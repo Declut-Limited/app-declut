@@ -20,6 +20,7 @@ import { register, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
 import { validateEmail, validateName, validateNigerianLocalPhone, validatePassword } from '@/lib/validators';
+import Icon from '@/components/Icon';
 
 const PHONE_COUNTRY_CODE = '+234';
 
@@ -95,7 +96,7 @@ export default function SignUpScreen() {
               CLAUDE.md ("Auth Flow — resolved 2026-07-23"). */}
           <Input
             placeholder="Full name"
-            leadingIcon={<User size={20} color={colors.gray400} />}
+            leadingIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
             value={name}
             onChangeText={(text) => {
               setName(text);
@@ -106,7 +107,7 @@ export default function SignUpScreen() {
           />
           <Input
             placeholder="Email"
-            leadingIcon={<Envelope size={20} color={colors.gray400} />}
+            leadingIcon={<Icon name="sms" variant="bold" size={20} color={colors.gray400} />}
             value={email}
             onChangeText={(text) => {
               setEmail(text);
@@ -127,6 +128,7 @@ export default function SignUpScreen() {
           <Input
             placeholder="Password"
             isPassword
+            leadingIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
             value={password}
             onChangeText={(text) => {
               setPassword(text);

@@ -19,6 +19,7 @@ import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
 import { validateRequired } from '@/lib/validators';
+import Icon from '@/components/Icon';
 
 interface FieldErrors {
   identifier?: string;
@@ -74,7 +75,7 @@ export default function SignInScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer style={styles.container}>
       <Card style={styles.card}>
         <AuthLogo />
         <Text style={styles.headline}>Let's get you in</Text>
@@ -85,7 +86,7 @@ export default function SignInScreen() {
         <View style={styles.form}>
           <Input
             placeholder="Email or Phone number"
-            leadingIcon={<User size={20} color={colors.gray400} />}
+            leadingIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
             value={identifier}
             onChangeText={(text) => {
               setIdentifier(text);
@@ -99,6 +100,7 @@ export default function SignInScreen() {
           <Input
             placeholder="Password"
             isPassword
+            leadingIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
             value={password}
             onChangeText={(text) => {
               setPassword(text);
@@ -132,9 +134,11 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+  },
   card: {
     gap: spacing.lg,
-    marginTop: spacing['3xl'],
   },
   headline: {
     fontFamily: fontFamily.bold,

@@ -14,12 +14,15 @@ import { StatusBar } from 'expo-status-bar';
 interface ScreenContainerProps extends ViewProps {
   scroll?: boolean;
   background?: string;
+  /** Renders full-width above the padded/scrollable content, so a header's divider can bleed edge-to-edge. */
+  header?: React.ReactNode;
 }
 
 /** Shared shell for onboarding/auth/KYC screens: safe area + keyboard avoidance + background. */
 export function ScreenContainer({
   scroll = true,
   background = colors.background,
+  header,
   style,
   children,
   ...rest
@@ -27,6 +30,7 @@ export function ScreenContainer({
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'bottom']}>
       <StatusBar style="dark" backgroundColor={background} />
+      {header}
 
       <KeyboardAvoidingView
         style={styles.flex}

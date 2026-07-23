@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
+import { router } from 'expo-router';
 import { colors, fontFamily, fontSize } from '@/theme/tokens';
 
 interface LegalConsentTextProps {
@@ -7,9 +8,10 @@ interface LegalConsentTextProps {
   onPressPrivacy?: () => void;
 }
 
-// Terms/Privacy URLs aren't confirmed yet — onPress handlers default to no-ops
-// until there's a real destination (in-app screen or external link) to send to.
-export function LegalConsentText({ onPressTerms, onPressPrivacy }: LegalConsentTextProps) {
+export function LegalConsentText({
+  onPressTerms = () => router.push('/(legal)/terms-of-use'),
+  onPressPrivacy = () => router.push('/(legal)/privacy-policy'),
+}: LegalConsentTextProps) {
   return (
     <Text style={styles.text}>
       By clicking "Continue", I have read and agree with the{' '}

@@ -2,7 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { AuthTokens } from './types';
 import { clearTokens, getTokens, setTokens } from '@/lib/secureStore';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,

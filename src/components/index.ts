@@ -12,3 +12,8 @@ export { TextLink } from './TextLink';
 export { LegalConsentText } from './LegalConsentText';
 export { ScreenContainer } from './ScreenContainer';
 export { StepHeader } from './StepHeader';
+export { BackButton } from './BackButton';
+export { ScreenHeader } from './ScreenHeader';
+export { FaqAccordionItem } from './FaqAccordionItem';
+export { ContactRow } from './ContactRow';
+export { LegalDocumentBody } from './LegalDocumentBody';
