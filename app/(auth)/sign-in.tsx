@@ -18,6 +18,12 @@ import { useAuth } from '@/context/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
+import { validateRequired } from '@/lib/validators';
+
+interface FieldErrors {
+  identifier?: string;
+  password?: string;
+}
 
 export default function SignInScreen() {
   const { establishSession } = useAuth();
@@ -26,9 +32,20 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  function validate(): boolean {
+    const errors: FieldErrors = {
+      identifier: validateRequired(identifier, 'Email or phone number'),
+      password: validateRequired(password, 'Password'),
+    };
+    setFieldErrors(errors);
+    return !Object.values(errors).some(Boolean);
+  }
 
   async function handleContinue() {
     setError(null);
+    if (!validate()) return;
     setLoading(true);
     try {
       const tokens = await loginRequest({ identifier: identifier.trim(), password });
@@ -70,17 +87,25 @@ export default function SignInScreen() {
             placeholder="Email or Phone number"
             leadingIcon={<User size={20} color={colors.gray400} />}
             value={identifier}
-            onChangeText={setIdentifier}
+            onChangeText={(text) => {
+              setIdentifier(text);
+              setFieldErrors((prev) => ({ ...prev, identifier: undefined }));
+            }}
             autoCapitalize="none"
             keyboardType="email-address"
+            error={fieldErrors.identifier}
           />
           {/* Position/style estimated — no fresh screenshot confirms exact placement (see CLAUDE.md). */}
           <Input
             placeholder="Password"
             isPassword
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              setFieldErrors((prev) => ({ ...prev, password: undefined }));
+            }}
             autoCapitalize="none"
+            error={fieldErrors.password}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button label="Continue" onPress={handleContinue} loading={loading} />
@@ -89,9 +114,7 @@ export default function SignInScreen() {
         <Divider />
 
         <View style={styles.socials}>
-          <SocialButton provider="google" label="Sign in with Google" onPress={handleGoogle} loading={googleLoading} disabled={googleLoading} />
-          {/* Apple button matches the design visually but isn't wired — no backend endpoint yet (see CLAUDE.md). */}
-          <SocialButton provider="apple" label="Sign in with Apple" onPress={() => {}} disabled />
+          <SocialButton label="Sign in with Google" onPress={handleGoogle} loading={googleLoading} disabled={googleLoading} />
         </View>
 
         <TextLink

@@ -33,7 +33,6 @@
           "cameraPermission": "Declut uses your camera to verify your identity (liveness check) during KYC."
         }
       ],
-      "expo-apple-authentication",
       "expo-font",
       "expo-notifications"
     ]

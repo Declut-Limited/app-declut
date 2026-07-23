@@ -19,23 +19,46 @@ import { useAuth } from '@/context/AuthContext';
 import { register, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
+import { validateEmail, validateName, validateNigerianLocalPhone, validatePassword } from '@/lib/validators';
+
+const PHONE_COUNTRY_CODE = '+234';
+
+interface FieldErrors {
+  name?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+}
 
 export default function SignUpScreen() {
-  const { establishSession } = useAuth();
+  const { establishSession, establishRegisteredSession } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('+234');
+  const [phone, setPhone] = useState(PHONE_COUNTRY_CODE);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  function validate(): boolean {
+    const errors: FieldErrors = {
+      name: validateName(name),
+      email: validateEmail(email),
+      phone: validateNigerianLocalPhone(phone.replace(PHONE_COUNTRY_CODE, '')),
+      password: validatePassword(password),
+    };
+    setFieldErrors(errors);
+    return !Object.values(errors).some(Boolean);
+  }
 
   async function handleContinue() {
     setError(null);
+    if (!validate()) return;
     setLoading(true);
     try {
       const { otpToken, ...tokens } = await register({ name: name.trim(), email: email.trim(), phone, password });
-      await establishSession(tokens, otpToken);
+      await establishRegisteredSession(tokens, otpToken);
       router.replace('/');
     } catch (e) {
       setError(extractErrorMessage(e, 'Could not create your account. Please try again.'));
@@ -74,24 +97,43 @@ export default function SignUpScreen() {
             placeholder="Full name"
             leadingIcon={<User size={20} color={colors.gray400} />}
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => {
+              setName(text);
+              setFieldErrors((prev) => ({ ...prev, name: undefined }));
+            }}
             autoCapitalize="words"
+            error={fieldErrors.name}
           />
           <Input
             placeholder="Email"
             leadingIcon={<Envelope size={20} color={colors.gray400} />}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              setFieldErrors((prev) => ({ ...prev, email: undefined }));
+            }}
             autoCapitalize="none"
             keyboardType="email-address"
+            error={fieldErrors.email}
           />
-          <PhoneInput value={phone} onChangeValue={setPhone} />
+          <PhoneInput
+            value={phone}
+            onChangeValue={(value) => {
+              setPhone(value);
+              setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+            }}
+            error={fieldErrors.phone}
+          />
           <Input
             placeholder="Password"
             isPassword
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              setFieldErrors((prev) => ({ ...prev, password: undefined }));
+            }}
             autoCapitalize="none"
+            error={fieldErrors.password}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button label="Continue" onPress={handleContinue} loading={loading} />
@@ -100,9 +142,7 @@ export default function SignUpScreen() {
         <Divider />
 
         <View style={styles.socials}>
-          <SocialButton provider="google" label="Sign up with Google" onPress={handleGoogle} loading={googleLoading} disabled={googleLoading} />
-          {/* Apple button matches the design visually but isn't wired — no backend endpoint yet (see CLAUDE.md). */}
-          <SocialButton provider="apple" label="Sign up with Apple" onPress={() => {}} disabled />
+          <SocialButton label="Sign up with Google" onPress={handleGoogle} loading={googleLoading} disabled={googleLoading} />
         </View>
 
         <TextLink text="Have an account?" actionLabel="Sign in" onPress={() => router.push('/(auth)/sign-in')} />

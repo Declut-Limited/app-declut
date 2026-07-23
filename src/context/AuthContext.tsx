@@ -22,7 +22,16 @@ interface AuthContextValue {
    * otpToken (see CLAUDE.md) — pass it through so verify-email doesn't need
    * a redundant resend right after signup.
    */
-  establishSession: (tokens: AuthTokens, otpToken?: string) => Promise<void>;
+  establishSession: (tokens: AuthTokens) => Promise<void>;
+  /**
+   * Register-specific: a fresh registration is deterministically
+   * needs-email-verification (that's the whole point of the mandatory
+   * chain), so this sets status directly instead of depending on /users/me.
+   * A /users/me hiccup right after signup must never make a successful
+   * registration look like a failure — it just fetches the profile
+   * best-effort in the background.
+   */
+  establishRegisteredSession: (tokens: AuthTokens, otpToken: string) => Promise<void>;
   /** Current otpToken for /auth/verify-email, if one is held. */
   emailOtpToken: string | null;
   /** Returns the held otpToken, or fetches a fresh one via resend-verification-email if none is held yet (e.g. app restarted mid-flow, or logging back in unverified). */
@@ -84,13 +93,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const establishSession = useCallback(
-    async (tokens: AuthTokens, otpToken?: string) => {
+  const establishSession = useCallback(async (tokens: AuthTokens) => {
+    await setSessionTokens(tokens);
+    const profile = await getMyProfile();
+    setUser(profile);
+    setStatus(statusForUser(profile));
+  }, []);
+
+  const establishRegisteredSession = useCallback(
+    async (tokens: AuthTokens, otpToken: string) => {
       await setSessionTokens(tokens);
-      if (otpToken) updateEmailOtpToken(otpToken);
-      const profile = await getMyProfile();
-      setUser(profile);
-      setStatus(statusForUser(profile));
+      updateEmailOtpToken(otpToken);
+      setStatus('needs-email-verification');
+      getMyProfile()
+        .then(setUser)
+        .catch(() => {});
     },
     [updateEmailOtpToken]
   );
@@ -144,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status,
       user,
       establishSession,
+      establishRegisteredSession,
       emailOtpToken,
       ensureEmailOtpToken,
       refreshEmailOtpToken,
@@ -157,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status,
       user,
       establishSession,
+      establishRegisteredSession,
       emailOtpToken,
       ensureEmailOtpToken,
       refreshEmailOtpToken,

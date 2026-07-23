@@ -3,11 +3,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-/**
- * Requests notification permissions and returns an Expo push token. Throws on
- * a simulator/emulator, a denied permission, or a missing EAS project ID —
- * callers should catch and treat this as fire-and-forget (see CLAUDE.md).
- */
+
 export async function registerForPushNotificationsAsync(): Promise<string> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {

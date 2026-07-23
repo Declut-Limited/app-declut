@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/theme/tokens';
+import { StatusBar } from 'expo-status-bar';
 
 interface ScreenContainerProps extends ViewProps {
   scroll?: boolean;
@@ -25,6 +26,8 @@ export function ScreenContainer({
 }: ScreenContainerProps) {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'bottom']}>
+      <StatusBar style="dark" backgroundColor={background} />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

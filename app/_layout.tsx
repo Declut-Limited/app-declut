@@ -1,8 +1,9 @@
 import 'react-native-gesture-handler';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { SplashScreen, Stack } from 'expo-router';
 import { IconContext } from 'phosphor-react-native';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
@@ -18,6 +19,20 @@ import { NotificationProvider } from '@/context/NotificationContext';
 import { colors } from '@/theme/tokens';
 import ErrorFallback from './error';
 
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+	handleNotification: async () => {
+		return {
+			shouldPlaySound: true,
+			shouldSetBadge: true,
+			shouldShowAlert: true,
+		};
+	},
+});
+
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
@@ -25,6 +40,10 @@ export default function RootLayout() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
   });
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
 
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback} onError={(error, info) => console.error('Global error caught:', error, info)}>
