@@ -14,11 +14,12 @@ import {
   TextLink,
 } from '@/components';
 import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
-import { useAuth } from '@/context/AuthContext';
+import { isVerified, useAuth } from '@/context/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
 import { validateRequired } from '@/lib/validators';
+import { showErrorToast, showWarningToast } from '@/lib/toast';
 import Icon from '@/components/Icon';
 
 interface FieldErrors {
@@ -50,10 +51,12 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       const tokens = await loginRequest({ identifier: identifier.trim(), password });
-      await establishSession(tokens);
-      router.replace('/');
+      const user = await establishSession(tokens);
+      if (isVerified(user)) router.replace('/');
     } catch (e) {
-      setError(extractErrorMessage(e, 'Invalid credentials. Please try again.'));
+      const message = extractErrorMessage(e, 'Invalid credentials. Please try again.');
+      setError(message);
+      showErrorToast('Sign in failed', message);
     } finally {
       setLoading(false);
     }
@@ -65,10 +68,16 @@ export default function SignInScreen() {
     try {
       const idToken = await getGoogleIdToken();
       const tokens = await googleSignIn({ idToken });
-      await establishSession(tokens);
-      router.replace('/');
+      const user = await establishSession(tokens);
+      if (isVerified(user)) router.replace('/');
     } catch (e) {
-      setError(extractErrorMessage(e, 'Google sign-in failed. Please try again.'));
+      if (e instanceof Error && e.message.includes('not available in Expo Go')) {
+        showWarningToast('Not available yet', 'Google sign-in needs a custom dev client build.');
+      } else {
+        const message = extractErrorMessage(e, 'Google sign-in failed. Please try again.');
+        setError(message);
+        showErrorToast('Google sign-in failed', message);
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -96,7 +105,6 @@ export default function SignInScreen() {
             keyboardType="email-address"
             error={fieldErrors.identifier}
           />
-          {/* Position/style estimated — no fresh screenshot confirms exact placement (see CLAUDE.md). */}
           <Input
             placeholder="Password"
             isPassword

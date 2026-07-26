@@ -17,3 +17,4 @@ export { ScreenHeader } from './ScreenHeader';
 export { FaqAccordionItem } from './FaqAccordionItem';
 export { ContactRow } from './ContactRow';
 export { LegalDocumentBody } from './LegalDocumentBody';
+export { BottomSheetCard } from './BottomSheetCard';

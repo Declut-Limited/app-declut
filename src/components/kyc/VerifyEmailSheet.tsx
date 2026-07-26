@@ -1,31 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { EnvelopeSimpleOpen } from 'phosphor-react-native';
-import { Card, OtpInput, ScreenContainer, StepHeader } from '@/components';
+import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import { BottomSheetCard, OtpInput, StepHeader } from '@/components';
 import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
 import { useAuth } from '@/context/AuthContext';
 import { verifyEmail } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { useSingleTap } from '@/hooks/useSingleTap';
+import { showErrorToast, showSuccessToast } from '@/lib/toast';
 
-const RESEND_COOLDOWN_SECONDS = 30;
+const RESEND_COOLDOWN_SECONDS = 2 * 60;
 
-export default function VerifyEmailScreen() {
+function formatCooldown(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+export function VerifyEmailSheet() {
   const { markEmailVerified, user, ensureEmailOtpToken, refreshEmailOtpToken } = useAuth();
   const [otp, setOtp] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
   const requestedOnce = useRef(false);
   const guard = useSingleTap();
 
   useEffect(() => {
     if (requestedOnce.current) return;
     requestedOnce.current = true;
-    // Register already triggers the first send and returns its otpToken — this
-    // only fetches a fresh one when we don't already hold one (app restarted
-    // mid-flow, or logging back in with an unverified account; see CLAUDE.md).
     ensureEmailOtpToken()
       .then(() => setCooldown(RESEND_COOLDOWN_SECONDS))
       .catch((e) => setError(extractErrorMessage(e, 'Could not send a verification code yet.')));
@@ -44,7 +47,6 @@ export default function VerifyEmailScreen() {
       const otpToken = await ensureEmailOtpToken();
       await verifyEmail({ otpToken, otp: code });
       markEmailVerified();
-      router.replace('/(kyc)/verify-nin');
     } catch (e) {
       setError(extractErrorMessage(e, 'That code didn\'t work. Please try again.'));
       setOtp('');
@@ -54,60 +56,54 @@ export default function VerifyEmailScreen() {
   }
 
   async function handleResend() {
-    if (cooldown > 0) return;
+    if (cooldown > 0 || resending) return;
     setError(null);
+    setResending(true);
     try {
       await refreshEmailOtpToken();
       setCooldown(RESEND_COOLDOWN_SECONDS);
+      showSuccessToast('Code resent', `Check ${user?.email ?? 'your email'} for the new code.`);
     } catch (e) {
-      setError(extractErrorMessage(e, 'Could not resend the code yet.'));
+      const message = extractErrorMessage(e, 'Could not resend the code yet.');
+      setError(message);
+      showErrorToast('Could not resend code', message);
+    } finally {
+      setResending(false);
     }
   }
 
   return (
-    <ScreenContainer>
+    <BottomSheetCard>
       <StepHeader step={1} total={3} />
-      <Card style={styles.card}>
-        <View style={styles.avatar}>
-          <EnvelopeSimpleOpen size={28} color={colors.primary} />
-        </View>
-        <Text style={styles.headline}>Let's verify its you</Text>
-        <Text style={styles.subtext}>
-          We've sent a 6-digit code to {user?.email ?? 'your email address'}. It'll auto-verify once entered.
-        </Text>
+      <Text style={styles.headline}>Let's verify its you</Text>
+      <Text style={styles.subtext}>
+        We've sent a 6-digit code to {user?.email ?? 'your email address'}. It'll auto-verify once entered.
+      </Text>
 
-        <OtpInput value={otp} onChangeText={setOtp} onComplete={handleComplete} autoFocus />
+      <OtpInput value={otp} onChangeText={setOtp} onComplete={handleComplete} autoFocus />
 
-        {verifying ? <Text style={styles.helper}>Verifying…</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+      {verifying ? <Text style={styles.helper}>Verifying…</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Text style={styles.resendRow}>
-          Didn't receive the code?{' '}
-          <Text
-            style={[styles.resendAction, cooldown > 0 && styles.resendActionDisabled]}
-            onPress={guard(handleResend)}
-          >
-            {cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend'}
+      <Text style={styles.resendLabel}>Didn't receive the code?</Text>
+      <Pressable
+        style={[styles.resendPill, (cooldown > 0 || resending) && styles.resendPillDisabled]}
+        onPress={guard(handleResend)}
+        disabled={cooldown > 0 || resending}
+      >
+        {resending ? (
+          <ActivityIndicator size="small" color={colors.gray900} />
+        ) : (
+          <Text style={[styles.resendPillLabel, cooldown > 0 && styles.resendPillLabelDisabled]}>
+            {cooldown > 0 ? formatCooldown(cooldown) : 'Resend'}
           </Text>
-        </Text>
-      </Card>
-    </ScreenContainer>
+        )}
+      </Pressable>
+    </BottomSheetCard>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    gap: spacing.lg,
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.full,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headline: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize['2xl'],
@@ -124,6 +120,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
+    textAlign: 'center',
   },
   error: {
     fontFamily: fontFamily.medium,
@@ -131,17 +128,29 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
   },
-  resendRow: {
+  resendLabel: {
     fontFamily: fontFamily.regular,
     fontSize: fontSize.sm,
     color: colors.gray500,
     textAlign: 'center',
+    marginBottom: -spacing.sm,
   },
-  resendAction: {
+  resendPill: {
+    alignSelf: 'center',
+    backgroundColor: colors.gray100,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.full,
+  },
+  resendPillDisabled: {
+    opacity: 0.6,
+  },
+  resendPillLabel: {
     fontFamily: fontFamily.semibold,
-    color: colors.primary,
+    fontSize: fontSize.sm,
+    color: colors.gray900,
   },
-  resendActionDisabled: {
+  resendPillLabelDisabled: {
     color: colors.gray400,
   },
 });

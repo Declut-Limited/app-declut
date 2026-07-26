@@ -6,10 +6,15 @@ export interface ApiEnvelope<T> {
   success?: boolean;
 }
 
+/** Confirmed 2026-07-24 against the deployed API: { success: false, error: { statusCode, message, path, timestamp } }. */
 export interface ApiErrorBody {
-  statusCode: number;
-  message: string | string[];
-  error?: string;
+  success: false;
+  error: {
+    statusCode: number;
+    message: string | string[];
+    path?: string;
+    timestamp?: string;
+  };
 }
 
 export type KycStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
@@ -100,12 +105,16 @@ export interface ResendVerificationEmailResponse {
   otpToken: string;
 }
 
-export interface KycVerifyPayload {
+export interface VerifyNinPayload {
   nin: string;
+}
+
+export interface LivenessCheckPayload {
   selfieImageBase64: string;
 }
 
-export interface KycVerifyResponse {
+/** Both checks are independent; kycStatus becomes 'verified' once both pass. */
+export interface KycCheckResponse {
   kycStatus: KycStatus;
   referenceId?: string;
   reason?: string;

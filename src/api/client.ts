@@ -2,7 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { AuthTokens } from './types';
 import { clearTokens, getTokens, setTokens } from '@/lib/secureStore';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://unconscious-juli-idowu-space-4ff4116d.koyeb.app/api';
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -79,13 +79,16 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean;
 }
 
+// These return 401 for a wrong/expired OTP (business logic, not an invalid access token) — must not trigger a silent token refresh + retry, or a wrong code can look like a session expiry and sign the user out mid-verification.
+const REFRESH_EXEMPT_PATHS = ['/auth/refresh', '/auth/login', '/auth/verify-email', '/auth/verify-otp'];
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const config = error.config as RetriableConfig | undefined;
-    const isAuthEndpoint = config?.url?.includes('/auth/refresh') || config?.url?.includes('/auth/login');
+    const isRefreshExempt = REFRESH_EXEMPT_PATHS.some((path) => config?.url?.includes(path));
 
-    if (error.response?.status === 401 && config && !config._retried && !isAuthEndpoint) {
+    if (error.response?.status === 401 && config && !config._retried && !isRefreshExempt) {
       config._retried = true;
       const refreshed = await refreshTokens();
       if (refreshed) {
@@ -99,11 +102,19 @@ apiClient.interceptors.response.use(
   }
 );
 
+interface ErrorBody {
+  message?: string | string[];
+  error?: { message?: string | string[] };
+}
+
 export function extractErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   if (axios.isAxiosError(error)) {
-    const body = error.response?.data as { message?: string | string[] } | undefined;
-    if (Array.isArray(body?.message)) return body.message.join('\n');
-    if (typeof body?.message === 'string') return body.message;
+    const body = error.response?.data as ErrorBody | undefined;
+    // Real deployed shape is { success: false, error: { message, statusCode, ... } };
+    // some endpoints may still return the bare Nest default { message, statusCode, error }.
+    const message = body?.error?.message ?? body?.message;
+    if (Array.isArray(message)) return message.join('\n');
+    if (typeof message === 'string') return message;
   }
   return fallback;
 }

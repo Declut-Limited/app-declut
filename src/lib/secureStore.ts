@@ -8,6 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 const ACCESS_TOKEN_KEY = 'declut.accessToken';
 const REFRESH_TOKEN_KEY = 'declut.refreshToken';
 const ONBOARDING_SEEN_KEY = 'declut.onboardingSeen';
+const EMAIL_OTP_TOKEN_KEY = 'declut.emailOtpToken';
 
 export interface TokenPair {
   accessToken: string;
@@ -43,4 +44,22 @@ export async function getOnboardingSeen(): Promise<boolean> {
 
 export async function setOnboardingSeen(): Promise<void> {
   await SecureStore.setItemAsync(ONBOARDING_SEEN_KEY, 'true');
+}
+
+/**
+ * The signup-verification otpToken is itself a bearer-style JWT (see CLAUDE.md),
+ * so it gets the same storage treatment as access/refresh tokens. Persisting it
+ * means killing the app mid-verification doesn't force an unnecessary resend —
+ * the backend already handles otpToken expiry/validation on its end.
+ */
+export async function getEmailOtpToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(EMAIL_OTP_TOKEN_KEY);
+}
+
+export async function setEmailOtpToken(token: string): Promise<void> {
+  await SecureStore.setItemAsync(EMAIL_OTP_TOKEN_KEY, token);
+}
+
+export async function clearEmailOtpToken(): Promise<void> {
+  await SecureStore.deleteItemAsync(EMAIL_OTP_TOKEN_KEY);
 }

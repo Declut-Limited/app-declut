@@ -18,7 +18,8 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/icon-512.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "favicon": "./assets/icon-192.png"

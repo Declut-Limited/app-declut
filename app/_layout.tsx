@@ -1,6 +1,6 @@
-// import 'react-native-gesture-handler';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+// import 'react-native-gesture-handler';
 // import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SplashScreen, Stack } from 'expo-router';
@@ -20,6 +20,11 @@ import { colors } from '@/theme/tokens';
 import ErrorFallback from './error';
 
 import * as Notifications from 'expo-notifications';
+
+// import * as SecureStore from 'expo-secure-store';
+// ['declut.accessToken', 'declut.refreshToken', 'declut.onboardingSeen', 'declut.emailOtpToken'].forEach((key) =>
+//   SecureStore.deleteItemAsync(key).catch(() => {})
+// );
 
 Notifications.setNotificationHandler({
 	handleNotification: async () => {
@@ -52,7 +57,6 @@ export default function RootLayout() {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
-        // <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider style={{ flex: 1 }}>
             <IconContext.Provider value={{ size: 22, color: colors.gray700, weight: 'regular' }}>
               <AuthProvider>
@@ -64,7 +68,6 @@ export default function RootLayout() {
               </AuthProvider>
             </IconContext.Provider>
           </SafeAreaProvider>
-        // </GestureHandlerRootView>
       )}
     </ErrorBoundary>
   );

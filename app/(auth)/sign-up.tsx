@@ -15,11 +15,12 @@ import {
   TextLink,
 } from '@/components';
 import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
-import { useAuth } from '@/context/AuthContext';
+import { isVerified, useAuth } from '@/context/AuthContext';
 import { register, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
 import { validateEmail, validateName, validateNigerianLocalPhone, validatePassword } from '@/lib/validators';
+import { showErrorToast, showWarningToast } from '@/lib/toast';
 import Icon from '@/components/Icon';
 
 const PHONE_COUNTRY_CODE = '+234';
@@ -60,9 +61,10 @@ export default function SignUpScreen() {
     try {
       const { otpToken, ...tokens } = await register({ name: name.trim(), email: email.trim(), phone, password });
       await establishRegisteredSession(tokens, otpToken);
-      router.replace('/');
     } catch (e) {
-      setError(extractErrorMessage(e, 'Could not create your account. Please try again.'));
+      const message = extractErrorMessage(e, 'Could not create your account. Please try again.');
+      setError(message);
+      showErrorToast('Sign up failed', message);
     } finally {
       setLoading(false);
     }
@@ -74,10 +76,16 @@ export default function SignUpScreen() {
     try {
       const idToken = await getGoogleIdToken();
       const tokens = await googleSignIn({ idToken });
-      await establishSession(tokens);
-      router.replace('/');
+      const user = await establishSession(tokens);
+      if (isVerified(user)) router.replace('/');
     } catch (e) {
-      setError(extractErrorMessage(e, 'Google sign-in failed. Please try again.'));
+      if (e instanceof Error && e.message.includes('not available in Expo Go')) {
+        showWarningToast('Not available yet', 'Google sign-in needs a custom dev client build.');
+      } else {
+        const message = extractErrorMessage(e, 'Google sign-in failed. Please try again.');
+        setError(message);
+        showErrorToast('Google sign-in failed', message);
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -91,9 +99,6 @@ export default function SignUpScreen() {
         <Text style={styles.subtext}>To create an account in the application, enter your details below</Text>
 
         <View style={styles.form}>
-          {/* Name, phone (as a full field, not just the country segment) and
-              password are additions beyond the original 2-field mockup — see
-              CLAUDE.md ("Auth Flow — resolved 2026-07-23"). */}
           <Input
             placeholder="Full name"
             leadingIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}

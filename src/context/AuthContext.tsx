@@ -3,44 +3,25 @@ import { clearSessionTokens, hydrateSession, onSessionExpired, setSessionTokens 
 import { getMyProfile } from '@/api/users';
 import { logout as logoutRequest, resendVerificationEmail } from '@/api/auth';
 import type { AuthTokens, User } from '@/api/types';
-import { getOnboardingSeen, setOnboardingSeen as persistOnboardingSeen } from '@/lib/secureStore';
+import {
+  clearEmailOtpToken as persistClearEmailOtpToken,
+  getEmailOtpToken,
+  getOnboardingSeen,
+  setEmailOtpToken as persistEmailOtpToken,
+  setOnboardingSeen as persistOnboardingSeen,
+} from '@/lib/secureStore';
 
-export type SessionStatus =
-  | 'loading'
-  | 'onboarding'
-  | 'unauthenticated'
-  | 'needs-email-verification'
-  | 'needs-kyc'
-  | 'authenticated';
+export type SessionStatus = 'loading' | 'onboarding' | 'unauthenticated' | 'authenticated';
 
 interface AuthContextValue {
   status: SessionStatus;
   user: User | null;
-  /**
-   * Called after register/login/google with the fresh token pair; fetches the
-   * profile and updates status. Register also returns a signup-verification
-   * otpToken (see CLAUDE.md) — pass it through so verify-email doesn't need
-   * a redundant resend right after signup.
-   */
-  establishSession: (tokens: AuthTokens) => Promise<void>;
-  /**
-   * Register-specific: a fresh registration is deterministically
-   * needs-email-verification (that's the whole point of the mandatory
-   * chain), so this sets status directly instead of depending on /users/me.
-   * A /users/me hiccup right after signup must never make a successful
-   * registration look like a failure — it just fetches the profile
-   * best-effort in the background.
-   */
+  establishSession: (tokens: AuthTokens) => Promise<User>;
   establishRegisteredSession: (tokens: AuthTokens, otpToken: string) => Promise<void>;
-  /** Current otpToken for /auth/verify-email, if one is held. */
   emailOtpToken: string | null;
-  /** Returns the held otpToken, or fetches a fresh one via resend-verification-email if none is held yet (e.g. app restarted mid-flow, or logging back in unverified). */
   ensureEmailOtpToken: () => Promise<string>;
-  /** Always fetches a fresh otpToken — used by the screen's explicit "Resend" action. */
   refreshEmailOtpToken: () => Promise<string>;
-  /** Called once /auth/verify-email succeeds, to move status from needs-email-verification to needs-kyc. */
   markEmailVerified: () => void;
-  /** Called once /kyc/verify returns a verified status, to move status to authenticated. */
   markKycVerified: () => void;
   signOut: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
@@ -49,10 +30,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function statusForUser(user: User): SessionStatus {
-  if (!user.emailVerified) return 'needs-email-verification';
-  if (user.kycStatus !== 'verified') return 'needs-kyc';
-  return 'authenticated';
+/** The app is gated by email verification and KYC — both driven directly off the user record, not a derived status. */
+export function isVerified(user: User | null): boolean {
+  return !!user?.emailVerified && user?.kycStatus === 'verified';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -64,6 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateEmailOtpToken = useCallback((token: string | null) => {
     emailOtpTokenRef.current = token;
     setEmailOtpToken(token);
+    // Fire-and-forget persistence, survives the app being killed mid-verification.
+    if (token) persistEmailOtpToken(token).catch(() => {});
+    else persistClearEmailOtpToken().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -75,7 +58,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const [tokens, onboardingSeen] = await Promise.all([hydrateSession(), getOnboardingSeen()]);
+      const [tokens, onboardingSeen, storedOtpToken] = await Promise.all([
+        hydrateSession(),
+        getOnboardingSeen(),
+        getEmailOtpToken(),
+      ]);
+      if (storedOtpToken) {
+        emailOtpTokenRef.current = storedOtpToken;
+        setEmailOtpToken(storedOtpToken);
+      }
 
       if (!tokens) {
         setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
@@ -85,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const profile = await getMyProfile();
         setUser(profile);
-        setStatus(statusForUser(profile));
+        setStatus('authenticated');
       } catch {
         await clearSessionTokens();
         setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
@@ -97,14 +88,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setSessionTokens(tokens);
     const profile = await getMyProfile();
     setUser(profile);
-    setStatus(statusForUser(profile));
+    setStatus('authenticated');
+    return profile;
   }, []);
 
   const establishRegisteredSession = useCallback(
     async (tokens: AuthTokens, otpToken: string) => {
       await setSessionTokens(tokens);
       updateEmailOtpToken(otpToken);
-      setStatus('needs-email-verification');
+      setStatus('authenticated');
       getMyProfile()
         .then(setUser)
         .catch(() => {});
@@ -126,18 +118,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const markEmailVerified = useCallback(() => {
     updateEmailOtpToken(null);
     setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev));
-    setStatus('needs-kyc');
   }, [updateEmailOtpToken]);
 
   const markKycVerified = useCallback(() => {
     setUser((prev) => (prev ? { ...prev, kycStatus: 'verified' } : prev));
-    setStatus('authenticated');
   }, []);
 
   const refreshUser = useCallback(async () => {
     const profile = await getMyProfile();
     setUser(profile);
-    setStatus(statusForUser(profile));
   }, []);
 
   const signOut = useCallback(async () => {

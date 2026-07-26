@@ -1,21 +1,36 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+
+export type KycStep = 'nin' | 'selfie';
 
 interface KycFlowContextValue {
-  nin: string;
-  setNin: (nin: string) => void;
+  step: KycStep;
+  goToSelfieStep: () => void;
+  goToNinStep: () => void;
 }
 
 const KycFlowContext = createContext<KycFlowContextValue | undefined>(undefined);
 
-/**
- * Holds the NIN entered on screen 2 (verify-nin) in memory just long enough to
- * submit it together with the selfie on screen 3 — the backend takes both in
- * one call (see CLAUDE.md). Deliberately not URL params, so a sensitive
- * national ID number doesn't end up sitting in navigation history.
- */
+// TRACKS WHICH KYC SHEET (NIN OR SELFIE) KycSheetOverlay SHOWS NEXT
 export function KycFlowProvider({ children }: { children: React.ReactNode }) {
-  const [nin, setNin] = useState('');
-  const value = useMemo(() => ({ nin, setNin }), [nin]);
+  const { status } = useAuth();
+  const [step, setStep] = useState<KycStep>('nin');
+
+  useEffect(() => {
+    if (status === 'authenticated' || status === 'unauthenticated') {
+      setStep('nin');
+    }
+  }, [status]);
+
+  const value = useMemo(
+    () => ({
+      step,
+      goToSelfieStep: () => setStep('selfie'),
+      goToNinStep: () => setStep('nin'),
+    }),
+    [step]
+  );
+
   return <KycFlowContext.Provider value={value}>{children}</KycFlowContext.Provider>;
 }
 

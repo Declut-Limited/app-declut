@@ -1,9 +1,13 @@
 import { apiClient } from './client';
-import type { ApiEnvelope, KycHistoryEntry, KycVerifyPayload, KycVerifyResponse } from './types';
+import type { ApiEnvelope, KycCheckResponse, KycHistoryEntry, LivenessCheckPayload, VerifyNinPayload } from './types';
 
-/** NIN + facial liveness via QoreID — one combined call (see CLAUDE.md). */
-export async function verifyIdentity(payload: KycVerifyPayload) {
-  const res = await apiClient.post<ApiEnvelope<KycVerifyResponse>>('/kyc/verify', payload);
+export async function verifyNin(payload: VerifyNinPayload) {
+  const res = await apiClient.post<ApiEnvelope<KycCheckResponse>>('/kyc/verify-nin', payload);
+  return res.data.data;
+}
+
+export async function livenessCheck(payload: LivenessCheckPayload) {
+  const res = await apiClient.post<ApiEnvelope<KycCheckResponse>>('/kyc/liveness-check', payload);
   return res.data.data;
 }
 

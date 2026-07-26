@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MotiView } from 'moti';
 import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
@@ -16,6 +16,13 @@ export function OtpInput({ length = 6, value, onChangeText, onComplete, autoFocu
   const [focused, setFocused] = useState(false);
   const digits = Array.from({ length }, (_, i) => value[i] ?? '');
 
+  // Re-grab focus whenever the code is cleared (e.g. after a wrong-code reset)
+  // so the first box keeps reading as active and the keyboard doesn't require
+  // a manual tap to come back.
+  useEffect(() => {
+    if (value === '') inputRef.current?.focus();
+  }, [value]);
+
   function handleChangeText(text: string) {
     const digitsOnly = text.replace(/[^0-9]/g, '').slice(0, length);
     onChangeText(digitsOnly);
@@ -27,7 +34,7 @@ export function OtpInput({ length = 6, value, onChangeText, onComplete, autoFocu
   return (
     <Pressable onPress={() => inputRef.current?.focus()} style={styles.row}>
       {digits.map((digit, index) => {
-        const isActive = focused && index === value.length;
+        const isActive = index === value.length && (focused || value === '');
         return (
           <MotiView
             key={index}
