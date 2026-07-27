@@ -21,10 +21,10 @@ import ErrorFallback from './error';
 
 import * as Notifications from 'expo-notifications';
 
-// import * as SecureStore from 'expo-secure-store';
-// ['declut.accessToken', 'declut.refreshToken', 'declut.onboardingSeen', 'declut.emailOtpToken'].forEach((key) =>
-//   SecureStore.deleteItemAsync(key).catch(() => {})
-// );
+import * as SecureStore from 'expo-secure-store';
+['declut.accessToken', 'declut.refreshToken', 'declut.onboardingSeen', 'declut.emailOtpToken'].forEach((key) =>
+  SecureStore.deleteItemAsync(key).catch(() => {})
+);
 
 Notifications.setNotificationHandler({
 	handleNotification: async () => {

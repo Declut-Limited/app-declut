@@ -101,7 +101,7 @@ export default function SignUpScreen() {
         <View style={styles.form}>
           <Input
             placeholder="Full name"
-            leadingIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
             value={name}
             onChangeText={(text) => {
               setName(text);
@@ -112,7 +112,7 @@ export default function SignUpScreen() {
           />
           <Input
             placeholder="Email"
-            leadingIcon={<Icon name="sms" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="sms" variant="bold" size={20} color={colors.gray400} />}
             value={email}
             onChangeText={(text) => {
               setEmail(text);
@@ -133,7 +133,7 @@ export default function SignUpScreen() {
           <Input
             placeholder="Password"
             isPassword
-            leadingIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
             value={password}
             onChangeText={(text) => {
               setPassword(text);

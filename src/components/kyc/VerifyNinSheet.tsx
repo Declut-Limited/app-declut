@@ -46,7 +46,7 @@ export function VerifyNinSheet() {
 
       <Input
         placeholder="National Identification Number (NIN)"
-        leadingIcon={<IdentificationCard size={20} color={colors.gray400} />}
+        btnIcon={<IdentificationCard size={20} color={colors.gray400} />}
         value={nin}
         onChangeText={(text) => setNin(text.replace(/[^0-9]/g, '').slice(0, NIN_LENGTH))}
         keyboardType="number-pad"

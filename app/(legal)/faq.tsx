@@ -74,7 +74,7 @@ export default function FaqScreen() {
           label="Chat"
           value="Whatsapp"
           subtitle="Start a conversation on Whatsapp"
-          leadingIcon={<WhatsappLogo size={20} color="#25D366" weight="fill" />}
+          btnIcon={<WhatsappLogo size={20} color="#25D366" weight="fill" />}
           onPress={() => Linking.openURL(`https://wa.me/${SUPPORT_PHONE_E164.replace('+', '')}`)}
         />
       </Card>

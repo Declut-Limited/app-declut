@@ -70,6 +70,8 @@ export const fontSize = {
   xl: 22,
   '2xl': 26,
   '3xl': 30,
+  '4xl': 32,
+  '5xl': 34,
 } as const;
 
 export const theme = { colors, spacing, radii, fontFamily, fontSize };

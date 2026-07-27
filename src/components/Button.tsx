@@ -15,7 +15,7 @@ interface ButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
   label: string;
   variant?: ButtonVariant;
   loading?: boolean;
-  leadingIcon?: React.ReactNode;
+  btnIcon?: React.ReactNode;
   onPress?: () => void | Promise<void>;
   tapGuardDelay?: number;
 }
@@ -30,7 +30,7 @@ export function Button({
   label,
   variant = 'primary',
   loading,
-  leadingIcon,
+  btnIcon,
   disabled,
   onPress,
   tapGuardDelay = 800,
@@ -76,7 +76,7 @@ export function Button({
           <ActivityIndicator color={fill.text} />
         ) : (
           <>
-            {leadingIcon}
+            {btnIcon}
             <Text style={[styles.label, { color: fill.text }]}>{label}</Text>
           </>
         )}

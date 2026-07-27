@@ -12,13 +12,13 @@ import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
-  leadingIcon?: React.ReactNode;
+  btnIcon?: React.ReactNode;
   /** Renders a trailing eye/eye-slash toggle and manages secureTextEntry internally. */
   isPassword?: boolean;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, leadingIcon, isPassword, style, ...rest },
+  { label, error, btnIcon, isPassword, style, ...rest },
   ref
 ) {
   const [hidden, setHidden] = useState(true);
@@ -34,7 +34,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           error ? styles.fieldError : null,
         ]}
       >
-        {leadingIcon ? <View style={styles.icon}>{leadingIcon}</View> : null}
+        {btnIcon ? <View style={styles.icon}>{btnIcon}</View> : null}
         <TextInput
           ref={ref}
           style={[styles.input, style]}

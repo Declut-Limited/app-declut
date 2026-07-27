@@ -59,11 +59,8 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <View style={styles.topBar}>
-        <PaginationDots count={SLIDES.length} activeIndex={activeIndex} />
-      </View>
-
       <Animated.ScrollView
+        style={styles.scroll}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -72,7 +69,14 @@ export default function OnboardingScreen() {
         onMomentumScrollEnd={(e) => handleMomentumEnd(e.nativeEvent.contentOffset.x)}
       >
         {SLIDES.map((slide, index) => (
-          <Slide key={slide.tag} slide={slide} index={index} scrollX={scrollX} />
+          <Slide
+            key={slide.tag}
+            slide={slide}
+            index={index}
+            scrollX={scrollX}
+            activeIndex={activeIndex}
+            total={SLIDES.length}
+          />
         ))}
       </Animated.ScrollView>
 
@@ -89,12 +93,16 @@ function Slide({
   slide,
   index,
   scrollX,
+  activeIndex,
+  total,
 }: {
   slide: (typeof SLIDES)[number];
   index: number;
   scrollX: SharedValue<number>;
+  activeIndex: number;
+  total: number;
 }) {
-  const illustrationStyle = useAnimatedStyle(() => {
+  const cardStyle = useAnimatedStyle(() => {
     const distance = scrollX.value / SCREEN_WIDTH - index;
     return {
       opacity: interpolate(distance, [-1, 0, 1], [0.4, 1, 0.4]),
@@ -103,8 +111,13 @@ function Slide({
   });
 
   return (
-    <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-      <Animated.Image source={slide.image} resizeMode="contain" style={[styles.illustration, illustrationStyle]} />
+    <View style={{ flex: 1, width: SCREEN_WIDTH }}>
+      <Animated.View style={[styles.card, cardStyle]}>
+        <View style={styles.cardTopBar}>
+          <PaginationDots count={total} activeIndex={activeIndex} />
+        </View>
+        <Animated.Image source={slide.image} resizeMode="contain" style={styles.image} />
+      </Animated.View>
       <View style={styles.content}>
         <Pill label={slide.tag} variant={slide.variant} />
         <Text style={styles.headline}>{slide.headline}</Text>
@@ -115,37 +128,44 @@ function Slide({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  topBar: {
+  scroll: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xl,
+  },
+  card: {
+    width: '100%',
+    aspectRatio: 800 / 880,
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing['2xl'],
+  },
+  cardTopBar: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    paddingHorizontal: spacing['2xl'],
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xs,
   },
-  slide: {
-    flex: 1,
-    paddingHorizontal: spacing['2xl'],
-    paddingTop: spacing.xs,
-  },
-  illustration: {
+  image: {
     flex: 1,
     width: '100%',
-    borderRadius: radii.xl,
-    marginBottom: spacing['2xl'],
   },
   content: {
     gap: spacing.md,
     paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   headline: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize['3xl'],
-    lineHeight: fontSize['3xl'] * 1.25,
+    fontSize: fontSize['4xl'],
+    lineHeight: fontSize['4xl'] * 1.25,
     color: colors.ink,
   },
   footer: {
-    paddingHorizontal: spacing['2xl'],
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   linkSpacing: { height: spacing.lg },
 });

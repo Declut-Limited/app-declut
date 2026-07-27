@@ -13,19 +13,19 @@ interface ContactRowProps {
   label: string;
   value: string;
   subtitle?: string;
-  leadingIcon?: React.ReactNode;
+  btnIcon?: React.ReactNode;
   action?: ContactRowAction;
   responseTime?: string;
   /** Makes the whole row tappable (used by the Chat row, which has no action pill). */
   onPress?: () => void;
 }
 
-export function ContactRow({ label, value, subtitle, leadingIcon, action, responseTime, onPress }: ContactRowProps) {
+export function ContactRow({ label, value, subtitle, btnIcon, action, responseTime, onPress }: ContactRowProps) {
   const guard = useSingleTap();
 
   const content = (
     <View style={styles.row}>
-      {leadingIcon ? <View style={styles.leadingIcon}>{leadingIcon}</View> : null}
+      {btnIcon ? <View style={styles.btnIcon}>{btnIcon}</View> : null}
       <View style={styles.textBlock}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.value}>{value}</Text>
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  leadingIcon: {
+  btnIcon: {
     width: 36,
     height: 36,
     borderRadius: radii.full,

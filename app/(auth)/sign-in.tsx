@@ -95,7 +95,7 @@ export default function SignInScreen() {
         <View style={styles.form}>
           <Input
             placeholder="Email or Phone number"
-            leadingIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
             value={identifier}
             onChangeText={(text) => {
               setIdentifier(text);
@@ -108,7 +108,7 @@ export default function SignInScreen() {
           <Input
             placeholder="Password"
             isPassword
-            leadingIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
             value={password}
             onChangeText={(text) => {
               setPassword(text);
