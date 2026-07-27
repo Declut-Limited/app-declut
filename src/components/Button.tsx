@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
 
-export type ButtonVariant = 'dark' | 'primary' | 'outline';
+export type ButtonVariant = 'dark' | 'primary' | 'outline' | 'ghost';
 
 interface ButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
   label: string;
@@ -24,6 +24,7 @@ const fillByVariant: Record<ButtonVariant, { background: string; text: string; b
   dark: { background: colors.ink, text: colors.white },
   primary: { background: colors.primary, text: colors.white },
   outline: { background: colors.white, text: colors.gray900, border: colors.gray200 },
+  ghost: { background: 'transparent', text: colors.ink, border: 'transparent' },
 };
 
 export function Button({
@@ -68,6 +69,7 @@ export function Button({
           borderColor: fill.border ?? fill.background,
           opacity: isDisabled ? 0.6 : pressed ? 0.85 : 1,
         },
+        variant === 'ghost' && { paddingVertical: 0, minHeight: 10, },
       ]}
       {...rest}
     >

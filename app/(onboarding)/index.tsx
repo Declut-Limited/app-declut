@@ -9,7 +9,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, PaginationDots, Pill, TextLink } from '@/components';
+import { Button, PaginationDots, Pill } from '@/components';
 import type { PillVariant } from '@/components/Pill';
 import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
 import { useAuth } from '@/context/AuthContext';
@@ -83,7 +83,7 @@ export default function OnboardingScreen() {
       <View style={styles.footer}>
         <Button label="Log in" variant="dark" onPress={() => goToAuth('/(auth)/sign-in')} />
         <View style={styles.linkSpacing} />
-        <TextLink text="" actionLabel="Sign up" onPress={() => goToAuth('/(auth)/sign-up')} />
+        <Button label="Sign up" variant="ghost" onPress={() => goToAuth('/(auth)/sign-up')} />
       </View>
     </SafeAreaView>
   );
