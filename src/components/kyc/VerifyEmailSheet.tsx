@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 import { BottomSheetCard, OtpInput, StepHeader } from '@/components';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-import { useAuth } from '@/context/AuthContext';
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { verifyEmail } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtext: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
     textAlign: 'center',
@@ -129,18 +129,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   resendLabel: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
     textAlign: 'center',
-    marginBottom: -spacing.sm,
+    marginBottom: -spacingY.sm,
   },
   resendPill: {
     alignSelf: 'center',
     backgroundColor: colors.gray100,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.full,
+    paddingVertical: spacingY.sm,
+    paddingHorizontal: spacingX.lg,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
   },
   resendPillDisabled: {
     opacity: 0.6,

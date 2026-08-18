@@ -9,6 +9,7 @@ const ACCESS_TOKEN_KEY = 'declut.accessToken';
 const REFRESH_TOKEN_KEY = 'declut.refreshToken';
 const ONBOARDING_SEEN_KEY = 'declut.onboardingSeen';
 const EMAIL_OTP_TOKEN_KEY = 'declut.emailOtpToken';
+const KYC_BYPASSED_KEY = 'declut.kycBypassed';
 
 export interface TokenPair {
   accessToken: string;
@@ -62,4 +63,13 @@ export async function setEmailOtpToken(token: string): Promise<void> {
 
 export async function clearEmailOtpToken(): Promise<void> {
   await SecureStore.deleteItemAsync(EMAIL_OTP_TOKEN_KEY);
+}
+
+/** TEMPORARY — /kyc/verify-nin and /kyc/liveness-check aren't live yet (see CLAUDE.md). */
+export async function getKycBypassed(): Promise<boolean> {
+  return (await SecureStore.getItemAsync(KYC_BYPASSED_KEY)) === 'true';
+}
+
+export async function setKycBypassed(): Promise<void> {
+  await SecureStore.setItemAsync(KYC_BYPASSED_KEY, 'true');
 }

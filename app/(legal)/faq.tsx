@@ -2,7 +2,7 @@ import React from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Envelope, Phone, WhatsappLogo } from 'phosphor-react-native';
 import { Card, ContactRow, FaqAccordionItem, ScreenContainer, ScreenHeader } from '@/components';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
 
 // Answers here are a reasonable first draft, not reviewed copy — only the
 // questions themselves came from the delivered design.
@@ -87,8 +87,8 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     fontSize: fontSize.md,
     color: colors.ink,
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
+    marginTop: spacingY.xl,
+    marginBottom: spacingY.md,
   },
   firstSectionTitle: {
     marginTop: 0,
@@ -97,6 +97,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   contactCard: {
-    padding: spacing.lg,
+    paddingHorizontal: spacingX.lg,
+    paddingVertical: spacingY.lg,
   },
 });

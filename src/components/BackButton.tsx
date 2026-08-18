@@ -1,19 +1,11 @@
 import React from 'react';
-import { Pressable, PressableProps, StyleProp, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { CaretDown, CaretLeft, X } from 'phosphor-react-native';
-import { colors, radii } from '@/theme/tokens';
+import { colors, radius } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-
-type BackButtonIconType = 'back' | 'cancel' | 'drop';
-
-interface BackButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
-  iconSize?: number;
-  iconType?: BackButtonIconType;
-  /** Overrides the default router.back() — e.g. to dismiss a modal step instead of navigating away. */
-  customAction?: () => void;
-  style?: StyleProp<ViewStyle>;
-}
+import type { BackButtonProps } from '@/utils/types';
 
 const iconByType = { back: CaretLeft, cancel: X, drop: CaretDown };
 
@@ -41,9 +33,10 @@ export function BackButton({ iconSize = 20, iconType = 'back', customAction, sty
 
 const styles = StyleSheet.create({
   button: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.full,
+    width: verticalScale(40),
+    height: verticalScale(40),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',

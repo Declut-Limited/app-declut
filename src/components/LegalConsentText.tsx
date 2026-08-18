@@ -1,12 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
-import { colors, fontFamily, fontSize } from '@/theme/tokens';
-
-interface LegalConsentTextProps {
-  onPressTerms?: () => void;
-  onPressPrivacy?: () => void;
-}
+import { colors, fontFamily, fontSize } from '@/constants/theme';
+import type { LegalConsentTextProps } from '@/utils/types';
 
 export function LegalConsentText({
   onPressTerms = () => router.push('/(legal)/terms-of-use'),
@@ -28,7 +24,7 @@ export function LegalConsentText({
 
 const styles = StyleSheet.create({
   text: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.xs,
     color: colors.gray400,
     textAlign: 'center',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet } from 'react-native';
-import { radii } from '@/theme/tokens';
+import { radius } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 
 /** The app mark shown above the auth headlines. */
 export function AuthLogo() {
@@ -9,9 +10,10 @@ export function AuthLogo() {
 
 const styles = StyleSheet.create({
   badge: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.lg,
+    width: verticalScale(56),
+    height: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
     alignSelf: 'center',
   },
 });

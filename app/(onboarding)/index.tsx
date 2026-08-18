@@ -10,9 +10,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, PaginationDots, Pill } from '@/components';
-import type { PillVariant } from '@/components/Pill';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-import { useAuth } from '@/context/AuthContext';
+import type { PillVariant } from '@/utils/types';
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -130,32 +130,33 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flex: 1,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xl,
+    paddingHorizontal: spacingX.sm,
+    paddingTop: spacingY.xl,
   },
   card: {
     width: '100%',
     aspectRatio: 800 / 880,
     backgroundColor: colors.white,
-    borderRadius: radii.xl,
-    padding: spacing.md,
-    paddingHorizontal: spacing.sm,
-    marginBottom: spacing['2xl'],
+    borderRadius: radius.xl,
+    borderCurve: 'continuous',
+    paddingVertical: spacingY.md,
+    paddingHorizontal: spacingX.sm,
+    marginBottom: spacingY['2xl'],
   },
   cardTopBar: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: spacingX.lg,
+    paddingBottom: spacingY.xs,
   },
   image: {
     flex: 1,
     width: '100%',
   },
   content: {
-    gap: spacing.md,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    gap: spacingY.md,
+    paddingBottom: spacingY.lg,
+    paddingHorizontal: spacingX.lg,
   },
   headline: {
     fontFamily: fontFamily.bold,
@@ -164,8 +165,8 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   footer: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacingX.lg,
+    paddingBottom: spacingY.xl,
   },
-  linkSpacing: { height: spacing.lg },
+  linkSpacing: { height: spacingY.lg },
 });

@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
 import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import { Minus, Plus } from 'phosphor-react-native';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import type { FaqAccordionItemProps } from '@/utils/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-interface FaqAccordionItemProps {
-  question: string;
-  answer: string;
 }
 
 export function FaqAccordionItem({ question, answer }: FaqAccordionItemProps) {
@@ -33,7 +29,7 @@ export function FaqAccordionItem({ question, answer }: FaqAccordionItemProps) {
 
 const styles = StyleSheet.create({
   item: {
-    paddingVertical: spacing.lg,
+    paddingVertical: spacingY.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray100,
   },
@@ -41,7 +37,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: spacingX.md,
   },
   question: {
     flex: 1,
@@ -50,10 +46,10 @@ const styles = StyleSheet.create({
     color: colors.gray900,
   },
   answer: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
-    marginTop: spacing.sm,
+    marginTop: spacingY.sm,
     lineHeight: fontSize.sm * 1.5,
   },
 });

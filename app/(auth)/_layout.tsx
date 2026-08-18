@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { KycFlowProvider } from '@/context/KycFlowContext';
+import { KycFlowProvider } from '@/contexts/KycFlowContext';
 import { KycSheetOverlay } from '@/components/kyc/KycSheetOverlay';
 
 

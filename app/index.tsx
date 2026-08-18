@@ -1,8 +1,8 @@
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Redirect } from 'expo-router';
-import { isVerified, useAuth } from '@/context/AuthContext';
-import { colors } from '@/theme/tokens';
+import { isVerified, useAuth } from '@/contexts/AuthContext';
+import { colors } from '@/constants/theme';
 
 export default function Index() {
   const { status, user } = useAuth();

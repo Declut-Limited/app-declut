@@ -1,15 +1,12 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacingX } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { PaginationDotsProps } from '@/utils/types';
 
-interface PaginationDotsProps {
-  count: number;
-  activeIndex: number;
-}
-
-const DOT_SIZE = 8;
-const ACTIVE_WIDTH = 24;
+const DOT_SIZE = verticalScale(8);
+const ACTIVE_WIDTH = verticalScale(24);
 
 export function PaginationDots({ count, activeIndex }: PaginationDotsProps) {
   return (
@@ -34,10 +31,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacingX.xs,
   },
   dot: {
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
+    borderCurve: 'continuous',
   },
 });

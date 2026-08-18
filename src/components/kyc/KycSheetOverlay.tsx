@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useAuth } from '@/context/AuthContext';
-import { useKycFlow } from '@/context/KycFlowContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useKycFlow } from '@/contexts/KycFlowContext';
 import { VerifyEmailSheet } from './VerifyEmailSheet';
 import { VerifyNinSheet } from './VerifyNinSheet';
 import { SelfieCheckSheet } from './SelfieCheckSheet';

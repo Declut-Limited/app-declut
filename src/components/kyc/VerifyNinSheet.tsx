@@ -2,37 +2,26 @@ import React, { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { IdentificationCard } from 'phosphor-react-native';
 import { BottomSheetCard, Button, Input, StepHeader } from '@/components';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
-import { useKycFlow } from '@/context/KycFlowContext';
-import { verifyNin } from '@/api/kyc';
-import { extractErrorMessage } from '@/api/client';
-import { showErrorToast } from '@/lib/toast';
+import { colors, fontFamily, fontSize } from '@/constants/theme';
+import { useKycFlow } from '@/contexts/KycFlowContext';
 
 const NIN_LENGTH = 11;
 
 export function VerifyNinSheet() {
   const { goToSelfieStep } = useKycFlow();
   const [nin, setNin] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleContinue() {
+  // TEMPORARY — /kyc/verify-nin isn't live on the backend yet. Validate the
+  // format locally and move on; swap back to the real API call once it ships
+  // (see CLAUDE.md).
+  function handleContinue() {
     if (nin.length !== NIN_LENGTH) {
       setError(`Enter your ${NIN_LENGTH}-digit National Identification Number.`);
       return;
     }
     setError(null);
-    setSubmitting(true);
-    try {
-      await verifyNin({ nin });
-      goToSelfieStep();
-    } catch (e) {
-      const message = extractErrorMessage(e, 'Could not verify your NIN. Please try again.');
-      setError(message);
-      showErrorToast('NIN verification failed', message);
-    } finally {
-      setSubmitting(false);
-    }
+    goToSelfieStep();
   }
 
   return (
@@ -54,7 +43,7 @@ export function VerifyNinSheet() {
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Button label="Verify Identity" onPress={handleContinue} loading={submitting} />
+      <Button label="Verify Identity" onPress={handleContinue} />
     </BottomSheetCard>
   );
 }
@@ -67,7 +56,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtext: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
     textAlign: 'center',

@@ -1,13 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-
-export type PillVariant = 'primary' | 'success' | 'warning';
-
-interface PillProps {
-  label: string;
-  variant?: PillVariant;
-}
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import type { PillProps, PillVariant } from '@/utils/types';
 
 const backgroundByVariant: Record<PillVariant, string> = {
   primary: colors.primary,
@@ -26,9 +20,10 @@ export function Pill({ label, variant = 'primary' }: PillProps) {
 const styles = StyleSheet.create({
   base: {
     alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.full,
+    paddingVertical: spacingY.xs,
+    paddingHorizontal: spacingX.md,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
   },
   label: {
     color: colors.white,

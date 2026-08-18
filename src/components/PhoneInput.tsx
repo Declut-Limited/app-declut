@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-
-interface PhoneInputProps {
-  label?: string;
-  error?: string;
-  /** Full E.164 number, e.g. "+2348031234567". */
-  onChangeValue: (e164: string) => void;
-  value?: string;
-}
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { PhoneInputProps } from '@/utils/types';
 
 // Only Nigeria is supported for now — the design shows a static "+234" segment
 // with no picker interaction, so there's nothing to build a country switcher against yet.
@@ -57,22 +51,23 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray700,
-    marginBottom: spacing.xs,
+    marginBottom: spacingY.xs,
   },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56,
-    borderRadius: radii.lg,
+    minHeight: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray100,
     borderWidth: 1,
     borderColor: colors.gray100,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacingX.md,
   },
   fieldFocused: { borderColor: colors.primary },
   fieldError: { borderColor: colors.danger },
   countrySegment: {
-    paddingRight: spacing.sm,
+    paddingRight: spacingX.sm,
   },
   countryText: {
     fontFamily: fontFamily.medium,
@@ -81,21 +76,21 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: 1,
-    height: 24,
+    height: verticalScale(24),
     backgroundColor: colors.gray300,
-    marginRight: spacing.sm,
+    marginRight: spacingX.sm,
   },
   input: {
     flex: 1,
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.md,
     color: colors.gray900,
-    paddingVertical: spacing.md,
+    paddingVertical: spacingY.md,
   },
   errorText: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.xs,
     color: colors.danger,
-    marginTop: spacing.xs,
+    marginTop: spacingY.xs,
   },
 });

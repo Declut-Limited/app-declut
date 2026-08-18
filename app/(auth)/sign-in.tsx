@@ -13,8 +13,8 @@ import {
   SocialButton,
   TextLink,
 } from '@/components';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
-import { isVerified, useAuth } from '@/context/AuthContext';
+import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    gap: spacing.lg,
+    gap: spacingY.lg,
   },
   headline: {
     fontFamily: fontFamily.bold,
@@ -155,16 +155,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtext: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
     textAlign: 'center',
   },
   form: {
-    gap: spacing.md,
+    gap: spacingY.md,
   },
   socials: {
-    gap: spacing.md,
+    gap: spacingY.md,
   },
   error: {
     fontFamily: fontFamily.medium,
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   legal: {
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.md,
+    marginTop: spacingY.xl,
+    paddingHorizontal: spacingX.md,
   },
 });

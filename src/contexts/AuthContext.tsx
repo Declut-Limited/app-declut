@@ -6,8 +6,10 @@ import type { AuthTokens, User } from '@/api/types';
 import {
   clearEmailOtpToken as persistClearEmailOtpToken,
   getEmailOtpToken,
+  getKycBypassed,
   getOnboardingSeen,
   setEmailOtpToken as persistEmailOtpToken,
+  setKycBypassed as persistKycBypassed,
   setOnboardingSeen as persistOnboardingSeen,
 } from '@/lib/secureStore';
 
@@ -33,6 +35,13 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 /** The app is gated by email verification and KYC — both driven directly off the user record, not a derived status. */
 export function isVerified(user: User | null): boolean {
   return !!user?.emailVerified && user?.kycStatus === 'verified';
+}
+
+/** TEMPORARY — /kyc/verify-nin and /kyc/liveness-check aren't live on the backend yet. Once bypassed on this device, treat kycStatus as verified regardless of what the backend actually returns (see CLAUDE.md). */
+async function applyKycBypass(profile: User): Promise<User> {
+  if (profile.kycStatus === 'verified') return profile;
+  const bypassed = await getKycBypassed();
+  return bypassed ? { ...profile, kycStatus: 'verified' } : profile;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -74,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const profile = await getMyProfile();
+        const profile = await applyKycBypass(await getMyProfile());
         setUser(profile);
         setStatus('authenticated');
       } catch {
@@ -86,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const establishSession = useCallback(async (tokens: AuthTokens) => {
     await setSessionTokens(tokens);
-    const profile = await getMyProfile();
+    const profile = await applyKycBypass(await getMyProfile());
     setUser(profile);
     setStatus('authenticated');
     return profile;
@@ -98,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateEmailOtpToken(otpToken);
       setStatus('authenticated');
       getMyProfile()
+        .then(applyKycBypass)
         .then(setUser)
         .catch(() => {});
     },
@@ -121,11 +131,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [updateEmailOtpToken]);
 
   const markKycVerified = useCallback(() => {
+    persistKycBypassed().catch(() => {});
     setUser((prev) => (prev ? { ...prev, kycStatus: 'verified' } : prev));
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const profile = await getMyProfile();
+    const profile = await applyKycBypass(await getMyProfile());
     setUser(profile);
   }, []);
 

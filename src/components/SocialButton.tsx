@@ -1,13 +1,9 @@
 import React from 'react';
-import { ActivityIndicator, Image, Pressable, PressableProps, StyleSheet, Text, View } from 'react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, fontFamily, fontSize, radius, spacingX } from '@/constants/theme';
+import { scale, verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-
-interface SocialButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
-  label: string;
-  loading?: boolean;
-  onPress?: () => void | Promise<void>;
-}
+import type { SocialButtonProps } from '@/utils/types';
 
 /** Google sign-in/sign-up button. Apple was removed — no backend endpoint for it (see CLAUDE.md). */
 export function SocialButton({ label, disabled, loading, onPress, ...rest }: SocialButtonProps) {
@@ -40,11 +36,12 @@ export function SocialButton({ label, disabled, loading, onPress, ...rest }: Soc
 const styles = StyleSheet.create({
   base: {
     width: '100%',
-    minHeight: 56,
-    borderRadius: radii.lg,
+    minHeight: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacingX.lg,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.gray200,
@@ -53,11 +50,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacingX.sm,
   },
   icon: {
-    width: 20,
-    height: 20,
+    width: scale(20),
+    height: scale(20),
   },
   label: {
     fontFamily: fontFamily.semibold,

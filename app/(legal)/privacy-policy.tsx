@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { LegalDocumentBody, ScreenContainer, ScreenHeader } from '@/components';
-import type { LegalSection } from '@/components/LegalDocumentBody';
-import { colors, fontFamily, fontSize } from '@/theme/tokens';
+import type { LegalSection } from '@/utils/types';
+import { colors, fontFamily, fontSize } from '@/constants/theme';
 
 const SECTIONS: LegalSection[] = [
   {

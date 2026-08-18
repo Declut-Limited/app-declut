@@ -1,15 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MotiView } from 'moti';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-
-interface OtpInputProps {
-  length?: number;
-  value: string;
-  onChangeText: (value: string) => void;
-  onComplete?: (value: string) => void;
-  autoFocus?: boolean;
-}
+import { colors, fontFamily, fontSize, radius } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { OtpInputProps } from '@/utils/types';
 
 export function OtpInput({ length = 6, value, onChangeText, onComplete, autoFocus }: OtpInputProps) {
   const inputRef = useRef<TextInput>(null);
@@ -74,9 +68,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   box: {
-    width: 48,
-    height: 56,
-    borderRadius: radii.md,
+    width: verticalScale(48),
+    height: verticalScale(56),
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray100,
     borderWidth: 1,
     borderColor: colors.gray100,

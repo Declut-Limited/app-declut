@@ -1,13 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { colors, fontFamily, fontSize } from '@/theme/tokens';
+import { colors, fontFamily, fontSize } from '@/constants/theme';
 import { useSingleTap } from '@/hooks/useSingleTap';
-
-interface TextLinkProps {
-  text: string;
-  actionLabel: string;
-  onPress: () => void | Promise<void>;
-}
+import type { TextLinkProps } from '@/utils/types';
 
 /**
  * Centered nav link. Pass `text` for the "Don't have an account yet? Create an
@@ -28,7 +23,7 @@ export function TextLink({ text, actionLabel, onPress }: TextLinkProps) {
 
 const styles = StyleSheet.create({
   text: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
     textAlign: 'center',

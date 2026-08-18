@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '@/lib/registerForPushAsync';
 import { savePushToken } from '@/lib/pushToken';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NotificationContextValue {
   expoPushToken: string | null;

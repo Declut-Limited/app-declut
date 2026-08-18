@@ -1,24 +1,8 @@
 import React, { useCallback, useRef } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  PressableProps,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-
-export type ButtonVariant = 'dark' | 'primary' | 'outline' | 'ghost';
-
-interface ButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
-  label: string;
-  variant?: ButtonVariant;
-  loading?: boolean;
-  btnIcon?: React.ReactNode;
-  onPress?: () => void | Promise<void>;
-  tapGuardDelay?: number;
-}
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, fontFamily, fontSize, radius, spacingX } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { ButtonProps, ButtonVariant } from '@/utils/types';
 
 const fillByVariant: Record<ButtonVariant, { background: string; text: string; border?: string }> = {
   dark: { background: colors.ink, text: colors.white },
@@ -69,7 +53,7 @@ export function Button({
           borderColor: fill.border ?? fill.background,
           opacity: isDisabled ? 0.6 : pressed ? 0.85 : 1,
         },
-        variant === 'ghost' && { paddingVertical: 0, minHeight: 10, },
+        variant === 'ghost' && { paddingVertical: 0 },
       ]}
       {...rest}
     >
@@ -90,18 +74,19 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     width: '100%',
-    minHeight: 56,
-    borderRadius: radii.lg,
+    minHeight: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacingX.lg,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacingX.sm,
   },
   label: {
     fontFamily: fontFamily.semibold,

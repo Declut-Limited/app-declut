@@ -1,18 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
-
-export interface LegalSection {
-  heading?: string;
-  paragraphs: string[];
-}
-
-interface LegalDocumentBodyProps {
-  title: string;
-  lastUpdated: string;
-  intro: string;
-  sections: LegalSection[];
-}
+import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
+import type { LegalDocumentBodyProps } from '@/utils/types';
 
 export function LegalDocumentBody({ title, lastUpdated, intro, sections }: LegalDocumentBodyProps) {
   return (
@@ -44,30 +33,30 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   lastUpdated: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray400,
-    marginTop: spacing.xs,
+    marginTop: spacingY.xs,
   },
   divider: {
     height: 1,
     backgroundColor: colors.gray100,
-    marginVertical: spacing.lg,
+    marginVertical: spacingY.lg,
   },
   section: {
-    marginTop: spacing.lg,
+    marginTop: spacingY.lg,
   },
   heading: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize.lg,
     color: colors.ink,
-    marginBottom: spacing.sm,
+    marginBottom: spacingY.sm,
   },
   paragraph: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray600,
     lineHeight: fontSize.sm * 1.6,
-    marginBottom: spacing.sm,
+    marginBottom: spacingY.sm,
   },
 });

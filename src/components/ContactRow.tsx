@@ -1,24 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-
-interface ContactRowAction {
-  label: string;
-  icon: React.ReactNode;
-  onPress: () => void;
-}
-
-interface ContactRowProps {
-  label: string;
-  value: string;
-  subtitle?: string;
-  btnIcon?: React.ReactNode;
-  action?: ContactRowAction;
-  responseTime?: string;
-  /** Makes the whole row tappable (used by the Chat row, which has no action pill). */
-  onPress?: () => void;
-}
+import type { ContactRowProps } from '@/utils/types';
 
 export function ContactRow({ label, value, subtitle, btnIcon, action, responseTime, onPress }: ContactRowProps) {
   const guard = useSingleTap();
@@ -54,7 +39,7 @@ export function ContactRow({ label, value, subtitle, btnIcon, action, responseTi
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingVertical: spacing.lg,
+    paddingVertical: spacingY.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray100,
     borderStyle: 'dashed',
@@ -62,12 +47,13 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacingX.md,
   },
   btnIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
+    width: verticalScale(36),
+    height: verticalScale(36),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
     backgroundColor: '#25D36622',
     alignItems: 'center',
     justifyContent: 'center',
@@ -82,29 +68,30 @@ const styles = StyleSheet.create({
     color: colors.gray900,
   },
   value: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray600,
   },
   subtitle: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.xs,
     color: colors.gray400,
   },
   responseTime: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.xs,
     color: colors.gray400,
-    marginTop: spacing.xs,
+    marginTop: spacingY.xs,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacingX.xs,
     backgroundColor: colors.primaryLight,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.full,
+    paddingVertical: spacingY.sm,
+    paddingHorizontal: spacingX.md,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
   },
   actionLabel: {
     fontFamily: fontFamily.semibold,

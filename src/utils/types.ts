@@ -1,0 +1,133 @@
+import type { ReactNode } from 'react';
+import type { PressableProps, TextInputProps, ViewProps } from 'react-native';
+
+export type ButtonVariant = 'dark' | 'primary' | 'outline' | 'ghost';
+
+export interface ButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
+  label: string;
+  variant?: ButtonVariant;
+  loading?: boolean;
+  btnIcon?: ReactNode;
+  onPress?: () => void | Promise<void>;
+  tapGuardDelay?: number;
+}
+
+export interface SocialButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
+  label: string;
+  loading?: boolean;
+  onPress?: () => void | Promise<void>;
+}
+
+export type PillVariant = 'primary' | 'success' | 'warning';
+
+export interface PillProps {
+  label: string;
+  variant?: PillVariant;
+}
+
+export interface InputProps extends TextInputProps {
+  label?: string;
+  error?: string;
+  btnIcon?: ReactNode;
+  /** Renders a trailing eye/eye-slash toggle and manages secureTextEntry internally. */
+  isPassword?: boolean;
+}
+
+export interface PhoneInputProps {
+  label?: string;
+  error?: string;
+  /** Full E.164 number, e.g. "+2348031234567". */
+  onChangeValue: (e164: string) => void;
+  value?: string;
+}
+
+export interface OtpInputProps {
+  length?: number;
+  value: string;
+  onChangeText: (value: string) => void;
+  onComplete?: (value: string) => void;
+  autoFocus?: boolean;
+}
+
+export interface ScreenContainerProps extends ViewProps {
+  scroll?: boolean;
+  background?: string;
+  /** Renders full-width above the padded/scrollable content, so a header's divider can bleed edge-to-edge. */
+  header?: ReactNode;
+}
+
+export interface StepHeaderProps {
+  step: number;
+  total: number;
+  onBack?: () => void;
+}
+
+export type BackButtonIconType = 'back' | 'cancel' | 'drop';
+
+export interface BackButtonProps extends Omit<PressableProps, 'style' | 'onPress'> {
+  iconSize?: number;
+  iconType?: BackButtonIconType;
+  /** Overrides the default router.back() — e.g. to dismiss a modal step instead of navigating away. */
+  customAction?: () => void;
+  style?: ViewProps['style'];
+}
+
+export interface ScreenHeaderProps {
+  title: string;
+  /** Overrides the default router.back(). */
+  onBack?: () => void;
+  showBack?: boolean;
+  rightElement?: ReactNode;
+}
+
+export interface FaqAccordionItemProps {
+  question: string;
+  answer: string;
+}
+
+export interface ContactRowAction {
+  label: string;
+  icon: ReactNode;
+  onPress: () => void;
+}
+
+export interface ContactRowProps {
+  label: string;
+  value: string;
+  subtitle?: string;
+  btnIcon?: ReactNode;
+  action?: ContactRowAction;
+  responseTime?: string;
+  /** Makes the whole row tappable (used by the Chat row, which has no action pill). */
+  onPress?: () => void;
+}
+
+export interface LegalSection {
+  heading?: string;
+  paragraphs: string[];
+}
+
+export interface LegalDocumentBodyProps {
+  title: string;
+  lastUpdated: string;
+  intro: string;
+  sections: LegalSection[];
+}
+
+export interface BottomSheetCardProps extends ViewProps {}
+
+export interface TextLinkProps {
+  text: string;
+  actionLabel: string;
+  onPress: () => void | Promise<void>;
+}
+
+export interface LegalConsentTextProps {
+  onPressTerms?: () => void;
+  onPressPrivacy?: () => void;
+}
+
+export interface PaginationDotsProps {
+  count: number;
+  activeIndex: number;
+}

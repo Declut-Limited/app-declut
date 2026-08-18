@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, spacingX } from '@/constants/theme';
 
 export function Divider({ label = 'Or' }: { label?: string }) {
   return (
@@ -16,7 +16,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacingX.md,
     width: '100%',
   },
   line: {
@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray200,
   },
   label: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray400,
   },

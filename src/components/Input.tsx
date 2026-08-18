@@ -1,21 +1,9 @@
 import React, { forwardRef, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TextInputProps,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Eye, EyeSlash } from 'phosphor-react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
-
-interface InputProps extends TextInputProps {
-  label?: string;
-  error?: string;
-  btnIcon?: React.ReactNode;
-  /** Renders a trailing eye/eye-slash toggle and manages secureTextEntry internally. */
-  isPassword?: boolean;
-}
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { InputProps } from '@/utils/types';
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
   { label, error, btnIcon, isPassword, style, ...rest },
@@ -78,17 +66,18 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray700,
-    marginBottom: spacing.xs,
+    marginBottom: spacingY.xs,
   },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56,
-    borderRadius: radii.lg,
+    minHeight: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray100,
     borderWidth: 1,
     borderColor: colors.gray100,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacingX.md,
   },
   fieldFocused: {
     borderColor: colors.primary,
@@ -97,19 +86,19 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
   },
   icon: {
-    marginHorizontal: spacing.xs,
+    marginHorizontal: spacingX.xs,
   },
   input: {
     flex: 1,
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.md,
     color: colors.gray900,
-    paddingVertical: spacing.md,
+    paddingVertical: spacingY.md,
   },
   errorText: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.xs,
     color: colors.danger,
-    marginTop: spacing.xs,
+    marginTop: spacingY.xs,
   },
 });

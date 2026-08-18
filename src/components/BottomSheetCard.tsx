@@ -1,9 +1,9 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View, ViewProps } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, radii, spacing } from '@/theme/tokens';
-
-interface BottomSheetCardProps extends ViewProps {}
+import { colors, radius, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { BottomSheetCardProps } from '@/utils/types';
 
 // SHEET OVERLAY FOR THE KYC CHAIN — SIZES TO CONTENT, NO INTERNAL SCROLL
 export function BottomSheetCard({ style, children, ...rest }: BottomSheetCardProps) {
@@ -34,23 +34,25 @@ const styles = StyleSheet.create({
     width: '100%',
     maxHeight: '90%',
     backgroundColor: colors.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    borderCurve: 'continuous',
     overflow: 'hidden',
   },
   dragHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radii.full,
+    width: verticalScale(40),
+    height: verticalScale(4),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray300,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
+    marginTop: spacingY.md,
+    marginBottom: spacingY.xs,
   },
   content: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
+    paddingHorizontal: spacingX.xl,
+    paddingTop: spacingY.sm,
+    paddingBottom: spacingY.xl,
+    gap: spacingY.md,
   },
 });

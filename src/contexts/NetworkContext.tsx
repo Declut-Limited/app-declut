@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { reloadAppAsync } from 'expo';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 
 interface NetworkContextValue {
   isConnected: boolean;
@@ -97,9 +98,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9999,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.xl,
+    paddingTop: Platform.OS === 'ios' ? verticalScale(50) : verticalScale(30),
+    paddingBottom: spacingY.lg,
+    paddingHorizontal: spacingX.xl,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -109,12 +110,13 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacingX.md,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
+    width: verticalScale(36),
+    height: verticalScale(36),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',

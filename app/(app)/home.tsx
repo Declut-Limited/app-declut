@@ -2,8 +2,8 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
 import { ScreenContainer, Button } from '@/components';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
-import { useAuth } from '@/context/AuthContext';
+import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 
 // STUB LANDING ROUTE — HOME SCREEN NOT YET DESIGNED
 export default function HomeScreen() {
@@ -31,12 +31,12 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     fontSize: fontSize['2xl'],
     color: colors.ink,
-    marginBottom: spacing.md,
+    marginBottom: spacingY.md,
   },
   subtitle: {
-    fontFamily: fontFamily.regular,
+    fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
-    marginBottom: spacing['2xl'],
+    marginBottom: spacingY['2xl'],
   },
 });

@@ -1,17 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BackButton } from './BackButton';
-import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
+import type { ScreenHeaderProps } from '@/utils/types';
 
-interface ScreenHeaderProps {
-  title: string;
-  /** Overrides the default router.back(). */
-  onBack?: () => void;
-  showBack?: boolean;
-  rightElement?: React.ReactNode;
-}
-
-const SIDE_WIDTH = 40;
+const SIDE_WIDTH = verticalScale(40);
 
 /**
  * Back arrow + centered title used across FAQ/legal/settings-style screens.
@@ -40,8 +34,8 @@ const styles = StyleSheet.create({
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing['2xl'],
-    paddingVertical: spacing.lg,
+    paddingHorizontal: spacingX['2xl'],
+    paddingVertical: spacingY.lg,
   },
   side: {
     width: SIDE_WIDTH,

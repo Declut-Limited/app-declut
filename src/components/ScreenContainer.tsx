@@ -5,18 +5,11 @@ import {
   ScrollView,
   StyleSheet,
   View,
-  ViewProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacingX, spacingY } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
-
-interface ScreenContainerProps extends ViewProps {
-  scroll?: boolean;
-  background?: string;
-  /** Renders full-width above the padded/scrollable content, so a header's divider can bleed edge-to-edge. */
-  header?: React.ReactNode;
-}
+import type { ScreenContainerProps } from '@/utils/types';
 
 /** Shared shell for onboarding/auth/KYC screens: safe area + keyboard avoidance + background. */
 export function ScreenContainer({
@@ -59,8 +52,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing['2xl'],
-    paddingTop: spacing.xl,
-    paddingBottom: spacing['2xl'],
+    paddingHorizontal: spacingX['2xl'],
+    paddingTop: spacingY.xl,
+    paddingBottom: spacingY['2xl'],
   },
 });

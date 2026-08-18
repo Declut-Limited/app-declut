@@ -1,14 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CaretLeft } from 'phosphor-react-native';
-import { colors, fontFamily, fontSize, radii, spacing } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-
-interface StepHeaderProps {
-  step: number;
-  total: number;
-  onBack?: () => void;
-}
+import type { StepHeaderProps } from '@/utils/types';
 
 /** "‹  2 of 3" header used across the mandatory post-signup verification screens. */
 export function StepHeader({ step, total, onBack }: StepHeaderProps) {
@@ -33,29 +29,33 @@ export function StepHeader({ step, total, onBack }: StepHeaderProps) {
   );
 }
 
+const BUTTON_SIZE = verticalScale(36);
+
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xl,
+    marginBottom: spacingY.xl,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonPlaceholder: {
-    width: 36,
-    height: 36,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
   },
   badge: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.full,
+    paddingVertical: spacingY.xs,
+    paddingHorizontal: spacingX.md,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
     backgroundColor: colors.gray100,
   },
   badgeText: {
