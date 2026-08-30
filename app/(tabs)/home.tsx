@@ -1,24 +1,26 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
 import { ListingCard, ScreenContainer } from '@/components';
+import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
 import { useAuth } from '@/contexts/AuthContext';
-import { listingsApi, favoritesApi } from '@/api';
+import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
-import { getDeviceLocation } from '@/lib/location';
+import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { useSingleTap } from '@/hooks/useSingleTap';
+import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { showWarningToast } from '@/lib/toast';
 
-const NEARBY_RADIUS_KM = 5;
-const SECTION_LIMIT = 4;
+const SECTION_LIMIT = 2;
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const guard = useSingleTap();
+  const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -26,64 +28,64 @@ export default function HomeScreen() {
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [recent, setRecent] = useState<Listing[] | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const device = await getDeviceLocation();
-      if (!device) {
-        setLocationDenied(true);
-        return;
-      }
-      setLocationLabel(device.label);
-      try {
-        const result = await listingsApi.searchListings({
-          lat: device.lat,
-          lng: device.lng,
-          radiusKm: NEARBY_RADIUS_KM,
-          limit: SECTION_LIMIT,
-        });
-        setNearby(result.items ?? []);
-      } catch (e) {
-        setNearbyError(extractErrorMessage(e, 'Could not load nearby listings.'));
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const result = await listingsApi.searchListings({ limit: SECTION_LIMIT });
-        setRecent(result.items ?? []);
-      } catch (e) {
-        setRecentError(extractErrorMessage(e, 'Could not load recent listings.'));
-      }
-    })();
-  }, []);
-
-  const toggleFavorite = useCallback((listingId: string) => {
-    setFavoriteIds((prev) => {
-      const wasFavorited = prev.has(listingId);
-      const next = new Set(prev);
-      if (wasFavorited) next.delete(listingId);
-      else next.add(listingId);
-
-      const request = wasFavorited ? favoritesApi.removeFavorite(listingId) : favoritesApi.addFavorite(listingId);
-      request.catch(() => {
-        setFavoriteIds((current) => {
-          const reverted = new Set(current);
-          if (wasFavorited) reverted.add(listingId);
-          else reverted.delete(listingId);
-          return reverted;
-        });
+  const loadNearby = useCallback(async () => {
+    const device = await getDeviceLocation();
+    if (!device) {
+      setLocationDenied(true);
+      return;
+    }
+    setLocationDenied(false);
+    setLocationLabel(device.label);
+    try {
+      const data = await listingsApi.getNearbyListings({
+        lat: device.lat,
+        lng: device.lng,
+        radiusKm: DEFAULT_NEARBY_RADIUS_KM,
+        limit: SECTION_LIMIT,
       });
-
-      return next;
-    });
+      setNearby(data.results ?? []);
+      setNearbyError(null);
+    } catch (e) {
+      setNearbyError(extractErrorMessage(e, 'Could not load nearby listings.'));
+    }
   }, []);
+
+  const loadRecent = useCallback(async () => {
+    try {
+      const data = await listingsApi.getNewListings({ limit: SECTION_LIMIT });
+      setRecent(data.results ?? []);
+      setRecentError(null);
+    } catch (e) {
+      setRecentError(extractErrorMessage(e, 'Could not load recent listings.'));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNearby();
+  }, [loadNearby]);
+
+  useEffect(() => {
+    loadRecent();
+  }, [loadRecent]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await Promise.all([loadNearby(), loadRecent()]);
+    setRefreshing(false);
+  }
 
   function goToSearch() {
-    router.push('/(app)/search');
+    router.push('/(tabs)/search');
+  }
+
+  function goToNearbyListings() {
+    router.push('/(modals)/nearbyListingsModal');
+  }
+
+  function goToNewListings() {
+    router.push('/(modals)/newListingsModal');
   }
 
   function goToListing() {
@@ -92,7 +94,19 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScreenContainer edges={['top']} background={colors.white}>
+    <ScreenContainer
+      edges={['top']}
+      background={colors.white}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+          progressBackgroundColor={colors.white}
+        />
+      }
+    >
       <Text style={styles.welcome}>Welcome back, {user?.name?.split(' ')[0] ?? 'there'}</Text>
       <View style={styles.locationRow}>
         <Icons.MapPinIcon size={verticalScale(18)} color={colors.gray400} />
@@ -102,15 +116,15 @@ export default function HomeScreen() {
       </View>
 
       <Pressable onPress={guard(goToSearch)} style={styles.searchBar}>
-        <Icons.MagnifyingGlassIcon size={verticalScale(18)} color={colors.gray400} />
+        <Icon name="search-normal-1" variant="linear" size={verticalScale(18)} color={colors.gray400} />
         <Text style={styles.searchPlaceholder}>What are you looking for?</Text>
         <Pressable onPress={guard(goToSearch)} style={styles.filterButton} hitSlop={8}>
-          <Icons.SlidersIcon size={verticalScale(16)} color={colors.white} />
+          <Icon name="setting-3" variant="linear" size={verticalScale(16)} color={colors.white} />
         </Pressable>
       </Pressable>
 
       <View style={styles.escrowBanner}>
-        <Icons.ShieldCheckIcon size={verticalScale(20)} color={colors.primary} weight="fill" />
+        <Icon name="shield" variant="bold" size={verticalScale(20)} color={colors.primary} />
         <View style={styles.escrowText}>
           <Text style={styles.escrowTitle}>Escrow Protected</Text>
           <Text style={styles.escrowSubtitle}>All transactions are secured until you confirm.</Text>
@@ -119,11 +133,11 @@ export default function HomeScreen() {
 
       <ListingSection
         title="Listings Near You"
-        subtitle={locationLabel ? `within ${NEARBY_RADIUS_KM}km` : undefined}
+        subtitle={locationLabel ? `within ${DEFAULT_NEARBY_RADIUS_KM}km` : undefined}
         listings={locationDenied ? [] : nearby}
         emptyLabel={locationDenied ? 'Enable location to see listings near you.' : 'No nearby listings yet.'}
         error={nearbyError}
-        onSeeAll={goToSearch}
+        onSeeAll={goToNearbyListings}
         onPressListing={goToListing}
       />
 
@@ -135,7 +149,7 @@ export default function HomeScreen() {
         showFavorite
         favoriteIds={favoriteIds}
         onToggleFavorite={toggleFavorite}
-        onSeeAll={goToSearch}
+        onSeeAll={goToNewListings}
         onPressListing={goToListing}
       />
     </ScreenContainer>
@@ -179,16 +193,10 @@ function ListingSection({
         </Pressable>
       </View>
 
-      {error ? (
-        <Text style={styles.sectionMessage}>{error}</Text>
-      ) : listings === null ? (
-        <ActivityIndicator color={colors.primary} style={styles.sectionLoading} />
-      ) : listings.length === 0 ? (
-        <Text style={styles.sectionMessage}>{emptyLabel}</Text>
-      ) : (
+      {listings && listings?.length > 0 ? (
         listings.map((listing) => (
           <ListingCard
-            key={listing.id}
+            key={listing._id}
             listing={listing}
             onPress={() => onPressListing(listing.id)}
             showFavorite={showFavorite}
@@ -196,6 +204,12 @@ function ListingSection({
             onToggleFavorite={() => onToggleFavorite?.(listing.id)}
           />
         ))
+      ) : error ? (
+        <Text style={styles.sectionMessage}>{error}</Text>
+      ) : listings === null ? (
+        <ActivityIndicator color={colors.primary} style={styles.sectionLoading} />
+      ) : (
+        <Text style={styles.sectionMessage}>{emptyLabel}</Text>
       )}
     </View>
   );
@@ -237,7 +251,7 @@ const styles = StyleSheet.create({
   searchPlaceholder: {
     flex: 1,
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.gray400,
   },
   filterButton: {
@@ -265,12 +279,12 @@ const styles = StyleSheet.create({
   },
   escrowTitle: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.primary,
   },
   escrowSubtitle: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     color: colors.primaryDark,
   },
   section: {
@@ -285,17 +299,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     flex: 1,
     fontFamily: fontFamily.bold,
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
     color: colors.ink,
   },
   sectionSubtitle: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     color: colors.gray400,
   },
   seeAll: {
     fontFamily: fontFamily.semibold,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     color: colors.warning,
   },
   sectionLoading: {
@@ -303,7 +317,7 @@ const styles = StyleSheet.create({
   },
   sectionMessage: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.gray400,
     paddingVertical: spacingY.md,
   },

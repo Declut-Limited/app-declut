@@ -19,6 +19,7 @@ export function ScreenContainer({
   edges = ['top', 'bottom'],
   style,
   children,
+  refreshControl,
   ...rest
 }: ScreenContainerProps) {
   return (
@@ -34,6 +35,7 @@ export function ScreenContainer({
           <ScrollView
             contentContainerStyle={[styles.scrollContent, style]}
             keyboardShouldPersistTaps="handled"
+            refreshControl={refreshControl}
             {...rest}
           >
             {children}

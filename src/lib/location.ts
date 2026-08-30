@@ -1,5 +1,8 @@
 import * as Location from 'expo-location';
 
+/** Backend also defaults to this if radiusKm is omitted from /listings/nearby — kept explicit here so the UI can display it. */
+export const DEFAULT_NEARBY_RADIUS_KM = 5;
+
 export interface DeviceLocation {
   lat: number;
   lng: number;

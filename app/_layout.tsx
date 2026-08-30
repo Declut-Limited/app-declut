@@ -60,7 +60,15 @@ export default function RootLayout() {
               <AuthProvider>
                 <NotificationProvider>
                   <NetworkProvider>
-                    <Stack screenOptions={{ headerShown: false }} />
+                    {/* Bottom navigation */}
+                    {/* <View style={{ flex: 1, paddingBottom: verticalScale(sysNavigationHeight - 4), }}> */}
+                      <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="index" />
+                        <Stack.Screen name="(modals)/createListingModal" options={{ presentation: 'modal' }} />
+                        <Stack.Screen name="(modals)/nearbyListingsModal" options={{ presentation: 'modal' }} />
+                        <Stack.Screen name="(modals)/newListingsModal" options={{ presentation: 'modal' }} />
+                      </Stack>
+                    {/* </View> */}
                   </NetworkProvider>
                 </NotificationProvider>
               </AuthProvider>

@@ -19,6 +19,7 @@ import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
+import { getPushToken } from '@/lib/pushToken';
 import { validateRequired } from '@/lib/validators';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
 import Icon from '@/components/Icon';
@@ -51,7 +52,8 @@ export default function SignInScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const tokens = await loginRequest({ identifier: identifier.trim(), password });
+      const pushToken = await getPushToken();
+      const tokens = await loginRequest({ identifier: identifier.trim(), password, pushToken });
       const user = await establishSession(tokens);
       if (isVerified(user)) router.replace('/');
     } catch (e) {

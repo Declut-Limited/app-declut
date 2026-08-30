@@ -16,6 +16,6 @@ export default function Index() {
   }
 
   if (status === 'onboarding') return <Redirect href="/(onboarding)" />;
-  if (status === 'authenticated' && isVerified(user)) return <Redirect href="/(app)/home" />;
+  if (status === 'authenticated' && isVerified(user)) return <Redirect href="/(tabs)/home" />;
   return <Redirect href="/(auth)/sign-in" />;
 }

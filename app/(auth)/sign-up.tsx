@@ -20,6 +20,7 @@ import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { register, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
 import { getGoogleIdToken } from '@/lib/googleAuth';
+import { getPushToken } from '@/lib/pushToken';
 import { validateEmail, validateName, validateNigerianLocalPhone, validatePassword } from '@/lib/validators';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
 import Icon from '@/components/Icon';
@@ -60,7 +61,8 @@ export default function SignUpScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const { otpToken, ...tokens } = await register({ name: name.trim(), email: email.trim(), phone, password });
+      const pushToken = await getPushToken();
+      const { otpToken, ...tokens } = await register({ name: name.trim(), email: email.trim(), phone, password, pushToken });
       await establishRegisteredSession(tokens, otpToken);
     } catch (e) {
       const message = extractErrorMessage(e, 'Could not create your account. Please try again.');

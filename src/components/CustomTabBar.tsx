@@ -8,7 +8,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { scale, verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { showWarningToast } from '@/lib/toast';
+import { router } from 'expo-router';
 import { getProfileImage } from '@/utils/helpers';
 
 const BAR_HEIGHT = verticalScale(76);
@@ -35,7 +35,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const middleIndex = Math.ceil(state.routes.length / 2);
 
   function handleCreatePress() {
-    showWarningToast('Coming soon', "Listing creation isn't built yet.");
+    router.push('/(modals)/createListingModal');
   }
 
   return (
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: verticalScale(2),
-    width: verticalScale(50),
+    width: verticalScale(35),
     height: verticalScale(50),
     borderRadius: radius.full,
     borderCurve: 'continuous',
@@ -149,6 +149,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: spacingX.xs,
+    marginHorizontal: spacingX.md,
   },
 });

@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import type { PressableProps, TextInputProps, ViewProps } from 'react-native';
+import type { ReactElement, ReactNode } from 'react';
+import type { PressableProps, RefreshControlProps, TextInputProps, ViewProps } from 'react-native';
 import type { Edge } from 'react-native-safe-area-context';
 import type { Listing } from '@/api/types';
 
@@ -58,6 +58,8 @@ export interface ScreenContainerProps extends ViewProps {
   header?: ReactNode;
   /** Defaults to ['top', 'bottom'] — pass ['top'] for tab screens, since the custom tab bar already handles its own bottom safe-area inset. */
   edges?: Edge[];
+  /** Passed straight through to the internal ScrollView — only applies when scroll is true. */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }
 
 export interface StepHeaderProps {

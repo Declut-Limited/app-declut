@@ -49,12 +49,16 @@ export interface RegisterPayload {
   password: string;
   /** Nigerian number: 07/08/09 + 9 local digits, or +234 international. Doubles as the alternate login identifier — must be unique. */
   phone: string;
+  /** Optional Expo push token — if present, added to deviceTokens (deduped, same as POST /notifications/register-token). */
+  pushToken?: string;
 }
 
 export interface LoginPayload {
   /** Email or phone — whichever the account was registered with. */
   identifier: string;
   password: string;
+  /** Optional Expo push token — if present, added to deviceTokens (deduped, same as POST /notifications/register-token). */
+  pushToken?: string;
 }
 
 export interface GoogleSignInPayload {
@@ -135,7 +139,7 @@ export interface UpdateProfilePayload {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
+  results: T[];
   page: number;
   limit: number;
   total: number;
@@ -148,6 +152,7 @@ export interface ListingLocation {
 
 export interface Listing {
   id: string;
+  _id: string;
   title: string;
   description: string;
   category: string;
@@ -181,6 +186,20 @@ export interface ListingSearchParams {
   lat?: number;
   lng?: number;
   radiusKm?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface NearbyListingsParams {
+  lat: number;
+  lng: number;
+  /** Max distance in km, >= 0.1. Defaults to 5 if omitted. Actually enforced server-side (via $geoNear), unlike ListingSearchParams.radiusKm. */
+  radiusKm?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface NewListingsParams {
   page?: number;
   limit?: number;
 }

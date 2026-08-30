@@ -4,6 +4,8 @@ import type {
   CreateListingPayload,
   Listing,
   ListingSearchParams,
+  NearbyListingsParams,
+  NewListingsParams,
   PaginatedResponse,
   UpdateListingPayload,
   UploadSignature,
@@ -16,6 +18,18 @@ export async function getUploadSignature() {
 
 export async function searchListings(params: ListingSearchParams) {
   const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings', { params });
+  return res.data.data;
+}
+
+/** Active listings within radiusKm of (lat, lng), closest first — "Listings Near You". */
+export async function getNearbyListings(params: NearbyListingsParams) {
+  const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings/nearby', { params });
+  return res.data.data;
+}
+
+/** Active listings created in the last 7 days, newest first — "Recently Posted". */
+export async function getNewListings(params: NewListingsParams = {}) {
+  const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings/new', { params });
   return res.data.data;
 }
 
