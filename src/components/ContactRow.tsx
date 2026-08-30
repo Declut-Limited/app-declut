@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   textBlock: {
     flex: 1,
-    gap: 2,
+    gap: verticalScale(2),
   },
   label: {
     fontFamily: fontFamily.semibold,

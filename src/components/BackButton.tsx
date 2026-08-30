@@ -1,13 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { CaretDown, CaretLeft, X } from 'phosphor-react-native';
+import * as Icons from 'phosphor-react-native';
 import { colors, radius } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import type { BackButtonProps } from '@/utils/types';
 
-const iconByType = { back: CaretLeft, cancel: X, drop: CaretDown };
+const iconByType = { back: Icons.CaretLeftIcon, cancel: Icons.XIcon, drop: Icons.CaretDownIcon };
 
 export function BackButton({ iconSize = 20, iconType = 'back', customAction, style, ...rest }: BackButtonProps) {
   const guard = useSingleTap();
@@ -26,7 +26,7 @@ export function BackButton({ iconSize = 20, iconType = 'back', customAction, sty
       onPress={guard(handlePress)}
       {...rest}
     >
-      <Icon size={iconSize} color={colors.gray900} weight="bold" />
+      <Icon size={verticalScale(iconSize)} color={colors.gray900} weight="bold" />
     </Pressable>
   );
 }

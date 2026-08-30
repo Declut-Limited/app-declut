@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { IdentificationCard } from 'phosphor-react-native';
+import * as Icons from 'phosphor-react-native';
 import { BottomSheetCard, Button, Input, StepHeader } from '@/components';
 import { colors, fontFamily, fontSize } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import { useKycFlow } from '@/contexts/KycFlowContext';
 
 const NIN_LENGTH = 11;
@@ -35,7 +36,7 @@ export function VerifyNinSheet() {
 
       <Input
         placeholder="National Identification Number (NIN)"
-        btnIcon={<IdentificationCard size={20} color={colors.gray400} />}
+        btnIcon={<Icons.IdentificationCardIcon size={verticalScale(20)} color={colors.gray400} />}
         value={nin}
         onChangeText={(text) => setNin(text.replace(/[^0-9]/g, '').slice(0, NIN_LENGTH))}
         keyboardType="number-pad"

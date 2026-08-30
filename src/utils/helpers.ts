@@ -114,3 +114,17 @@ export const paystackTransferFee = function(amount: number) {
 	if (amount <= 50000) return 25;
 	return 50;
 }
+
+export const getProfileImage = function(file: any) {
+	if (file && typeof file === "string") return file;
+	if (file && typeof file === "object") return file?.uri;
+
+	return require("../../assets/defaultAvatar.png");
+}
+
+export const getFilePath = function(file: any) {
+	if (file && typeof file === "string") return file;
+	if (file && typeof file === "object") return file?.uri;
+
+	return null;
+}

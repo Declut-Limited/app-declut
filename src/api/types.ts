@@ -158,6 +158,11 @@ export interface Listing {
   locationLabel: string;
   status: 'active' | 'archived' | 'sold';
   sellerId: string;
+  createdAt: string;
+  /** Only present when a search included lat/lng (radius search). */
+  distanceKm?: number;
+  /** Only present if the backend embeds the caller's favorite state in search results. */
+  favorited?: boolean;
 }
 
 export type CreateListingPayload = Pick<

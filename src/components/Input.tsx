@@ -1,6 +1,6 @@
 import React, { forwardRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { Eye, EyeSlash } from 'phosphor-react-native';
+import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import type { InputProps } from '@/utils/types';
@@ -46,9 +46,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             style={styles.icon}
           >
             {hidden ? (
-              <Eye size={20} color={colors.gray400} />
+              <Icons.EyeIcon size={verticalScale(20)} color={colors.gray400} />
             ) : (
-              <EyeSlash size={20} color={colors.gray400} />
+              <Icons.EyeSlashIcon size={verticalScale(20)} color={colors.gray400} />
             )}
           </Text>
         ) : null}

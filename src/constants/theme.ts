@@ -70,17 +70,19 @@ export const fontFamily = {
   medium: 'PlusJakartaSans_500Medium',
   semibold: 'PlusJakartaSans_600SemiBold',
   bold: 'PlusJakartaSans_700Bold',
+  // DM Serif Text — display serif for large marketplace headlines (e.g. Home's "Welcome back"), not body text. Regular is the only weight this face ships.
+  display_400: 'DMSerifText_400Regular',
 } as const;
 
 export const fontSize = {
-  xs: verticalScale(12),
-  sm: verticalScale(14),
-  md: verticalScale(16),
-  lg: verticalScale(18),
-  xl: verticalScale(22),
-  '2xl': verticalScale(26),
-  '3xl': verticalScale(30),
-  '4xl': verticalScale(34),
+  xs: verticalScale(13),
+  sm: verticalScale(15),
+  md: verticalScale(18),
+  lg: verticalScale(20),
+  xl: verticalScale(24),
+  '2xl': verticalScale(28),
+  '3xl': verticalScale(32),
+  '4xl': verticalScale(36),
 } as const;
 
 export const theme = { colors, spacingX, spacingY, radius, fontFamily, fontSize };

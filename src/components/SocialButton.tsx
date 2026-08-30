@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: fontFamily.semibold,
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
     color: colors.gray900,
   },
 });

@@ -13,10 +13,12 @@ import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
 } from '@expo-google-fonts/plus-jakarta-sans';
+import { DMSerifText_400Regular } from '@expo-google-fonts/dm-serif-text';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NetworkProvider } from '@/contexts/NetworkContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { colors } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import ErrorFallback from './error';
 
 import * as Notifications from 'expo-notifications';
@@ -39,6 +41,7 @@ export default function RootLayout() {
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
+    DMSerifText_400Regular,
   });
 
   useEffect(() => {
@@ -53,7 +56,7 @@ export default function RootLayout() {
         </View>
       ) : (
           <SafeAreaProvider style={{ flex: 1 }}>
-            <IconContext.Provider value={{ size: 22, color: colors.gray700, weight: 'regular' }}>
+            <IconContext.Provider value={{ size: verticalScale(22), color: colors.gray700, weight: 'regular' }}>
               <AuthProvider>
                 <NotificationProvider>
                   <NetworkProvider>

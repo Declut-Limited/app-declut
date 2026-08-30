@@ -34,6 +34,12 @@
           "cameraPermission": "Declut uses your camera to verify your identity (liveness check) during KYC."
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Declut uses your location to show listings near you."
+        }
+      ],
       "expo-font",
       "expo-notifications"
     ]

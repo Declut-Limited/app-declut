@@ -1,8 +1,9 @@
 import React from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
-import { Envelope, Phone, WhatsappLogo } from 'phosphor-react-native';
+import * as Icons from 'phosphor-react-native';
 import { Card, ContactRow, FaqAccordionItem, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 
 // Answers here are a reasonable first draft, not reviewed copy — only the
 // questions themselves came from the delivered design.
@@ -56,7 +57,7 @@ export default function FaqScreen() {
           responseTime="Avg. Response time: 1 hr"
           action={{
             label: 'Email',
-            icon: <Envelope size={14} color={colors.primary} weight="bold" />,
+            icon: <Icons.EnvelopeIcon size={verticalScale(14)} color={colors.primary} weight="bold" />,
             onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`),
           }}
         />
@@ -66,7 +67,7 @@ export default function FaqScreen() {
           responseTime="Avg. Response time: 1 min"
           action={{
             label: 'Call',
-            icon: <Phone size={14} color={colors.primary} weight="bold" />,
+            icon: <Icons.PhoneIcon size={verticalScale(14)} color={colors.primary} weight="bold" />,
             onPress: () => Linking.openURL(`tel:${SUPPORT_PHONE_E164}`),
           }}
         />
@@ -74,7 +75,7 @@ export default function FaqScreen() {
           label="Chat"
           value="Whatsapp"
           subtitle="Start a conversation on Whatsapp"
-          btnIcon={<WhatsappLogo size={20} color="#25D366" weight="fill" />}
+          btnIcon={<Icons.WhatsappLogoIcon size={verticalScale(20)} color="#25D366" weight="fill" />}
           onPress={() => Linking.openURL(`https://wa.me/${SUPPORT_PHONE_E164.replace('+', '')}`)}
         />
       </Card>

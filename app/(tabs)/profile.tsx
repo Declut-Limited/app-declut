@@ -5,8 +5,8 @@ import { ScreenContainer, Button } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
-// STUB LANDING ROUTE — HOME SCREEN NOT YET DESIGNED
-export default function HomeScreen() {
+// STUB TAB — PROFILE SCREEN NOT YET DESIGNED (sign-out lives here for now)
+export default function ProfileScreen() {
   const { user, signOut } = useAuth();
 
   async function handleSignOut() {
@@ -15,12 +15,9 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScreenContainer>
-      <Text style={styles.title}>You're in, {user?.name ?? 'there'}.</Text>
-      <Text style={styles.subtitle}>
-        Onboarding, sign-in/up, and the mandatory OTP → NIN → liveness chain are done. The home screen itself
-        hasn't been designed yet.
-      </Text>
+    <ScreenContainer edges={['top']} background={colors.white}>
+      <Text style={styles.title}>{user?.name ?? 'Profile'}</Text>
+      <Text style={styles.subtitle}>This screen hasn't been designed yet.</Text>
       <Button label="Sign out" variant="outline" onPress={handleSignOut} />
     </ScreenContainer>
   );

@@ -14,6 +14,7 @@ import {
   TextLink,
 } from '@/components';
 import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
@@ -95,7 +96,7 @@ export default function SignInScreen() {
         <View style={styles.form}>
           <Input
             placeholder="Email or Phone number"
-            btnIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="profile" variant="bold" size={verticalScale(20)} color={colors.gray400} />}
             value={identifier}
             onChangeText={(text) => {
               setIdentifier(text);
@@ -108,7 +109,7 @@ export default function SignInScreen() {
           <Input
             placeholder="Password"
             isPassword
-            btnIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="lock" variant="bold" size={verticalScale(20)} color={colors.gray400} />}
             value={password}
             onChangeText={(text) => {
               setPassword(text);

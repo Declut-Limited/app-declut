@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import type { PressableProps, TextInputProps, ViewProps } from 'react-native';
+import type { Edge } from 'react-native-safe-area-context';
+import type { Listing } from '@/api/types';
 
 export type ButtonVariant = 'dark' | 'primary' | 'outline' | 'ghost';
 
@@ -54,6 +56,8 @@ export interface ScreenContainerProps extends ViewProps {
   background?: string;
   /** Renders full-width above the padded/scrollable content, so a header's divider can bleed edge-to-edge. */
   header?: ReactNode;
+  /** Defaults to ['top', 'bottom'] — pass ['top'] for tab screens, since the custom tab bar already handles its own bottom safe-area inset. */
+  edges?: Edge[];
 }
 
 export interface StepHeaderProps {
@@ -130,4 +134,12 @@ export interface LegalConsentTextProps {
 export interface PaginationDotsProps {
   count: number;
   activeIndex: number;
+}
+
+export interface ListingCardProps {
+  listing: Listing;
+  onPress: () => void;
+  showFavorite?: boolean;
+  favorited?: boolean;
+  onToggleFavorite?: () => void;
 }

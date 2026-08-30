@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     fontSize: fontSize.md,
     color: colors.white,
-    marginBottom: 2,
+    marginBottom: verticalScale(2),
   },
   subtitle: {
     fontFamily: fontFamily.medium,

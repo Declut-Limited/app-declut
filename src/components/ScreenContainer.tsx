@@ -6,7 +6,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { colors, spacingX, spacingY } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import type { ScreenContainerProps } from '@/utils/types';
@@ -16,12 +16,13 @@ export function ScreenContainer({
   scroll = true,
   background = colors.background,
   header,
+  edges = ['top', 'bottom'],
   style,
   children,
   ...rest
 }: ScreenContainerProps) {
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={edges}>
       <StatusBar style="dark" backgroundColor={background} />
       {header}
 

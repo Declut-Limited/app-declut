@@ -15,6 +15,7 @@ import {
   TextLink,
 } from '@/components';
 import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { register, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
@@ -101,7 +102,7 @@ export default function SignUpScreen() {
         <View style={styles.form}>
           <Input
             placeholder="Full name"
-            btnIcon={<Icon name="profile" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="profile" variant="bold" size={verticalScale(20)} color={colors.gray400} />}
             value={name}
             onChangeText={(text) => {
               setName(text);
@@ -112,7 +113,7 @@ export default function SignUpScreen() {
           />
           <Input
             placeholder="Email"
-            btnIcon={<Icon name="sms" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="sms" variant="bold" size={verticalScale(20)} color={colors.gray400} />}
             value={email}
             onChangeText={(text) => {
               setEmail(text);
@@ -133,7 +134,7 @@ export default function SignUpScreen() {
           <Input
             placeholder="Password"
             isPassword
-            btnIcon={<Icon name="lock" variant="bold" size={20} color={colors.gray400} />}
+            btnIcon={<Icon name="lock" variant="bold" size={verticalScale(20)} color={colors.gray400} />}
             value={password}
             onChangeText={(text) => {
               setPassword(text);

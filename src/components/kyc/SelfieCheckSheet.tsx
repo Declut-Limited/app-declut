@@ -30,14 +30,14 @@ export function SelfieCheckSheet() {
           <CameraView style={styles.previewCircle} facing="front" />
         ) : (
           <View style={[styles.previewCircle, styles.previewPlaceholder]}>
-            <Icons.CameraIcon size={28} color={colors.gray400} />
+            <Icons.CameraIcon size={verticalScale(28)} color={colors.gray400} />
           </View>
         )}
       </View>
 
       <View style={styles.instructionRow}>
         <View style={styles.instructionIcon}>
-          <Icons.ShieldCheckIcon size={18} color={colors.primary} weight="fill" />
+          <Icons.ShieldCheckIcon size={verticalScale(18)} color={colors.primary} weight="fill" />
         </View>
         <View style={styles.instructionText}>
           <Text style={styles.instructionTitle}>Let's confirm it's really you</Text>
@@ -47,7 +47,7 @@ export function SelfieCheckSheet() {
 
       <View style={styles.instructionRow}>
         <View style={styles.instructionIcon}>
-          <Icons.CameraIcon size={18} color={colors.primary} weight="fill" />
+          <Icons.CameraIcon size={verticalScale(18)} color={colors.primary} weight="fill" />
         </View>
         <View style={styles.instructionText}>
           <Text style={styles.instructionTitle}>Center your face in the frame</Text>
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     flex: 1,
-    gap: 2,
+    gap: verticalScale(2),
   },
   instructionTitle: {
     fontFamily: fontFamily.semibold,

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
-import { Minus, Plus } from 'phosphor-react-native';
+import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 import type { FaqAccordionItemProps } from '@/utils/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -20,7 +21,11 @@ export function FaqAccordionItem({ question, answer }: FaqAccordionItemProps) {
     <Pressable onPress={toggle} style={styles.item}>
       <View style={styles.row}>
         <Text style={styles.question}>{question}</Text>
-        {open ? <Minus size={18} color={colors.gray500} /> : <Plus size={18} color={colors.gray500} />}
+        {open ? (
+          <Icons.MinusIcon size={verticalScale(18)} color={colors.gray500} />
+        ) : (
+          <Icons.PlusIcon size={verticalScale(18)} color={colors.gray500} />
+        )}
       </View>
       {open ? <Text style={styles.answer}>{answer}</Text> : null}
     </Pressable>

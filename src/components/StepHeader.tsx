@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { CaretLeft } from 'phosphor-react-native';
+import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -14,7 +14,7 @@ export function StepHeader({ step, total, onBack }: StepHeaderProps) {
     <View style={styles.row}>
       {onBack ? (
         <Pressable onPress={guard(onBack)} hitSlop={12} style={styles.backButton}>
-          <CaretLeft size={20} color={colors.gray700} />
+          <Icons.CaretLeftIcon size={verticalScale(20)} color={colors.gray700} />
         </Pressable>
       ) : (
         <View style={styles.backButtonPlaceholder} />

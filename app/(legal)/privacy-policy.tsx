@@ -3,6 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { LegalDocumentBody, ScreenContainer, ScreenHeader } from '@/components';
 import type { LegalSection } from '@/utils/types';
 import { colors, fontFamily, fontSize } from '@/constants/theme';
+import { verticalScale } from '@/utils/styling';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -56,6 +57,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.xs,
     color: colors.warning,
-    marginTop: 4,
+    marginTop: verticalScale(4),
   },
 });
