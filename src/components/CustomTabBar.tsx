@@ -90,7 +90,7 @@ function TabButton({ route, index, state, navigation }: TabButtonProps) {
   );
 
   return (
-    <Pressable onPress={guard(onPress)} style={styles.tabButton} accessibilityRole="button" accessibilityState={{ selected: isFocused }}>
+    <Pressable onPress={guard(onPress)} style={[styles.tabButton, isFocused && styles.tabButtonActive]} accessibilityRole="button" accessibilityState={{ selected: isFocused }}>
       {iconElement}
       <Text style={[styles.tabLabel, { color }]}>{labelByRoute[route.name] ?? route.name}</Text>
     </Pressable>
@@ -112,7 +112,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: verticalScale(4),
+    gap: verticalScale(2),
+    width: verticalScale(50),
+    height: verticalScale(50),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+  },
+  tabButtonActive: {
+    backgroundColor: colors.primaryLight,
   },
   tabLabel: {
     fontFamily: fontFamily.semibold,
