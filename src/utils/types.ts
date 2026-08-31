@@ -74,6 +74,8 @@ export interface ScreenContainerProps extends ViewProps {
   edges?: Edge[];
   /** Passed straight through to the internal ScrollView — only applies when scroll is true. */
   refreshControl?: ReactElement<RefreshControlProps>;
+  /** Defaults to true. False skips the keyboard-padding behavior, letting the keyboard float on top of the content instead. */
+  avoidKeyboard?: boolean;
 }
 
 export interface StepHeaderProps {

@@ -21,6 +21,7 @@ export function ScreenContainer({
   style,
   children,
   refreshControl,
+  avoidKeyboard = true,
   ...rest
 }: ScreenContainerProps) {
   return (
@@ -30,7 +31,7 @@ export function ScreenContainer({
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {scroll ? (
           <ScrollView

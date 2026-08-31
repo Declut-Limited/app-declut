@@ -185,15 +185,27 @@ export type CreateListingPayload = Pick<
 
 export type UpdateListingPayload = Partial<CreateListingPayload>;
 
+/** GET /listings — all fields optional/combinable; shares its filter logic with GET /listings/count. */
 export interface ListingSearchParams {
-  keyword?: string;
-  category?: string;
-  condition?: string;
-  minPrice?: number;
-  maxPrice?: number;
+  categoryId?: string;
+  /** When true, lat/lng/searchWithin apply ($geoNear). When false/omitted, address/state/city/area text filters apply instead. */
+  useMyLocation?: boolean;
   lat?: number;
   lng?: number;
-  radiusKm?: number;
+  /** Radius in km — only applied when useMyLocation is true. Omitted = unlimited distance, still proximity-sorted. */
+  searchWithin?: number;
+  address?: string;
+  state?: string;
+  city?: string;
+  area?: string;
+  /** Matches Listing.condition = 'new'. */
+  conditionNew?: boolean;
+  /** Matches Listing.condition in [like_new, good] — fair/poor are excluded. */
+  conditionNeatlyUsed?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  /** Free-text match against title/description (Mongo text search). */
+  search?: string;
   page?: number;
   limit?: number;
 }

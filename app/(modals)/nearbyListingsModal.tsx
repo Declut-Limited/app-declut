@@ -1,31 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
+import * as Icons from 'phosphor-react-native';
+import { EmptyState, ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
+import { useSingleTap } from '@/hooks/useSingleTap';
 import { showWarningToast } from '@/lib/toast';
 
 const SKELETON_COUNT = 6;
 
 // FULL-SCREEN "SEE ALL" MODAL — Home's "Listings Near You" section, GET /listings/nearby
 export default function NearbyListingsModal() {
+  const guard = useSingleTap();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
+  // True while getDeviceLocation() is resolving (permission prompt + GPS fix) — without this, the
+  // list's own skeleton never shows for that window, since usePaginatedListings stays disabled
+  // until coords is set, and it would otherwise flash the "No nearby listings yet." empty state.
+  const [resolvingLocation, setResolvingLocation] = useState(true);
   const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
-  useEffect(() => {
-    (async () => {
+  async function requestLocation() {
+    setResolvingLocation(true);
+    try {
       const device = await getDeviceLocation();
       if (!device) {
         setLocationDenied(true);
         return;
       }
+      setLocationDenied(false);
       setCoords({ lat: device.lat, lng: device.lng });
-    })();
+    } finally {
+      setResolvingLocation(false);
+    }
+  }
+
+  useEffect(() => {
+    requestLocation();
   }, []);
 
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
@@ -52,8 +67,18 @@ export default function NearbyListingsModal() {
       scroll={false}
       header={<ScreenHeader title="Listings Near You" />}
     >
-      {locationDenied ? (
-        <Text style={styles.message}>Enable location to see listings near you.</Text>
+      {resolvingLocation ? (
+        <ListingCardSkeleton count={SKELETON_COUNT} variant="all" />
+      ) : locationDenied ? (
+        <EmptyState
+          icon={Icons.MapPinIcon}
+          message="Enable location to see listings near you."
+          action={
+            <Pressable onPress={guard(requestLocation)} hitSlop={8}>
+              <Text style={styles.allowLocationText}>Allow Location</Text>
+            </Pressable>
+          }
+        />
       ) : (
         <FlatList
           data={loading || refreshing ? [] : items}
@@ -78,8 +103,10 @@ export default function NearbyListingsModal() {
           ListEmptyComponent={
             loading || refreshing ? (
               <ListingCardSkeleton count={SKELETON_COUNT} variant="all" />
+            ) : error ? (
+              <Text style={styles.message}>{error}</Text>
             ) : (
-              <Text style={styles.message}>{error ?? 'No nearby listings yet.'}</Text>
+              <EmptyState icon={Icons.PackageIcon} message="No nearby listings yet." />
             )
           }
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footerLoading} /> : null}
@@ -103,5 +130,10 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     paddingVertical: spacingY.xl,
     textAlign: 'center',
+  },
+  allowLocationText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.primary,
   },
 });

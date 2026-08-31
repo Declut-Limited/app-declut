@@ -16,8 +16,32 @@ export async function getUploadSignature() {
   return res.data.data;
 }
 
+/**
+ * GET /listings — search + filter, combined. Built as an explicit flat object (not a nested
+ * `params` object) so the bracket-style keys (`itemCondition[new]`, `priceRange[min]`, ...) the
+ * backend expects go over the wire literally, regardless of how axios would serialize nesting.
+ */
 export async function searchListings(params: ListingSearchParams) {
-  const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings', { params });
+  const query: Record<string, string | number | boolean> = {
+    page: params.page ?? 1,
+    limit: params.limit ?? 20,
+  };
+  if (params.categoryId) query.categoryId = params.categoryId;
+  if (params.useMyLocation) query.useMyLocation = true;
+  if (params.lat !== undefined) query.lat = params.lat;
+  if (params.lng !== undefined) query.lng = params.lng;
+  if (params.searchWithin !== undefined) query.searchWithin = params.searchWithin;
+  if (params.address) query.address = params.address;
+  if (params.state) query.state = params.state;
+  if (params.city) query.city = params.city;
+  if (params.area) query.area = params.area;
+  if (params.conditionNew) query['itemCondition[new]'] = true;
+  if (params.conditionNeatlyUsed) query['itemCondition[neatlyUsed]'] = true;
+  if (params.minPrice !== undefined) query['priceRange[min]'] = params.minPrice;
+  if (params.maxPrice !== undefined) query['priceRange[max]'] = params.maxPrice;
+  if (params.search) query.search = params.search;
+
+  const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings', { params: query });
   return res.data.data;
 }
 

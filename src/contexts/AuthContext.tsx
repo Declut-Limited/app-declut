@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import { clearSessionTokens, hydrateSession, onSessionExpired, setSessionTokens } from '@/api/client';
 import { getMyProfile } from '@/api/users';
 import { logout as logoutRequest, resendVerificationEmail } from '@/api/auth';
@@ -86,9 +87,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profile = await applyKycBypass(await getMyProfile());
         setUser(profile);
         setStatus('authenticated');
-      } catch {
-        await clearSessionTokens();
-        setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
+      } catch (e) {
+        // A 401 here means even the interceptor's silent refresh attempt failed (client.ts has
+        // already cleared tokens and fired sessionExpiredHandler in that case) — a genuinely
+        // invalid session. Anything else (no connectivity, a timeout, a cold-starting backend)
+        // is NOT a reason to sign the user out — the stored session is still perfectly valid,
+        // we just couldn't confirm it right now. Stay on 'loading' rather than guessing wrong:
+        // NetworkContext's offline banner explains the wait, and reloads the app once
+        // connectivity returns, which re-runs this hydration with the still-valid tokens.
+        const isAuthFailure = axios.isAxiosError(e) && e.response?.status === 401;
+        if (isAuthFailure) {
+          await clearSessionTokens();
+          setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
+        }
       }
     })();
   }, []);

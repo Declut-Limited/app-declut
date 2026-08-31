@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { extractErrorMessage } from '@/api/client';
 import type { Listing, PaginatedResponse } from '@/api/types';
 
@@ -7,14 +7,8 @@ const PAGE_LIMIT = 20;
 type FetchPage = (params: { page: number; limit: number }) => Promise<PaginatedResponse<Listing>>;
 type LoadMode = 'initial' | 'refresh' | 'more';
 
-/**
- * Drives a paginated, infinite-scroll listing screen: initial load, pull-to-refresh, and
- * load-more-on-scroll, all backed by a single `page`/`limit` fetch function.
- *
- * `enabled` gates the initial load for screens that need to resolve something (e.g. device
- * location) before the first fetch can run — flipping it to true triggers that first load.
- */
-export function usePaginatedListings(fetchPage: FetchPage, enabled = true) {
+
+export function usePaginatedListings(fetchPage: FetchPage, enabled = true, resetKey?: string | number) {
   const [items, setItems] = useState<Listing[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
@@ -48,10 +42,10 @@ export function usePaginatedListings(fetchPage: FetchPage, enabled = true) {
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return;
     load(1, 'initial');
-  }, [enabled, load]);
+  }, [enabled, resetKey, load]);
 
   const hasMore = total === null ? true : items.length < total;
 

@@ -17,6 +17,7 @@ import { DMSerifText_400Regular } from '@expo-google-fonts/dm-serif-text';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NetworkProvider } from '@/contexts/NetworkContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
+import { SearchFilterProvider } from '@/contexts/SearchFilterContext';
 import { colors } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import ErrorFallback from './error';
@@ -60,16 +61,18 @@ export default function RootLayout() {
               <AuthProvider>
                 <NotificationProvider>
                   <NetworkProvider>
-                    {/* Bottom navigation */}
-                    {/* <View style={{ flex: 1, paddingBottom: verticalScale(sysNavigationHeight - 4), }}> */}
-                      <Stack screenOptions={{ headerShown: false }}>
-                        <Stack.Screen name="index" />
-                        <Stack.Screen name="(modals)/addItemModal" options={{ presentation: 'modal' }} />
-                        <Stack.Screen name="(modals)/nearbyListingsModal" options={{ presentation: 'modal' }} />
-                        <Stack.Screen name="(modals)/newListingsModal" options={{ presentation: 'modal' }} />
-                        <Stack.Screen name="(modals)/filterByModal" options={{ presentation: 'modal' }} />
-                      </Stack>
-                    {/* </View> */}
+                    <SearchFilterProvider>
+                      {/* Bottom navigation */}
+                      {/* <View style={{ flex: 1, paddingBottom: verticalScale(sysNavigationHeight - 4), }}> */}
+                        <Stack screenOptions={{ headerShown: false }}>
+                          <Stack.Screen name="index" />
+                          <Stack.Screen name="(modals)/addItemModal" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/nearbyListingsModal" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/newListingsModal" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/filterByModal" options={{ presentation: 'modal' }} />
+                        </Stack>
+                      {/* </View> */}
+                    </SearchFilterProvider>
                   </NetworkProvider>
                 </NotificationProvider>
               </AuthProvider>

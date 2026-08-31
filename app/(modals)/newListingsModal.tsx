@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ListingCardSkeleton, RecentListingCard, ScreenContainer, ScreenHeader } from '@/components';
+import * as Icons from 'phosphor-react-native';
+import { EmptyState, ListingCardSkeleton, RecentListingCard, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
 import { getDeviceLocation } from '@/lib/location';
@@ -61,8 +62,10 @@ export default function NewListingsModal() {
         ListEmptyComponent={
           loading || refreshing ? (
             <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
+          ) : error ? (
+            <Text style={styles.message}>{error}</Text>
           ) : (
-            <Text style={styles.message}>{error ?? 'No listings yet.'}</Text>
+            <EmptyState icon={Icons.PackageIcon} message="No listings yet." />
           )
         }
         ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footerLoading} /> : null}

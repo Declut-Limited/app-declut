@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   price: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     color: colors.ink,
   },
   divider: {

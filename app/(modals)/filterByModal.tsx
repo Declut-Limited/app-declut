@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { FormDropdown, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
@@ -12,6 +13,7 @@ import type { Category } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
 import { showWarningToast } from '@/lib/toast';
+import { useSearchFilter } from '@/contexts/SearchFilterContext';
 
 const CATEGORY_PAGE_LIMIT = 20;
 // No listings-count-by-filter endpoint exists yet — Price Range just needs sane outer bounds for the slider.
@@ -28,6 +30,7 @@ const switchProps = {
   trackColor: { false: colors.gray200, true: colors.primary },
   thumbColor: colors.white,
   ios_backgroundColor: colors.gray200,
+  style: [{ transform: [{ scale: 1.2 }] }],
 };
 
 function clamp(value: number, lo: number, hi: number) {
@@ -37,6 +40,7 @@ function clamp(value: number, lo: number, hi: number) {
 // FULL-SCREEN "FILTER BY" MODAL — triggered from Home's search-bar filter button.
 export default function FilterByModal() {
   const guard = useSingleTap();
+  const { filters: committedFilters, setFilters: commitFilters } = useSearchFilter();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesPage, setCategoriesPage] = useState(1);
@@ -44,27 +48,32 @@ export default function FilterByModal() {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesLoadingMore, setCategoriesLoadingMore] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
-  const [selectedCategorySlugs, setSelectedCategorySlugs] = useState<Set<string>>(new Set());
+  // The backend only takes a single categoryId, so this is effectively single-select — see toggleCategory.
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(
+    () => (committedFilters.categoryId ? new Set([committedFilters.categoryId]) : new Set())
+  );
 
-  const [useCurrentLocation, setUseCurrentLocation] = useState(false);
+  const [useCurrentLocation, setUseCurrentLocation] = useState(committedFilters.useMyLocation);
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
-  const [state, setState] = useState<string | undefined>(undefined);
-  const [city, setCity] = useState<string | undefined>(undefined);
-  const [area, setArea] = useState<string | undefined>(undefined);
-  const [applyRadius, setApplyRadius] = useState(true);
+  const [deviceLat, setDeviceLat] = useState<number | undefined>(committedFilters.lat);
+  const [deviceLng, setDeviceLng] = useState<number | undefined>(committedFilters.lng);
+  const [state, setState] = useState<string | undefined>(committedFilters.state);
+  const [city, setCity] = useState<string | undefined>(committedFilters.city);
+  const [area, setArea] = useState<string | undefined>(committedFilters.area);
+  const [applyRadius, setApplyRadius] = useState(committedFilters.searchWithin !== undefined);
   // Left blank (shows the "0.00" placeholder) until the user overrides it — an empty box still
   // means the default radius applies, matching the design's banner text ("within 5km") below it.
-  const [radiusKm, setRadiusKm] = useState('');
+  const [radiusKm, setRadiusKm] = useState(committedFilters.searchWithin !== undefined ? String(committedFilters.searchWithin) : '');
   const effectiveRadiusKm = radiusKm || String(DEFAULT_NEARBY_RADIUS_KM);
 
-  const [includeNew, setIncludeNew] = useState(true);
-  const [includeNeatlyUsed, setIncludeNeatlyUsed] = useState(true);
+  const [includeNew, setIncludeNew] = useState(committedFilters.conditionNew);
+  const [includeNeatlyUsed, setIncludeNeatlyUsed] = useState(committedFilters.conditionNeatlyUsed);
 
-  const [minPrice, setMinPrice] = useState(PRICE_BOUND_MIN);
-  const [maxPrice, setMaxPrice] = useState(PRICE_BOUND_MAX);
+  const [minPrice, setMinPrice] = useState(committedFilters.minPrice ?? PRICE_BOUND_MIN);
+  const [maxPrice, setMaxPrice] = useState(committedFilters.maxPrice ?? PRICE_BOUND_MAX);
 
   const hasActiveFilters =
-    selectedCategorySlugs.size > 0 ||
+    selectedCategoryIds.size > 0 ||
     useCurrentLocation ||
     state !== undefined ||
     city !== undefined ||
@@ -98,13 +107,10 @@ export default function FilterByModal() {
     loadCategories(1);
   }, [loadCategories]);
 
-  function toggleCategory(slug: string) {
-    setSelectedCategorySlugs((prev) => {
-      const next = new Set(prev);
-      if (next.has(slug)) next.delete(slug);
-      else next.add(slug);
-      return next;
-    });
+  // Tapping the active chip again clears it; tapping a different one replaces the selection —
+  // the backend only accepts one categoryId, so the chips are effectively single-select.
+  function toggleCategory(id: string) {
+    setSelectedCategoryIds((prev) => (prev.has(id) ? new Set() : new Set([id])));
   }
 
   // Turning this on is the moment location access actually matters — getDeviceLocation() checks
@@ -120,13 +126,17 @@ export default function FilterByModal() {
         return;
       }
       setLocationLabel(device.label);
+      setDeviceLat(device.lat);
+      setDeviceLng(device.lng);
       setUseCurrentLocation(true);
     });
   }
 
   function handleReset() {
-    setSelectedCategorySlugs(new Set());
+    setSelectedCategoryIds(new Set());
     setUseCurrentLocation(false);
+    setDeviceLat(undefined);
+    setDeviceLng(undefined);
     setState(undefined);
     setCity(undefined);
     setArea(undefined);
@@ -139,7 +149,20 @@ export default function FilterByModal() {
   }
 
   function handleShow() {
-    // No search-results screen is wired up yet — this just closes the modal for now.
+    commitFilters({
+      categoryId: selectedCategoryIds.size > 0 ? Array.from(selectedCategoryIds)[0] : undefined,
+      useMyLocation: useCurrentLocation,
+      lat: useCurrentLocation ? deviceLat : undefined,
+      lng: useCurrentLocation ? deviceLng : undefined,
+      searchWithin: useCurrentLocation && applyRadius ? Number(effectiveRadiusKm) : undefined,
+      state: !useCurrentLocation ? state : undefined,
+      city: !useCurrentLocation ? city : undefined,
+      area: !useCurrentLocation ? area : undefined,
+      conditionNew: includeNew,
+      conditionNeatlyUsed: includeNeatlyUsed,
+      minPrice: minPrice !== PRICE_BOUND_MIN ? minPrice : undefined,
+      maxPrice: maxPrice !== PRICE_BOUND_MAX ? maxPrice : undefined,
+    });
     router.back();
   }
 
@@ -172,26 +195,26 @@ export default function FilterByModal() {
       }
     >
       <Text style={styles.sectionTitle}>Categories</Text>
-      <View style={styles.chipWrap}>
-        {categories.map((category) => {
-          const selected = selectedCategorySlugs.has(category.slug);
-          return (
-            <Pressable
-              key={category.id}
-              onPress={guard(() => toggleCategory(category.slug))}
-              style={[styles.chip, selected && styles.chipSelected]}
-            >
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{category.title}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       {categoriesLoading ? (
-        <ActivityIndicator color={colors.primary} style={styles.categoriesLoading} />
+        <CategoryChipsSkeleton />
       ) : categoriesError ? (
         <Text style={styles.errorText}>{categoriesError}</Text>
-      ) : null}
+      ) : (
+        <View style={styles.chipWrap}>
+          {categories.map((category) => {
+            const selected = selectedCategoryIds.has(category.id);
+            return (
+              <Pressable
+                key={category.id}
+                onPress={guard(() => toggleCategory(category.id))}
+                style={[styles.chip, selected && styles.chipSelected]}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{category.title}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {!categoriesLoading && categoriesHasMore ? (
         <Pressable
@@ -307,6 +330,28 @@ export default function FilterByModal() {
         />
       </View>
     </ScreenContainer>
+  );
+}
+
+// Varied widths so the placeholder row reads as text-shaped chips rather than uniform blocks.
+const CATEGORY_SKELETON_WIDTHS = [72, 90, 64, 100, 80, 68, 96, 76];
+
+/** Initial-load placeholder for the Categories chips — pulses like ListingCardSkeleton. */
+function CategoryChipsSkeleton() {
+  const opacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, [opacity]);
+
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View style={[styles.chipWrap, pulseStyle]}>
+      {CATEGORY_SKELETON_WIDTHS.map((width, index) => (
+        <View key={index} style={[styles.chipSkeletonBone, { width: verticalScale(width) }]} />
+      ))}
+    </Animated.View>
   );
 }
 
@@ -496,8 +541,11 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: colors.white,
   },
-  categoriesLoading: {
-    marginVertical: spacingY.lg,
+  chipSkeletonBone: {
+    height: verticalScale(34),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray200,
   },
   loadMoreButton: {
     alignSelf: 'center',

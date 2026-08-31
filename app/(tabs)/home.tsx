@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
-import { ListingCard, ListingCardSkeleton, RecentListingCard, ScreenContainer } from '@/components';
+import { EmptyState, ListingCard, ListingCardSkeleton, RecentListingCard, ScreenContainer } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
@@ -236,7 +236,7 @@ function ListingSection({
       ) : error ? (
         <Text style={styles.sectionMessage}>{error}</Text>
       ) : (
-        <Text style={styles.sectionMessage}>{emptyLabel}</Text>
+        <EmptyState icon={Icons.PackageIcon} message={emptyLabel}  />
       )}
     </View>
   );
