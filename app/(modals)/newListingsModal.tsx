@@ -60,7 +60,7 @@ export default function NewListingsModal() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           loading || refreshing ? (
-            <ListingCardSkeleton count={SKELETON_COUNT} variant="nearby" />
+            <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
           ) : (
             <Text style={styles.message}>{error ?? 'No listings yet.'}</Text>
           )

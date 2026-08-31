@@ -77,7 +77,7 @@ export default function NearbyListingsModal() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             loading || refreshing ? (
-              <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
+              <ListingCardSkeleton count={SKELETON_COUNT} variant="all" />
             ) : (
               <Text style={styles.message}>{error ?? 'No nearby listings yet.'}</Text>
             )

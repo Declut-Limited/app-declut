@@ -52,7 +52,7 @@ export default function RootLayout() {
     <ErrorBoundary FallbackComponent={ErrorFallback} onError={(error, info) => console.error('Global error caught:', error, info)}>
       {!fontsLoaded ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : (
           <SafeAreaProvider style={{ flex: 1 }}>

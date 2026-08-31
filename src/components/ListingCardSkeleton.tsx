@@ -4,8 +4,9 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTim
 import { colors, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 
-const NEARBY_IMAGE_SIZE = verticalScale(112);
-const RECENT_IMAGE_SIZE = verticalScale(96);
+const IMAGE_SIZE = verticalScale(96);
+const RECENT_IMAGE_WIDTH = verticalScale(120);
+const RECENT_IMAGE_HEIGHT = verticalScale(100);
 
 function Bone({ width, height, tint }: { width: number | `${number}%`; height: number; tint?: string }) {
   return <View style={[styles.bone, { width, height, backgroundColor: tint ?? colors.gray100 }]} />;
@@ -14,9 +15,9 @@ function Bone({ width, height, tint }: { width: number | `${number}%`; height: n
 function ListingSkeletonCard() {
   return (
     <View style={[styles.card, styles.listingCard]}>
-      <View style={[styles.imageWrap, { width: NEARBY_IMAGE_SIZE, height: NEARBY_IMAGE_SIZE }]}>
+      <View style={[styles.imageWrap, { width: IMAGE_SIZE, height: IMAGE_SIZE }]}>
         <View style={[styles.image, styles.nearbyImageRadius]} />
-        <View style={[styles.pillBadge, styles.listingBadgeTint]} />
+        <View style={[styles.pillBadge, styles.badgeTint]} />
         <View style={styles.plainHeart} />
       </View>
 
@@ -36,9 +37,9 @@ function ListingSkeletonCard() {
 function RecentSkeletonCard() {
   return (
     <View style={[styles.card, styles.recentCard]}>
-      <View style={[styles.imageWrap, { width: RECENT_IMAGE_SIZE, height: RECENT_IMAGE_SIZE }]}>
+      <View style={[styles.imageWrap, { width: RECENT_IMAGE_WIDTH, height: RECENT_IMAGE_HEIGHT }]}>
         <View style={[styles.image, styles.recentImageRadius]} />
-        <View style={[styles.pillBadge, styles.recentBadgeTint]} />
+        <View style={[styles.pillBadge, styles.badgeTint]} />
         <View style={styles.plainHeart} />
       </View>
 
@@ -114,15 +115,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderCurve: 'continuous',
   },
-  // RecentListingCard now renders "Recently Posted" — lavender/primary tint.
-  listingBadgeTint: {
+  badgeTint: {
     backgroundColor: colors.primaryLight,
   },
-  // ListingCard now renders "Listings Near You" / search — peach/warning tint.
-  recentBadgeTint: {
-    backgroundColor: colors.warningLight,
-  },
-  // Both real cards use a plain heart glyph on the photo now — no circular chip.
   plainHeart: {
     position: 'absolute',
     top: spacingY.xs,

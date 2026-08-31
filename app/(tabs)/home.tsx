@@ -150,7 +150,7 @@ export default function HomeScreen() {
       <ListingSection
         title="Listings Near You"
         subtitle={locationLabel ? `within ${DEFAULT_NEARBY_RADIUS_KM}km` : undefined}
-        variant="recent"
+        variant="all"
         listings={locationDenied ? [] : nearby}
         loading={nearbyLoading}
         emptyLabel={locationDenied ? 'Enable location to see listings near you.' : 'No nearby listings yet.'}
@@ -173,7 +173,7 @@ export default function HomeScreen() {
 
       <ListingSection
         title="Recently Posted"
-        variant="nearby"
+        variant="recent"
         listings={recent}
         loading={recentLoading}
         emptyLabel="No listings yet."
