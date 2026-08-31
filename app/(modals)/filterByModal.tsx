@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, FormDropdown, ScreenContainer, ScreenHeader } from '@/components';
+import { FormDropdown, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
@@ -11,6 +11,7 @@ import { extractErrorMessage } from '@/api/client';
 import type { Category } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
+import { showWarningToast } from '@/lib/toast';
 
 const CATEGORY_PAGE_LIMIT = 20;
 // No listings-count-by-filter endpoint exists yet — Price Range just needs sane outer bounds for the slider.
@@ -62,6 +63,19 @@ export default function FilterByModal() {
   const [minPrice, setMinPrice] = useState(PRICE_BOUND_MIN);
   const [maxPrice, setMaxPrice] = useState(PRICE_BOUND_MAX);
 
+  const hasActiveFilters =
+    selectedCategorySlugs.size > 0 ||
+    useCurrentLocation ||
+    state !== undefined ||
+    city !== undefined ||
+    area !== undefined ||
+    !applyRadius ||
+    radiusKm !== '' ||
+    !includeNew ||
+    !includeNeatlyUsed ||
+    minPrice !== PRICE_BOUND_MIN ||
+    maxPrice !== PRICE_BOUND_MAX;
+
   const loadCategories = useCallback(async (page: number) => {
     if (page === 1) setCategoriesLoading(true);
     else setCategoriesLoadingMore(true);
@@ -84,18 +98,29 @@ export default function FilterByModal() {
     loadCategories(1);
   }, [loadCategories]);
 
-  useEffect(() => {
-    getDeviceLocation().then((device) => {
-      if (device) setLocationLabel(device.label);
-    });
-  }, []);
-
   function toggleCategory(slug: string) {
     setSelectedCategorySlugs((prev) => {
       const next = new Set(prev);
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
       return next;
+    });
+  }
+
+  // Turning this on is the moment location access actually matters — getDeviceLocation() checks
+  // (and, if needed, prompts for) permission itself; a denial/failure reverts the toggle.
+  function handleToggleCurrentLocation(next: boolean) {
+    if (!next) {
+      setUseCurrentLocation(false);
+      return;
+    }
+    getDeviceLocation().then((device) => {
+      if (!device) {
+        showWarningToast('Location needed', 'Enable location access to search near you.');
+        return;
+      }
+      setLocationLabel(device.label);
+      setUseCurrentLocation(true);
     });
   }
 
@@ -129,8 +154,8 @@ export default function FilterByModal() {
         <ScreenHeader
           title="Filter By"
           rightElement={
-            <Pressable onPress={guard(handleReset)} hitSlop={8}>
-              <Text style={styles.resetText}>Reset</Text>
+            <Pressable onPress={guard(handleReset)} hitSlop={8} disabled={!hasActiveFilters}>
+              <Text style={[styles.resetText, !hasActiveFilters && styles.resetTextDisabled]}>Reset</Text>
             </Pressable>
           }
         />
@@ -138,11 +163,11 @@ export default function FilterByModal() {
       footer={
         <View style={styles.footerRow}>
           <View style={styles.resultsPill}>
-            <Text style={styles.resultsPillText}>— Results</Text>
+            <Text style={styles.resultsPillText}>No Results</Text>
           </View>
-          <View style={styles.showButtonWrap}>
-            <Button label="Show" onPress={guard(handleShow)} />
-          </View>
+          <Pressable onPress={guard(handleShow)} style={styles.showButton}>
+            <Text style={styles.showButtonLabel}>Show</Text>
+          </Pressable>
         </View>
       }
     >
@@ -190,42 +215,40 @@ export default function FilterByModal() {
           <Text style={styles.rowLabel}>Show items in your current location</Text>
           <Text style={styles.rowSubtitle}>When this is on, you'll see listings around you right now.</Text>
         </View>
-        <Switch value={useCurrentLocation} onValueChange={setUseCurrentLocation} {...switchProps} />
+        <Switch value={useCurrentLocation} onValueChange={handleToggleCurrentLocation} {...switchProps} />
       </View>
 
-      <Text style={styles.subheading}>Explore Locations</Text>
-      <View style={styles.fieldGap}>
-        <FormDropdown label="State" placeholder="Select--" data={NIGERIAN_STATE_OPTIONS} value={state} onChange={setState} />
-      </View>
-      <View style={styles.fieldGap}>
-        <FormDropdown label="City" placeholder="Select--" data={localityOptions} value={city} onChange={setCity} />
-      </View>
-      <View style={styles.fieldGap}>
-        <FormDropdown label="Area" placeholder="Select--" data={localityOptions} value={area} onChange={setArea} />
-      </View>
+      {!useCurrentLocation ? (
+        <>
+          <Text style={styles.subheading}>Explore Locations</Text>
+          <View style={styles.fieldGap}>
+            <FormDropdown label="State" placeholder="Select--" data={NIGERIAN_STATE_OPTIONS} value={state} onChange={setState} />
+          </View>
+          <View style={styles.fieldGap}>
+            <FormDropdown label="City" placeholder="Select--" data={localityOptions} value={city} onChange={setCity} />
+          </View>
+          <View style={styles.fieldGap}>
+            <FormDropdown label="Area" placeholder="Select--" data={localityOptions} value={area} onChange={setArea} />
+          </View>
+        </>
+      ) : (
+        <View style={styles.toggleRow}>
+          <Text style={styles.rowLabel}>Apply Radius</Text>
+          <Switch value={applyRadius} onValueChange={setApplyRadius} {...switchProps} />
+        </View>
+      )}
 
-      <View style={styles.toggleRow}>
-        <Text style={styles.rowLabel}>Apply Radius</Text>
-        <Switch value={applyRadius} onValueChange={setApplyRadius} {...switchProps} />
-      </View>
-
-      {applyRadius ? (
+      {useCurrentLocation && applyRadius ? (
         <>
           <View style={styles.radiusRow}>
             <Text style={styles.rowLabel}>Search within:</Text>
-            <View style={styles.inputGroup}>
-              <TextInput
-                style={styles.radiusInput}
-                value={radiusKm}
-                onChangeText={setRadiusKm}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-                placeholderTextColor={colors.gray300}
-              />
-              <View style={styles.unitPill}>
-                <Text style={styles.unitPillText}>KM</Text>
-              </View>
-            </View>
+            <AmountField
+              unitLabel="KM"
+              value={radiusKm}
+              onChangeText={setRadiusKm}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+            />
           </View>
 
           <View style={styles.infoBanner}>
@@ -267,31 +290,21 @@ export default function FilterByModal() {
 
       <View style={styles.priceRow}>
         <Text style={styles.rowLabel}>Min</Text>
-        <View style={styles.inputGroup}>
-          <TextInput
-            style={styles.priceInput}
-            value={String(minPrice)}
-            onChangeText={(text) => setMinPrice(clamp(Number(text) || 0, PRICE_BOUND_MIN, maxPrice))}
-            keyboardType="number-pad"
-          />
-          <View style={styles.unitPill}>
-            <Text style={styles.unitPillText}>Naira</Text>
-          </View>
-        </View>
+        <AmountField
+          unitLabel="Naira"
+          value={String(minPrice)}
+          onChangeText={(text) => setMinPrice(clamp(Number(text) || 0, PRICE_BOUND_MIN, maxPrice))}
+          keyboardType="number-pad"
+        />
       </View>
       <View style={styles.priceRow}>
         <Text style={styles.rowLabel}>Max</Text>
-        <View style={styles.inputGroup}>
-          <TextInput
-            style={styles.priceInput}
-            value={String(maxPrice)}
-            onChangeText={(text) => setMaxPrice(clamp(Number(text) || 0, minPrice, PRICE_BOUND_MAX))}
-            keyboardType="number-pad"
-          />
-          <View style={styles.unitPill}>
-            <Text style={styles.unitPillText}>Naira</Text>
-          </View>
-        </View>
+        <AmountField
+          unitLabel="Naira"
+          value={String(maxPrice)}
+          onChangeText={(text) => setMaxPrice(clamp(Number(text) || 0, minPrice, PRICE_BOUND_MAX))}
+          keyboardType="number-pad"
+        />
       </View>
     </ScreenContainer>
   );
@@ -364,11 +377,47 @@ function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) 
   );
 }
 
+interface AmountFieldProps {
+  unitLabel: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  keyboardType: 'decimal-pad' | 'number-pad';
+  placeholder?: string;
+}
+
+/** Unit pill + focus-highlighted box, matching AddItemPriceStep's price input treatment. */
+function AmountField({ unitLabel, value, onChangeText, keyboardType, placeholder }: AmountFieldProps) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={styles.amountGroup}>
+      <View style={styles.unitPill}>
+        <Text style={styles.unitPillText}>{unitLabel}</Text>
+      </View>
+      <View style={[styles.amountInputWrap, focused && styles.amountInputWrapFocused]}>
+        <TextInput
+          style={styles.amountInput}
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType}
+          placeholder={placeholder}
+          placeholderTextColor={colors.gray300}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   resetText: {
     fontFamily: fontFamily.semibold,
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: colors.warning,
+  },
+  resetTextDisabled: {
+    color: colors.gray300,
   },
   footerRow: {
     flexDirection: 'row',
@@ -388,8 +437,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.gray700,
   },
-  showButtonWrap: {
+  // Matches addItemModal's footer button treatment — fully rounded, not the shared Button's radius.lg.
+  showButton: {
     flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  showButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
   },
   sectionTitle: {
     fontFamily: fontFamily.bold,
@@ -490,36 +552,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacingY.lg,
   },
-  inputGroup: {
+  // Pill + focus-highlighted box — matches AddItemPriceStep's priceInputWrap treatment.
+  amountGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacingX.sm,
   },
-  radiusInput: {
-    width: verticalScale(90),
-    minHeight: verticalScale(44),
-    borderRadius: radius.md,
+  amountInputWrap: {
+    width: verticalScale(110),
+    backgroundColor: colors.gray50,
+    borderRadius: radius.lg,
     borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: colors.gray200,
     paddingHorizontal: spacingX.md,
-    fontFamily: fontFamily.medium,
-    fontSize: fontSize.md,
-    color: colors.gray900,
-    textAlign: 'right',
+    paddingVertical: spacingY.sm,
   },
-  priceInput: {
-    width: verticalScale(120),
-    minHeight: verticalScale(44),
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    paddingHorizontal: spacingX.md,
-    fontFamily: fontFamily.medium,
+  amountInputWrapFocused: {
+    borderColor: colors.primary,
+  },
+  amountInput: {
+    fontFamily: fontFamily.bold,
     fontSize: fontSize.md,
-    color: colors.gray900,
+    color: colors.gray400,
     textAlign: 'right',
+    padding: 0,
   },
   unitPill: {
     paddingHorizontal: spacingX.md,
