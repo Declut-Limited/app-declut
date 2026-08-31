@@ -1,11 +1,15 @@
-import React from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { BackButton, ListingCard, ScreenContainer } from '@/components';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
+import { getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { showWarningToast } from '@/lib/toast';
+
+const SKELETON_COUNT = 6;
 
 // FULL-SCREEN "SEE ALL" MODAL — Home's "Recently Posted" section, GET /listings/new
 export default function NewListingsModal() {
@@ -13,6 +17,14 @@ export default function NewListingsModal() {
     ({ page, limit }) => listingsApi.getNewListings({ page, limit })
   );
   const { favoriteIds, toggleFavorite } = useFavoriteToggle();
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Purely for the card's "(Xkm)" distance display — this list itself isn't location-filtered.
+  useEffect(() => {
+    getDeviceLocation().then((device) => {
+      if (device) setCoords({ lat: device.lat, lng: device.lng });
+    });
+  }, []);
 
   function onPressListing() {
     // No listing detail screen yet — nothing to navigate to.
@@ -20,31 +32,35 @@ export default function NewListingsModal() {
   }
 
   return (
-    <ScreenContainer edges={['top', 'bottom']} background={colors.white} scroll={false}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Recently Posted</Text>
-        <BackButton iconType="cancel" />
-      </View>
-
+    <ScreenContainer
+      edges={['top', 'bottom']}
+      background={colors.white}
+      scroll={false}
+      header={<ScreenHeader title="Recently Posted" />}
+    >
       <FlatList
-        data={items}
+        data={loading || refreshing ? [] : items}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ListingCard
-            listing={item}
-            onPress={onPressListing}
-            showFavorite
-            favorited={favoriteIds.has(item.id)}
-            onToggleFavorite={() => toggleFavorite(item.id)}
-          />
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(index * 70)}>
+            <ListingCard
+              listing={item}
+              userLat={coords?.lat}
+              userLng={coords?.lng}
+              onPress={onPressListing}
+              showFavorite
+              favorited={favoriteIds.has(item.id)}
+              onToggleFavorite={() => toggleFavorite(item.id)}
+            />
+          </Animated.View>
         )}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
         onEndReachedThreshold={0.4}
         onEndReached={hasMore ? loadMore : undefined}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          loading ? (
-            <ActivityIndicator color={colors.primary} style={styles.loading} />
+          loading || refreshing ? (
+            <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
           ) : (
             <Text style={styles.message}>{error ?? 'No listings yet.'}</Text>
           )
@@ -56,23 +72,9 @@ export default function NewListingsModal() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacingY.xl,
-  },
-  title: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize['2xl'],
-    color: colors.ink,
-  },
   listContent: {
     flexGrow: 1,
     paddingBottom: spacingY.xl,
-  },
-  loading: {
-    paddingVertical: spacingY['3xl'],
   },
   footerLoading: {
     paddingVertical: spacingY.lg,

@@ -64,7 +64,7 @@ export default function RootLayout() {
                     {/* <View style={{ flex: 1, paddingBottom: verticalScale(sysNavigationHeight - 4), }}> */}
                       <Stack screenOptions={{ headerShown: false }}>
                         <Stack.Screen name="index" />
-                        <Stack.Screen name="(modals)/createListingModal" options={{ presentation: 'modal' }} />
+                        <Stack.Screen name="(modals)/addItemModal" options={{ presentation: 'modal' }} />
                         <Stack.Screen name="(modals)/nearbyListingsModal" options={{ presentation: 'modal' }} />
                         <Stack.Screen name="(modals)/newListingsModal" options={{ presentation: 'modal' }} />
                       </Stack>

@@ -16,6 +16,7 @@ export function ScreenContainer({
   scroll = true,
   background = colors.background,
   header,
+  footer,
   edges = ['top', 'bottom'],
   style,
   children,
@@ -41,10 +42,13 @@ export function ScreenContainer({
             {children}
           </ScrollView>
         ) : (
-          <View style={[styles.scrollContent, style]} {...rest}>
+          <View style={[styles.flexContent, style]} {...rest}>
             {children}
           </View>
         )}
+
+        {/* Inside KeyboardAvoidingView (not after it) so it rides above the keyboard instead of being covered by it. */}
+        {footer ? <View style={[styles.footer, { backgroundColor: background }]}>{footer}</View> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -58,5 +62,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingX['2xl'],
     paddingTop: spacingY.xl,
     paddingBottom: spacingY['2xl'],
+  },
+  // `flex: 1` (not `flexGrow`) — a non-scrolling child like a FlatList needs a definite bounded
+  // height from its parent to virtualize/scroll against; flexGrow alone doesn't reliably provide one.
+  flexContent: {
+    flex: 1,
+    paddingHorizontal: spacingX['2xl'],
+    paddingTop: spacingY.xl,
+    paddingBottom: spacingY['2xl'],
+  },
+  footer: {
+    paddingHorizontal: spacingX['2xl'],
+    paddingTop: spacingY.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray100,
   },
 });

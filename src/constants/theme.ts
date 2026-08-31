@@ -19,6 +19,8 @@ export const colors = {
 
   white: '#FFFFFF',
   black: '#000000',
+  // Flat card fill for listing cards (Home) — no shadow, distinct from pure white per design.
+  cardBackground: '#FCFCFD',
 
   // Estimated gray scale — not confirmed in DESIGN.md
   gray50: '#F9FAFB',

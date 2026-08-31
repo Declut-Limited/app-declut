@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
-import { ListingCard, ScreenContainer } from '@/components';
+import { ListingCard, ListingCardSkeleton, NearbyListingCard, ScreenContainer } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
 import { useAuth } from '@/contexts/AuthContext';
 import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
+import type { ListingCardVariant } from '@/utils/types';
 import { extractErrorMessage } from '@/api/client';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -24,21 +26,27 @@ export default function HomeScreen() {
 
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [userLat, setUserLat] = useState<number | undefined>(undefined);
+  const [userLng, setUserLng] = useState<number | undefined>(undefined);
   const [nearby, setNearby] = useState<Listing[] | null>(null);
+  const [nearbyLoading, setNearbyLoading] = useState(true);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [recent, setRecent] = useState<Listing[] | null>(null);
+  const [recentLoading, setRecentLoading] = useState(true);
   const [recentError, setRecentError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   const loadNearby = useCallback(async () => {
-    const device = await getDeviceLocation();
-    if (!device) {
-      setLocationDenied(true);
-      return;
-    }
-    setLocationDenied(false);
-    setLocationLabel(device.label);
+    setNearbyLoading(true);
     try {
+      const device = await getDeviceLocation();
+      if (!device) {
+        setLocationDenied(true);
+        return;
+      }
+      setLocationDenied(false);
+      setLocationLabel(device.label);
+      setUserLat(device.lat);
+      setUserLng(device.lng);
       const data = await listingsApi.getNearbyListings({
         lat: device.lat,
         lng: device.lng,
@@ -49,16 +57,21 @@ export default function HomeScreen() {
       setNearbyError(null);
     } catch (e) {
       setNearbyError(extractErrorMessage(e, 'Could not load nearby listings.'));
+    } finally {
+      setNearbyLoading(false);
     }
   }, []);
 
   const loadRecent = useCallback(async () => {
+    setRecentLoading(true);
     try {
       const data = await listingsApi.getNewListings({ limit: SECTION_LIMIT });
       setRecent(data.results ?? []);
       setRecentError(null);
     } catch (e) {
       setRecentError(extractErrorMessage(e, 'Could not load recent listings.'));
+    } finally {
+      setRecentLoading(false);
     }
   }, []);
 
@@ -70,10 +83,12 @@ export default function HomeScreen() {
     loadRecent();
   }, [loadRecent]);
 
-  async function onRefresh() {
-    setRefreshing(true);
-    await Promise.all([loadNearby(), loadRecent()]);
-    setRefreshing(false);
+  // The native pull indicator is never held open — `refreshing` always resolves to false, so it
+  // retracts the instant the pull gesture completes. The skeletons (nearbyLoading/recentLoading,
+  // set inside loadNearby/loadRecent above) carry the rest of the loading feedback from there.
+  function onRefresh() {
+    loadNearby();
+    loadRecent();
   }
 
   function goToSearch() {
@@ -99,7 +114,7 @@ export default function HomeScreen() {
       background={colors.white}
       refreshControl={
         <RefreshControl
-          refreshing={refreshing}
+          refreshing={false}
           onRefresh={onRefresh}
           tintColor={colors.primary}
           colors={[colors.primary]}
@@ -119,12 +134,14 @@ export default function HomeScreen() {
         <Icon name="search-normal-1" variant="linear" size={verticalScale(18)} color={colors.gray400} />
         <Text style={styles.searchPlaceholder}>What are you looking for?</Text>
         <Pressable onPress={guard(goToSearch)} style={styles.filterButton} hitSlop={8}>
-          <Icon name="setting-3" variant="linear" size={verticalScale(16)} color={colors.white} />
+          <Icon name="setting-3" variant="bold" size={verticalScale(18)} color={colors.white} />
         </Pressable>
       </Pressable>
 
       <View style={styles.escrowBanner}>
-        <Icon name="shield" variant="bold" size={verticalScale(20)} color={colors.primary} />
+        <View style={styles.escrowIconWrap}>
+          <Icon name="shield" variant="bold" size={verticalScale(20)} color={colors.primary} />
+        </View>
         <View style={styles.escrowText}>
           <Text style={styles.escrowTitle}>Escrow Protected</Text>
           <Text style={styles.escrowSubtitle}>All transactions are secured until you confirm.</Text>
@@ -134,23 +151,48 @@ export default function HomeScreen() {
       <ListingSection
         title="Listings Near You"
         subtitle={locationLabel ? `within ${DEFAULT_NEARBY_RADIUS_KM}km` : undefined}
+        variant="nearby"
         listings={locationDenied ? [] : nearby}
+        loading={nearbyLoading}
         emptyLabel={locationDenied ? 'Enable location to see listings near you.' : 'No nearby listings yet.'}
         error={nearbyError}
         onSeeAll={goToNearbyListings}
-        onPressListing={goToListing}
+        renderCard={(listing, index) => (
+          <Animated.View key={listing.id} entering={FadeInDown.delay(index * 70)}>
+            <NearbyListingCard
+              listing={listing}
+              userLat={userLat}
+              userLng={userLng}
+              onPress={goToListing}
+              showFavorite
+              favorited={favoriteIds.has(listing.id)}
+              onToggleFavorite={() => toggleFavorite(listing.id)}
+            />
+          </Animated.View>
+        )}
       />
 
       <ListingSection
         title="Recently Posted"
+        variant="recent"
         listings={recent}
+        loading={recentLoading}
         emptyLabel="No listings yet."
         error={recentError}
-        showFavorite
-        favoriteIds={favoriteIds}
-        onToggleFavorite={toggleFavorite}
         onSeeAll={goToNewListings}
-        onPressListing={goToListing}
+        renderCard={(listing, index) => (
+          <Animated.View key={listing.id} entering={FadeInDown.delay(index * 70)}>
+            <ListingCard
+              listing={listing}
+              userLat={userLat}
+              userLng={userLng}
+              onPress={goToListing}
+              showFavorite
+              favorited={favoriteIds.has(listing.id)}
+              onToggleFavorite={() => toggleFavorite(listing.id)}
+            />
+          </Animated.View>
+        )}
       />
     </ScreenContainer>
   );
@@ -159,25 +201,23 @@ export default function HomeScreen() {
 function ListingSection({
   title,
   subtitle,
+  variant,
   listings,
+  loading,
   emptyLabel,
   error,
-  showFavorite,
-  favoriteIds,
-  onToggleFavorite,
   onSeeAll,
-  onPressListing,
+  renderCard,
 }: {
   title: string;
   subtitle?: string;
+  variant: ListingCardVariant;
   listings: Listing[] | null;
+  loading: boolean;
   emptyLabel: string;
   error: string | null;
-  showFavorite?: boolean;
-  favoriteIds?: Set<string>;
-  onToggleFavorite?: (listingId: string) => void;
   onSeeAll: () => void;
-  onPressListing: (listingId: string) => void;
+  renderCard: (listing: Listing, index: number) => React.ReactNode;
 }) {
   const guard = useSingleTap();
 
@@ -193,21 +233,12 @@ function ListingSection({
         </Pressable>
       </View>
 
-      {listings && listings?.length > 0 ? (
-        listings.map((listing) => (
-          <ListingCard
-            key={listing._id}
-            listing={listing}
-            onPress={() => onPressListing(listing.id)}
-            showFavorite={showFavorite}
-            favorited={favoriteIds?.has(listing.id)}
-            onToggleFavorite={() => onToggleFavorite?.(listing.id)}
-          />
-        ))
+      {loading ? (
+        <ListingCardSkeleton count={SECTION_LIMIT} variant={variant} />
+      ) : listings && listings.length > 0 ? (
+        listings.map((listing, index) => renderCard(listing, index))
       ) : error ? (
         <Text style={styles.sectionMessage}>{error}</Text>
-      ) : listings === null ? (
-        <ActivityIndicator color={colors.primary} style={styles.sectionLoading} />
       ) : (
         <Text style={styles.sectionMessage}>{emptyLabel}</Text>
       )}
@@ -273,6 +304,15 @@ const styles = StyleSheet.create({
     padding: spacingX.md,
     marginBottom: spacingY.xl,
   },
+  escrowIconWrap: {
+    width: verticalScale(36),
+    height: verticalScale(36),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   escrowText: {
     flex: 1,
     gap: verticalScale(2),
@@ -311,9 +351,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.sm,
     color: colors.warning,
-  },
-  sectionLoading: {
-    paddingVertical: spacingY.lg,
   },
   sectionMessage: {
     fontFamily: fontFamily.medium,

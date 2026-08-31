@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { PressableProps, RefreshControlProps, TextInputProps, ViewProps } from 'react-native';
 import type { Edge } from 'react-native-safe-area-context';
 import type { Listing } from '@/api/types';
+import type { DropdownOption } from '@/constants/formOptions';
 
 export type ButtonVariant = 'dark' | 'primary' | 'outline' | 'ghost';
 
@@ -33,6 +34,8 @@ export interface InputProps extends TextInputProps {
   btnIcon?: ReactNode;
   /** Renders a trailing eye/eye-slash toggle and manages secureTextEntry internally. */
   isPassword?: boolean;
+  /** Trailing slot on the opposite side from btnIcon — e.g. a picker's chevron, or a map icon. Ignored when isPassword is set. */
+  customIcon?: ReactNode;
 }
 
 export interface PhoneInputProps {
@@ -41,6 +44,15 @@ export interface PhoneInputProps {
   /** Full E.164 number, e.g. "+2348031234567". */
   onChangeValue: (e164: string) => void;
   value?: string;
+}
+
+export interface FormDropdownProps {
+  label?: string;
+  placeholder: string;
+  data: DropdownOption[];
+  value?: string;
+  onChange: (value: string) => void;
+  error?: string;
 }
 
 export interface OtpInputProps {
@@ -56,6 +68,8 @@ export interface ScreenContainerProps extends ViewProps {
   background?: string;
   /** Renders full-width above the padded/scrollable content, so a header's divider can bleed edge-to-edge. */
   header?: ReactNode;
+  /** Renders full-width below the scrollable/content area, pinned to the bottom (e.g. a Previous/Next bar) — stays fixed while the content above it scrolls. */
+  footer?: ReactNode;
   /** Defaults to ['top', 'bottom'] — pass ['top'] for tab screens, since the custom tab bar already handles its own bottom safe-area inset. */
   edges?: Edge[];
   /** Passed straight through to the internal ScrollView — only applies when scroll is true. */
@@ -138,9 +152,27 @@ export interface PaginationDotsProps {
   activeIndex: number;
 }
 
+/** Picks which of the two listing-card skeleton shapes ListingCardSkeleton renders. */
+export type ListingCardVariant = 'nearby' | 'recent';
+
+/** "Recently Posted" card — blue floating pill badge, always-available favorite heart. */
 export interface ListingCardProps {
   listing: Listing;
   onPress: () => void;
+  /** Current device coordinates, for a client-computed "(Xkm)" distance — omitted (no distance shown) if either is undefined. */
+  userLat?: number;
+  userLng?: number;
+  showFavorite?: boolean;
+  favorited?: boolean;
+  onToggleFavorite?: () => void;
+}
+
+/** "Listings Near You" / search-result card — tinted pill badge, plain heart glyph, larger image. */
+export interface NearbyListingCardProps {
+  listing: Listing;
+  onPress: () => void;
+  userLat?: number;
+  userLng?: number;
   showFavorite?: boolean;
   favorited?: boolean;
   onToggleFavorite?: () => void;

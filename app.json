@@ -40,8 +40,15 @@
           "locationWhenInUsePermission": "Declut uses your location to show listings near you."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Declut uses your photo library to upload listing photos and videos."
+        }
+      ],
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-video"
     ]
   }
 }

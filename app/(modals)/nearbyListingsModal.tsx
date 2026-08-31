@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { BackButton, ListingCard, ScreenContainer } from '@/components';
-import { colors, fontFamily, fontSize, spacingX, spacingY } from '@/constants/theme';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { ListingCardSkeleton, NearbyListingCard, ScreenContainer, ScreenHeader } from '@/components';
+import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
+import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { showWarningToast } from '@/lib/toast';
+
+const SKELETON_COUNT = 6;
 
 // FULL-SCREEN "SEE ALL" MODAL — Home's "Listings Near You" section, GET /listings/nearby
 export default function NearbyListingsModal() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
+  const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
   useEffect(() => {
     (async () => {
@@ -41,26 +46,38 @@ export default function NearbyListingsModal() {
   }
 
   return (
-    <ScreenContainer edges={['top', 'bottom']} background={colors.white} scroll={false}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Listings Near You</Text>
-        <BackButton iconType="cancel" />
-      </View>
-
+    <ScreenContainer
+      edges={['top', 'bottom']}
+      background={colors.white}
+      scroll={false}
+      header={<ScreenHeader title="Listings Near You" />}
+    >
       {locationDenied ? (
         <Text style={styles.message}>Enable location to see listings near you.</Text>
       ) : (
         <FlatList
-          data={items}
+          data={loading || refreshing ? [] : items}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ListingCard listing={item} onPress={onPressListing} />}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeInDown.delay(index * 70)}>
+              <NearbyListingCard
+                listing={item}
+                userLat={coords?.lat}
+                userLng={coords?.lng}
+                onPress={onPressListing}
+                showFavorite
+                favorited={favoriteIds.has(item.id)}
+                onToggleFavorite={() => toggleFavorite(item.id)}
+              />
+            </Animated.View>
+          )}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
           onEndReachedThreshold={0.4}
           onEndReached={hasMore ? loadMore : undefined}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            loading ? (
-              <ActivityIndicator color={colors.primary} style={styles.loading} />
+            loading || refreshing ? (
+              <ListingCardSkeleton count={SKELETON_COUNT} variant="nearby" />
             ) : (
               <Text style={styles.message}>{error ?? 'No nearby listings yet.'}</Text>
             )
@@ -73,23 +90,9 @@ export default function NearbyListingsModal() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacingY.xl,
-  },
-  title: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize['2xl'],
-    color: colors.ink,
-  },
   listContent: {
     flexGrow: 1,
     paddingBottom: spacingY.xl,
-  },
-  loading: {
-    paddingVertical: spacingY['3xl'],
   },
   footerLoading: {
     paddingVertical: spacingY.lg,

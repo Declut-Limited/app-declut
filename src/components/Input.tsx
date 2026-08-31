@@ -6,7 +6,7 @@ import { verticalScale } from '@/utils/styling';
 import type { InputProps } from '@/utils/types';
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, btnIcon, isPassword, style, ...rest },
+  { label, error, btnIcon, isPassword, customIcon, style, ...rest },
   ref
 ) {
   const [hidden, setHidden] = useState(true);
@@ -51,6 +51,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
               <Icons.EyeSlashIcon size={verticalScale(20)} color={colors.gray400} />
             )}
           </Text>
+        ) : customIcon ? (
+          <View style={styles.icon}>{customIcon}</View>
         ) : null}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}

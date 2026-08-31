@@ -35,7 +35,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const middleIndex = Math.ceil(state.routes.length / 2);
 
   function handleCreatePress() {
-    router.push('/(modals)/createListingModal');
+    router.push('/(modals)/addItemModal');
   }
 
   return (

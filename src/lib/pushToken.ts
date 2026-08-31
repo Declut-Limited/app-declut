@@ -9,7 +9,11 @@ export async function savePushToken(token: string) {
   return registered;
 }
 
-
+/**
+ * Best-effort push token fetch for attaching to the register/login payload —
+ * never throws (denied permission, simulator, missing EAS project id are all
+ * expected failure modes) and must never block sign-up/sign-in.
+ */
 export async function getPushToken(): Promise<string | undefined> {
   try {
     return await registerForPushNotificationsAsync();
