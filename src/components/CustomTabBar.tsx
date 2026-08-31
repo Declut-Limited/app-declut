@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 import { getProfileImage } from '@/utils/helpers';
 
-const BAR_HEIGHT = verticalScale(76);
+const BAR_HEIGHT = verticalScale(80);
 const TAB_ICON_SIZE = verticalScale(26);
 const AVATAR_SIZE = verticalScale(24);
 

@@ -6,7 +6,7 @@ import { verticalScale } from '@/utils/styling';
 
 const IMAGE_SIZE = verticalScale(96);
 const RECENT_IMAGE_WIDTH = verticalScale(120);
-const RECENT_IMAGE_HEIGHT = verticalScale(100);
+const RECENT_IMAGE_HEIGHT = verticalScale(96);
 
 function Bone({ width, height, tint }: { width: number | `${number}%`; height: number; tint?: string }) {
   return <View style={[styles.bone, { width, height, backgroundColor: tint ?? colors.gray100 }]} />;

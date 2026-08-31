@@ -2,6 +2,7 @@ export * as authApi from './auth';
 export * as kycApi from './kyc';
 export * as usersApi from './users';
 export * as listingsApi from './listings';
+export * as categoriesApi from './categories';
 export * as favoritesApi from './favorites';
 export * as offersApi from './offers';
 export * as transactionsApi from './transactions';

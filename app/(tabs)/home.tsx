@@ -94,6 +94,10 @@ export default function HomeScreen() {
     router.push('/(tabs)/search');
   }
 
+  function goToFilter() {
+    router.push('/(modals)/filterByModal');
+  }
+
   function goToNearbyListings() {
     router.push('/(modals)/nearbyListingsModal');
   }
@@ -132,7 +136,7 @@ export default function HomeScreen() {
       <Pressable onPress={guard(goToSearch)} style={styles.searchBar}>
         <Icon name="search-normal-1" variant="linear" size={verticalScale(18)} color={colors.gray400} />
         <Text style={styles.searchPlaceholder}>What are you looking for?</Text>
-        <Pressable onPress={guard(goToSearch)} hitSlop={8}>
+        <Pressable onPress={guard(goToFilter)} hitSlop={8}>
           <Icon name="setting-3" variant="bold" size={verticalScale(26)} color={colors.primary} />
         </Pressable>
       </Pressable>

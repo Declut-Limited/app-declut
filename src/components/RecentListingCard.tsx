@@ -10,7 +10,7 @@ import type { RecentListingCardProps } from '@/utils/types';
 
 const NEW_WITHIN_DAYS = 7;
 const IMAGE_WIDTH = verticalScale(120);
-const IMAGE_HEIGHT = verticalScale(100);
+const IMAGE_HEIGHT = verticalScale(96);
 
 /** "Recently Posted" card — the only real differences from ListingCard are image width and badge tint. */
 export function RecentListingCard({ listing, onPress, userLat, userLng, showFavorite, favorited, onToggleFavorite }: RecentListingCardProps) {

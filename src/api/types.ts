@@ -143,6 +143,13 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   total: number;
+  hasMore?: boolean;
+}
+
+export interface Category {
+  id: string;
+  title: string;
+  slug: string;
 }
 
 /** GeoJSON Point, matching the backend's actual response shape — coordinates are [lng, lat], not [lat, lng]. */
