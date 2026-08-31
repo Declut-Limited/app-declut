@@ -3,14 +3,13 @@ import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
-import { ListingCard, ListingCardSkeleton, NearbyListingCard, ScreenContainer } from '@/components';
+import { ListingCard, ListingCardSkeleton, RecentListingCard, ScreenContainer } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
 import { useAuth } from '@/contexts/AuthContext';
 import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
-import type { ListingCardVariant } from '@/utils/types';
 import { extractErrorMessage } from '@/api/client';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -133,8 +132,8 @@ export default function HomeScreen() {
       <Pressable onPress={guard(goToSearch)} style={styles.searchBar}>
         <Icon name="search-normal-1" variant="linear" size={verticalScale(18)} color={colors.gray400} />
         <Text style={styles.searchPlaceholder}>What are you looking for?</Text>
-        <Pressable onPress={guard(goToSearch)} style={styles.filterButton} hitSlop={8}>
-          <Icon name="setting-3" variant="bold" size={verticalScale(18)} color={colors.white} />
+        <Pressable onPress={guard(goToSearch)} hitSlop={8}>
+          <Icon name="setting-3" variant="bold" size={verticalScale(26)} color={colors.primary} />
         </Pressable>
       </Pressable>
 
@@ -151,7 +150,7 @@ export default function HomeScreen() {
       <ListingSection
         title="Listings Near You"
         subtitle={locationLabel ? `within ${DEFAULT_NEARBY_RADIUS_KM}km` : undefined}
-        variant="nearby"
+        variant="recent"
         listings={locationDenied ? [] : nearby}
         loading={nearbyLoading}
         emptyLabel={locationDenied ? 'Enable location to see listings near you.' : 'No nearby listings yet.'}
@@ -159,7 +158,7 @@ export default function HomeScreen() {
         onSeeAll={goToNearbyListings}
         renderCard={(listing, index) => (
           <Animated.View key={listing.id} entering={FadeInDown.delay(index * 70)}>
-            <NearbyListingCard
+            <ListingCard
               listing={listing}
               userLat={userLat}
               userLng={userLng}
@@ -174,7 +173,7 @@ export default function HomeScreen() {
 
       <ListingSection
         title="Recently Posted"
-        variant="recent"
+        variant="nearby"
         listings={recent}
         loading={recentLoading}
         emptyLabel="No listings yet."
@@ -182,7 +181,7 @@ export default function HomeScreen() {
         onSeeAll={goToNewListings}
         renderCard={(listing, index) => (
           <Animated.View key={listing.id} entering={FadeInDown.delay(index * 70)}>
-            <ListingCard
+            <RecentListingCard
               listing={listing}
               userLat={userLat}
               userLng={userLng}
@@ -211,7 +210,7 @@ function ListingSection({
 }: {
   title: string;
   subtitle?: string;
-  variant: ListingCardVariant;
+  variant: string;
   listings: Listing[] | null;
   loading: boolean;
   emptyLabel: string;
@@ -284,15 +283,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.md,
     color: colors.gray400,
-  },
-  filterButton: {
-    width: verticalScale(40),
-    height: verticalScale(40),
-    borderRadius: radius.lg,
-    borderCurve: 'continuous',
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   escrowBanner: {
     flexDirection: 'row',

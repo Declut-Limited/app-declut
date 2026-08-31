@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ListingCardSkeleton, NearbyListingCard, ScreenContainer, ScreenHeader } from '@/components';
+import { ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
@@ -60,7 +60,7 @@ export default function NearbyListingsModal() {
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 70)}>
-              <NearbyListingCard
+              <ListingCard
                 listing={item}
                 userLat={coords?.lat}
                 userLng={coords?.lng}
@@ -77,7 +77,7 @@ export default function NearbyListingsModal() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             loading || refreshing ? (
-              <ListingCardSkeleton count={SKELETON_COUNT} variant="nearby" />
+              <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
             ) : (
               <Text style={styles.message}>{error ?? 'No nearby listings yet.'}</Text>
             )

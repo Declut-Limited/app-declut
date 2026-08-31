@@ -21,5 +21,5 @@ export { LegalDocumentBody } from './LegalDocumentBody';
 export { BottomSheetCard } from './BottomSheetCard';
 export { CustomTabBar } from './CustomTabBar';
 export { ListingCard } from './ListingCard';
-export { NearbyListingCard } from './NearbyListingCard';
+export { RecentListingCard } from './RecentListingCard';
 export { ListingCardSkeleton } from './ListingCardSkeleton';

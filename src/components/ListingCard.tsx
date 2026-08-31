@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import dayjs from 'dayjs';
-import * as Icons from 'phosphor-react-native';
+import Icon from './Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -11,13 +11,14 @@ import type { ListingCardProps } from '@/utils/types';
 const NEW_WITHIN_DAYS = 7;
 const IMAGE_SIZE = verticalScale(96);
 
-/** "Recently Posted" card — blue floating pill "New" badge, favorite heart on a white circular chip. */
+/** "Listings Near You" / search-result card — the only real differences from RecentListingCard are image width and badge tint. */
 export function ListingCard({ listing, onPress, userLat, userLng, showFavorite, favorited, onToggleFavorite }: ListingCardProps) {
   const guard = useSingleTap();
   const isNew = dayjs().diff(dayjs(listing.createdAt), 'day') < NEW_WITHIN_DAYS;
+  const [listingLng, listingLat] = listing.location.coordinates;
   const distanceLabel =
     userLat !== undefined && userLng !== undefined
-      ? `(${formatDistance(userLat, userLng, listing.location.lat, listing.location.lng).replace(' away', '')})`
+      ? `(${formatDistance(userLat, userLng, listingLat, listingLng).replace(' away', '')})`
       : null;
 
   return (
@@ -29,8 +30,8 @@ export function ListingCard({ listing, onPress, userLat, userLng, showFavorite, 
           <View style={[styles.image, styles.imagePlaceholder]} />
         )}
         {isNew ? (
-          <View style={styles.badgePill}>
-            <Text style={styles.newBadgeLabel}>New</Text>
+          <View style={styles.badge}>
+            <Text style={styles.badgeLabel}>New</Text>
           </View>
         ) : null}
         {showFavorite ? (
@@ -41,11 +42,7 @@ export function ListingCard({ listing, onPress, userLat, userLng, showFavorite, 
             accessibilityRole="button"
             accessibilityLabel={favorited ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <Icons.HeartIcon
-              size={verticalScale(14)}
-              weight={favorited ? 'fill' : 'regular'}
-              color={favorited ? colors.danger : colors.gray700}
-            />
+            <Icon name="heart" variant="bold" size={verticalScale(20)} color={favorited ? colors.danger : colors.white} />
           </Pressable>
         ) : null}
       </View>
@@ -58,7 +55,7 @@ export function ListingCard({ listing, onPress, userLat, userLng, showFavorite, 
         <View style={styles.divider} />
         <View style={styles.locationRow}>
           <View style={styles.locationLeft}>
-            <Icons.MapPinIcon size={verticalScale(12)} color={colors.gray400} />
+            <Icon name="location" variant="bold" size={verticalScale(14)} color={colors.ink} />
             <Text style={styles.locationText} numberOfLines={1}>
               {listing.locationLabel}
             </Text>
@@ -78,7 +75,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBackground,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    padding: spacingX.sm,
+    padding: spacingX.xs,
     marginBottom: spacingY.md,
   },
   imageWrap: {
@@ -94,56 +91,49 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     backgroundColor: colors.gray100,
   },
-  // Floats above the image with a small gap, fully rounded — same treatment as the favorite button.
-  badgePill: {
+  badge: {
     position: 'absolute',
     top: spacingY.xs,
     left: spacingX.xs,
     paddingHorizontal: spacingX.sm,
-    paddingVertical: verticalScale(2),
+    paddingVertical: verticalScale(3),
     borderRadius: radius.full,
     borderCurve: 'continuous',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.warningLight,
   },
-  newBadgeLabel: {
+  badgeLabel: {
     fontFamily: fontFamily.bold,
-    fontSize: verticalScale(9),
-    color: colors.white,
+    fontSize: verticalScale(10),
+    color: colors.warning,
   },
+  // No circular backing chip — a plain glyph floating on the photo.
   favoriteButton: {
     position: 'absolute',
     top: spacingY.xs,
     right: spacingX.xs,
-    width: verticalScale(22),
-    height: verticalScale(22),
-    borderRadius: radius.full,
-    borderCurve: 'continuous',
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.25,
     shadowRadius: 2,
-    elevation: 1,
   },
   info: {
     flex: 1,
-    gap: verticalScale(4),
+    gap: verticalScale(6),
   },
   title: {
-    fontFamily: fontFamily.semibold,
-    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
     color: colors.gray700,
   },
   price: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
     color: colors.ink,
   },
   divider: {
-    height: 1,
-    backgroundColor: colors.gray100,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.gray200,
     marginVertical: verticalScale(2),
   },
   locationRow: {
@@ -156,17 +146,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scale(4),
+    gap: scale(6),
   },
   locationText: {
     flex: 1,
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     color: colors.gray400,
   },
   distanceText: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     color: colors.gray400,
   },
 });

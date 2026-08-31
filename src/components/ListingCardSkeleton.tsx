@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { colors, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
-import type { ListingCardVariant } from '@/utils/types';
 
 const NEARBY_IMAGE_SIZE = verticalScale(112);
 const RECENT_IMAGE_SIZE = verticalScale(96);
@@ -12,13 +11,12 @@ function Bone({ width, height, tint }: { width: number | `${number}%`; height: n
   return <View style={[styles.bone, { width, height, backgroundColor: tint ?? colors.gray100 }]} />;
 }
 
-/** Mirrors NearbyListingCard: bigger image, tinted floating pill badge, plain heart glyph (no circular chip). */
-function NearbySkeletonCard() {
+function ListingSkeletonCard() {
   return (
-    <View style={[styles.card, styles.nearbyCard]}>
+    <View style={[styles.card, styles.listingCard]}>
       <View style={[styles.imageWrap, { width: NEARBY_IMAGE_SIZE, height: NEARBY_IMAGE_SIZE }]}>
         <View style={[styles.image, styles.nearbyImageRadius]} />
-        <View style={[styles.pillBadge, styles.nearbyBadgeTint]} />
+        <View style={[styles.pillBadge, styles.listingBadgeTint]} />
         <View style={styles.plainHeart} />
       </View>
 
@@ -35,20 +33,19 @@ function NearbySkeletonCard() {
   );
 }
 
-/** Mirrors ListingCard: smaller image, solid floating pill badge, heart on a white circular chip. */
 function RecentSkeletonCard() {
   return (
     <View style={[styles.card, styles.recentCard]}>
       <View style={[styles.imageWrap, { width: RECENT_IMAGE_SIZE, height: RECENT_IMAGE_SIZE }]}>
         <View style={[styles.image, styles.recentImageRadius]} />
         <View style={[styles.pillBadge, styles.recentBadgeTint]} />
-        <View style={styles.circularHeart} />
+        <View style={styles.plainHeart} />
       </View>
 
       <View style={styles.recentInfo}>
         <Bone width="65%" height={verticalScale(14)} />
         <Bone width="40%" height={verticalScale(16)} />
-        <View style={styles.solidDivider} />
+        <View style={styles.dashedDivider} />
         <View style={styles.locationRow}>
           <Bone width="55%" height={verticalScale(12)} />
           <Bone width={verticalScale(36)} height={verticalScale(12)} />
@@ -59,7 +56,7 @@ function RecentSkeletonCard() {
 }
 
 /** Placeholder cards shown while a listing section is fetching or refetching — a simple Reanimated opacity pulse, no native dependencies beyond what's already installed. */
-export function ListingCardSkeleton({ count = 2, variant = 'recent' }: { count?: number; variant?: ListingCardVariant }) {
+export function ListingCardSkeleton({ count = 2, variant = 'recent' }: { count?: number; variant?: string }) {
   const opacity = useSharedValue(0.5);
 
   useEffect(() => {
@@ -67,7 +64,7 @@ export function ListingCardSkeleton({ count = 2, variant = 'recent' }: { count?:
   }, [opacity]);
 
   const pulseStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  const SkeletonCard = variant === 'nearby' ? NearbySkeletonCard : RecentSkeletonCard;
+  const SkeletonCard = variant === 'recent' ? RecentSkeletonCard : ListingSkeletonCard;
 
   return (
     <Animated.View style={pulseStyle}>
@@ -87,7 +84,7 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     marginBottom: spacingY.md,
   },
-  nearbyCard: {
+  listingCard: {
     borderRadius: radius.xl,
     padding: spacingX.md,
   },
@@ -117,13 +114,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderCurve: 'continuous',
   },
-  nearbyBadgeTint: {
-    backgroundColor: colors.warningLight,
-  },
-  recentBadgeTint: {
+  // RecentListingCard now renders "Recently Posted" — lavender/primary tint.
+  listingBadgeTint: {
     backgroundColor: colors.primaryLight,
   },
-  // NearbyListingCard's heart is a bare glyph on the photo — just a soft tinted blob, no chip.
+  // ListingCard now renders "Listings Near You" / search — peach/warning tint.
+  recentBadgeTint: {
+    backgroundColor: colors.warningLight,
+  },
+  // Both real cards use a plain heart glyph on the photo now — no circular chip.
   plainHeart: {
     position: 'absolute',
     top: spacingY.xs,
@@ -133,17 +132,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderCurve: 'continuous',
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
-  },
-  // ListingCard's heart sits on a solid white circular chip.
-  circularHeart: {
-    position: 'absolute',
-    top: spacingY.xs,
-    right: spacingX.xs,
-    width: verticalScale(22),
-    height: verticalScale(22),
-    borderRadius: radius.full,
-    borderCurve: 'continuous',
-    backgroundColor: colors.white,
   },
   nearbyInfo: {
     flex: 1,
@@ -157,11 +145,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.gray200,
-    marginVertical: verticalScale(2),
-  },
-  solidDivider: {
-    height: 1,
-    backgroundColor: colors.gray100,
     marginVertical: verticalScale(2),
   },
   locationRow: {

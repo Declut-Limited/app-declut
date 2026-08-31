@@ -145,9 +145,10 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
+/** GeoJSON Point, matching the backend's actual response shape — coordinates are [lng, lat], not [lat, lng]. */
 export interface ListingLocation {
-  lat: number;
-  lng: number;
+  type?: 'Point';
+  coordinates: [number, number];
 }
 
 export interface Listing {

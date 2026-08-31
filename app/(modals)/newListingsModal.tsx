@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
+import { ListingCardSkeleton, RecentListingCard, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
 import { getDeviceLocation } from '@/lib/location';
@@ -43,7 +43,7 @@ export default function NewListingsModal() {
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 70)}>
-            <ListingCard
+            <RecentListingCard
               listing={item}
               userLat={coords?.lat}
               userLng={coords?.lng}
@@ -60,7 +60,7 @@ export default function NewListingsModal() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           loading || refreshing ? (
-            <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
+            <ListingCardSkeleton count={SKELETON_COUNT} variant="nearby" />
           ) : (
             <Text style={styles.message}>{error ?? 'No listings yet.'}</Text>
           )

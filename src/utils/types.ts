@@ -152,10 +152,8 @@ export interface PaginationDotsProps {
   activeIndex: number;
 }
 
-/** Picks which of the two listing-card skeleton shapes ListingCardSkeleton renders. */
-export type ListingCardVariant = 'nearby' | 'recent';
 
-/** "Recently Posted" card — blue floating pill badge, always-available favorite heart. */
+/** "Listings Near You" / search-result card — smaller image, peach "New" badge. Only real differences from RecentListingCard are image width and badge tint. */
 export interface ListingCardProps {
   listing: Listing;
   onPress: () => void;
@@ -167,8 +165,8 @@ export interface ListingCardProps {
   onToggleFavorite?: () => void;
 }
 
-/** "Listings Near You" / search-result card — tinted pill badge, plain heart glyph, larger image. */
-export interface NearbyListingCardProps {
+/** "Recently Posted" card — larger image, lavender "New" badge. Only real differences from ListingCard are image width and badge tint. */
+export interface RecentListingCardProps {
   listing: Listing;
   onPress: () => void;
   userLat?: number;
