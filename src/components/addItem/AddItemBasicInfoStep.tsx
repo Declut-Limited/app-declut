@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
+import { Keyboard, Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as Icons from 'phosphor-react-native';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
@@ -75,6 +75,7 @@ export function AddItemBasicInfoStep({
     <KeyboardAwareScrollView
       style={styles.flex}
       extraScrollHeight={spacingY.sm}
+      // enableOnAndroid
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
@@ -227,10 +228,23 @@ interface LabeledPickerProps {
 function LabeledPicker({ label, value, placeholder, onPress, disabled, error }: LabeledPickerProps) {
   const guard = useSingleTap();
 
+  // A text field could still be focused when a picker is tapped — close the keyboard first so it
+  // doesn't linger behind the sheet that's about to open.
+  function handlePress() {
+    if(Keyboard.isVisible()) {
+      Keyboard.dismiss()
+      setTimeout(() => {
+        onPress();
+      }, 100);
+    } else {
+      onPress();
+    }
+  }
+
   return (
     <View>
       <Pressable
-        onPress={guard(onPress)}
+        onPress={guard(handlePress)}
         disabled={disabled}
         style={[styles.fieldBox, disabled && styles.fieldBoxDisabled, error ? styles.fieldBoxError : null]}
         accessibilityState={{ disabled }}
