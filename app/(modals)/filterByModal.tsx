@@ -128,6 +128,7 @@ export default function FilterByModal() {
   const draftFilters: SearchFilters = useMemo(
     () => ({
       categoryId: selectedCategoryIds.size > 0 ? Array.from(selectedCategoryIds)[0] : undefined,
+      categoryName: selectedCategoryIds.size > 0 ? categories.find((c) => c.id === Array.from(selectedCategoryIds)[0])?.title : undefined,
       useMyLocation: useCurrentLocation,
       lat: useCurrentLocation ? deviceLat : undefined,
       lng: useCurrentLocation ? deviceLng : undefined,
@@ -140,7 +141,7 @@ export default function FilterByModal() {
       minPrice: minPrice !== PRICE_BOUND_MIN ? minPrice : undefined,
       maxPrice: maxPrice !== PRICE_BOUND_MAX ? maxPrice : undefined,
     }),
-    [selectedCategoryIds, useCurrentLocation, deviceLat, deviceLng, applyRadius, effectiveRadiusKm, state, city, area, includeNew, includeNeatlyUsed, minPrice, maxPrice]
+    [selectedCategoryIds, categories, useCurrentLocation, deviceLat, deviceLng, applyRadius, effectiveRadiusKm, state, city, area, includeNew, includeNeatlyUsed, minPrice, maxPrice]
   );
 
   const [resultsTotal, setResultsTotal] = useState<number | null>(null);
@@ -151,6 +152,14 @@ export default function FilterByModal() {
   // page:1/limit:1 call doubles as a count. Every change to the draft filters (or the active
   // keyword) re-fires this, 3s debounced.
   useEffect(() => {
+    // The location toggle flips on optimistically, before getDeviceLocation() resolves — firing
+    // now would send useMyLocation=true with no lat/lng, which the endpoint requires together.
+    // Wait for coords instead of sending (and counting) a request that's missing them.
+    if (useCurrentLocation && (deviceLat === undefined || deviceLng === undefined)) {
+      setResultsLoading(true);
+      return;
+    }
+
     let cancelled = false;
     setResultsLoading(true);
     const timer = setTimeout(() => {
@@ -181,8 +190,8 @@ export default function FilterByModal() {
     area !== undefined ||
     !applyRadius ||
     radiusKm !== '' ||
-    !includeNew ||
-    !includeNeatlyUsed ||
+    includeNew ||
+    includeNeatlyUsed ||
     minPrice !== PRICE_BOUND_MIN ||
     maxPrice !== PRICE_BOUND_MAX;
 
@@ -251,8 +260,8 @@ export default function FilterByModal() {
     setArea(undefined);
     setApplyRadius(true);
     setRadiusKm('');
-    setIncludeNew(true);
-    setIncludeNeatlyUsed(true);
+    setIncludeNew(false);
+    setIncludeNeatlyUsed(false);
     setMinPrice(PRICE_BOUND_MIN);
     setMaxPrice(PRICE_BOUND_MAX);
   }
@@ -461,6 +470,8 @@ interface PriceRangeSliderProps {
   onChange: (min: number, max: number) => void;
 }
 
+const THUMB_HIT_SLOP = { top: 16, bottom: 16, left: 16, right: 16 };
+
 /** Custom dual-thumb slider — no range-slider package is installed, so this uses core PanResponder. */
 function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) {
   const [trackWidth, setTrackWidth] = useState(0);
@@ -470,6 +481,12 @@ function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) 
   // min/max/trackWidth from the first render — this ref keeps them reading the latest values.
   const latest = useRef({ min, max, trackWidth });
   latest.current = { min, max, trackWidth };
+
+  // gesture.dx is cumulative from wherever the touch started, not a per-move delta — so the
+  // starting pixel position has to be captured once (on grant) and reused for the whole gesture.
+  // Recomputing it from the live `min`/`max` on every move (as this used to) double-counts motion,
+  // since those props are themselves changing mid-drag — that's what made the thumb feel erratic.
+  const dragStartX = useRef(0);
 
   function valueToX(value: number) {
     const { trackWidth } = latest.current;
@@ -487,10 +504,17 @@ function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) 
   const minResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      // Refuse to hand the gesture back to an ancestor ScrollView mid-drag.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        dragStartX.current = valueToX(latest.current.min);
+      },
       onPanResponderMove: (_, gesture) => {
-        const { min, max } = latest.current;
-        const nextValue = clamp(xToValue(valueToX(min) + gesture.dx), boundMin, max);
+        const { max } = latest.current;
+        const nextValue = clamp(xToValue(dragStartX.current + gesture.dx), boundMin, max);
         onChange(nextValue, max);
       },
     })
@@ -499,10 +523,16 @@ function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) 
   const maxResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        dragStartX.current = valueToX(latest.current.max);
+      },
       onPanResponderMove: (_, gesture) => {
-        const { min, max } = latest.current;
-        const nextValue = clamp(xToValue(valueToX(max) + gesture.dx), min, boundMax);
+        const { min } = latest.current;
+        const nextValue = clamp(xToValue(dragStartX.current + gesture.dx), min, boundMax);
         onChange(min, nextValue);
       },
     })
@@ -515,8 +545,8 @@ function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) 
     <View style={styles.sliderWrap} onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}>
       <View style={styles.sliderTrackBase} />
       <View style={[styles.sliderTrackFill, { left: minX, width: Math.max(0, maxX - minX) }]} />
-      <View style={[styles.sliderThumb, { left: minX - THUMB_SIZE / 2 }]} {...minResponder.panHandlers} />
-      <View style={[styles.sliderThumb, { left: maxX - THUMB_SIZE / 2 }]} {...maxResponder.panHandlers} />
+      <View style={[styles.sliderThumb, { left: minX - THUMB_SIZE / 2 }]} hitSlop={THUMB_HIT_SLOP} {...minResponder.panHandlers} />
+      <View style={[styles.sliderThumb, { left: maxX - THUMB_SIZE / 2 }]} hitSlop={THUMB_HIT_SLOP} {...maxResponder.panHandlers} />
     </View>
   );
 }

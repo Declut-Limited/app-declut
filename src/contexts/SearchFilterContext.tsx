@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { ListingSearchParams } from '@/api/types';
+import { formatCurrency } from '@/utils/helpers';
 
 export interface SearchFilters {
   categoryId?: string;
+  /** Display-only — categoryId is what's sent to the API, this is just so summarizeFilters() doesn't need its own category lookup. */
+  categoryName?: string;
   useMyLocation: boolean;
   lat?: number;
   lng?: number;
@@ -17,10 +20,13 @@ export interface SearchFilters {
   maxPrice?: number;
 }
 
+// Item Condition defaults off (unfiltered) — turning a toggle on explicitly opts into that
+// condition. Since itemCondition[...] params are only ever sent when true, "both off" needs no
+// special-casing to mean "no restriction" the way "both on" would have.
 export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
   useMyLocation: false,
-  conditionNew: true,
-  conditionNeatlyUsed: true,
+  conditionNew: false,
+  conditionNeatlyUsed: false,
 };
 
 function computeHasActiveFilters(filters: SearchFilters): boolean {
@@ -30,25 +36,11 @@ function computeHasActiveFilters(filters: SearchFilters): boolean {
     filters.state !== undefined ||
     filters.city !== undefined ||
     filters.area !== undefined ||
-    !filters.conditionNew ||
-    !filters.conditionNeatlyUsed ||
+    filters.conditionNew ||
+    filters.conditionNeatlyUsed ||
     filters.minPrice !== undefined ||
     filters.maxPrice !== undefined
   );
-}
-
-/**
- * Both fields default "on" — sending them as itemCondition[new]=true&itemCondition[neatlyUsed]=true
- * would actually *restrict* results to just those two conditions, excluding e.g. "fairly used".
- * Only send them once the user has deviated from the neutral "show everything" default.
- */
-function conditionParams(filters: SearchFilters): Pick<ListingSearchParams, 'conditionNew' | 'conditionNeatlyUsed'> {
-  const bothDefault = filters.conditionNew && filters.conditionNeatlyUsed;
-  if (bothDefault) return {};
-  return {
-    conditionNew: filters.conditionNew || undefined,
-    conditionNeatlyUsed: filters.conditionNeatlyUsed || undefined,
-  };
 }
 
 /** Maps the shared filter state + the active keyword into the GET /listings query shape. */
@@ -62,11 +54,40 @@ export function toListingSearchParams(filters: SearchFilters, keyword: string): 
     state: !filters.useMyLocation ? filters.state : undefined,
     city: !filters.useMyLocation ? filters.city : undefined,
     area: !filters.useMyLocation ? filters.area : undefined,
-    ...conditionParams(filters),
+    conditionNew: filters.conditionNew || undefined,
+    conditionNeatlyUsed: filters.conditionNeatlyUsed || undefined,
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,
     search: keyword.trim() || undefined,
   };
+}
+
+/** Short human-readable labels for whatever's currently active — e.g. for a filter-summary row. */
+export function summarizeFilters(filters: SearchFilters): string[] {
+  const parts: string[] = [];
+
+  if (filters.categoryName) parts.push(filters.categoryName);
+
+  if (filters.useMyLocation) {
+    parts.push(filters.searchWithin !== undefined ? `Within ${filters.searchWithin}km` : 'Near you');
+  } else if (filters.state || filters.city || filters.area) {
+    parts.push([filters.area, filters.city, filters.state].filter(Boolean).join(', '));
+  }
+
+  if (filters.conditionNew || filters.conditionNeatlyUsed) {
+    const conditions = [filters.conditionNew && 'New', filters.conditionNeatlyUsed && 'Neatly Used'].filter(Boolean);
+    if (conditions.length) parts.push(conditions.join(' & '));
+  }
+
+  if (filters.minPrice !== undefined && filters.maxPrice !== undefined) {
+    parts.push(`${formatCurrency(filters.minPrice)} - ${formatCurrency(filters.maxPrice)}`);
+  } else if (filters.minPrice !== undefined) {
+    parts.push(`From ${formatCurrency(filters.minPrice)}`);
+  } else if (filters.maxPrice !== undefined) {
+    parts.push(`Up to ${formatCurrency(filters.maxPrice)}`);
+  }
+
+  return parts;
 }
 
 interface SearchFilterContextValue {

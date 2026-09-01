@@ -13,7 +13,7 @@ import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recentSearches';
 import { listingsApi } from '@/api';
-import { toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
+import { summarizeFilters, toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
 import { showWarningToast } from '@/lib/toast';
 
 const SKELETON_COUNT = 6;
@@ -21,7 +21,7 @@ const SKELETON_COUNT = 6;
 export default function SearchScreen() {
   const guard = useSingleTap();
   const inputRef = useRef<TextInput>(null);
-  const { keyword, setKeyword, filters, hasActiveFilters } = useSearchFilter();
+  const { keyword, setKeyword, filters, hasActiveFilters, resetFilters } = useSearchFilter();
   const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
   const [query, setQuery] = useState(keyword);
@@ -47,6 +47,10 @@ export default function SearchScreen() {
   );
 
   function goToFilter() {
+    // Typed-but-unsubmitted text would otherwise be silently dropped from the filtered results —
+    // it's still sitting visibly in the box, so commit it as the active keyword before leaving.
+    const trimmed = query.trim();
+    if (trimmed && trimmed !== keyword) commitSearch(trimmed);
     router.push('/(modals)/filterByModal');
   }
 
@@ -65,6 +69,10 @@ export default function SearchScreen() {
     setKeyword('');
   }
 
+  function handleClearFilters() {
+    resetFilters();
+  }
+
   async function handleClearRecent() {
     await clearRecentSearches();
     setRecentSearches([]);
@@ -74,6 +82,8 @@ export default function SearchScreen() {
     // No listing detail screen yet — nothing to navigate to.
     showWarningToast('Coming soon', "Listing details aren't built yet.");
   }
+
+  const filterSummary = hasActiveFilters ? summarizeFilters(filters) : [];
 
   return (
     <ScreenContainer
@@ -108,6 +118,17 @@ export default function SearchScreen() {
                 <Icon name="setting-3" variant="bold" size={verticalScale(20)} color={colors.gray700} />
               </Pressable>
             </View>
+
+            {filterSummary.length > 0 ? (
+              <View style={styles.activeFiltersRow}>
+                <Text style={styles.activeFiltersText} numberOfLines={1}>
+                  {filterSummary.join(' • ')}
+                </Text>
+                <Pressable onPress={guard(handleClearFilters)} hitSlop={8}>
+                  <Text style={styles.clearFiltersText}>Clear</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </>
       }
@@ -185,6 +206,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacingX.md,
+  },
+  activeFiltersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.md,
+    marginTop: spacingY.md,
+  },
+  activeFiltersText: {
+    flex: 1,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+  },
+  // Matches filterByModal's Reset text treatment.
+  clearFiltersText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.warning,
   },
   searchBar: {
     flex: 1,
