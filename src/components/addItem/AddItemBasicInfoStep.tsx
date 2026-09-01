@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 import * as Icons from 'phosphor-react-native';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -69,7 +69,9 @@ export function AddItemBasicInfoStep({
   const conditionLabel = CONDITION_OPTIONS.find((option) => option.value === condition)?.label;
 
   return (
-    <View>
+    // iOS keyboard avoidance already comes from ScreenContainer's own KeyboardAvoidingView — this
+    // only needs to cover Android, which relies on native window resize that isn't kicking in here.
+    <KeyboardAvoidingView behavior={Platform.OS === 'android' ? 'height' : undefined}>
       <Text style={styles.sectionTitle}>Basic Info</Text>
       <View style={styles.sectionGap}>
         <LabeledInput
@@ -156,7 +158,7 @@ export function AddItemBasicInfoStep({
           />
         ) : null}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
