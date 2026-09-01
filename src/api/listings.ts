@@ -4,6 +4,8 @@ import type {
   CreateListingPayload,
   Listing,
   ListingSearchParams,
+  ListingsCountParams,
+  ListingsCountResponse,
   NearbyListingsParams,
   NewListingsParams,
   PaginatedResponse,
@@ -42,6 +44,12 @@ export async function searchListings(params: ListingSearchParams) {
   if (params.search) query.search = params.search;
 
   const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings', { params: query });
+  return res.data.data;
+}
+
+/** Count of active listings within radiusKm (default 5) of (lat, lng) — location only, not a mirror of every /listings filter. */
+export async function getListingsCount(params: ListingsCountParams) {
+  const res = await apiClient.get<ApiEnvelope<ListingsCountResponse>>('/listings/count', { params });
   return res.data.data;
 }
 

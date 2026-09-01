@@ -210,6 +210,18 @@ export interface ListingSearchParams {
   limit?: number;
 }
 
+export interface ListingsCountParams {
+  lat: number;
+  lng: number;
+  /** >= 0.1. Defaults to 5 if omitted. */
+  radiusKm?: number;
+}
+
+/** Response shape assumed ({ count }) — no example response was given for GET /listings/count. */
+export interface ListingsCountResponse {
+  count: number;
+}
+
 export interface NearbyListingsParams {
   lat: number;
   lng: number;

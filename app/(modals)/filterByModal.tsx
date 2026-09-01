@@ -7,7 +7,7 @@ import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { categoriesApi } from '@/api';
+import { categoriesApi, listingsApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
 import type { Category } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
@@ -72,6 +72,41 @@ export default function FilterByModal() {
   const [minPrice, setMinPrice] = useState(committedFilters.minPrice ?? PRICE_BOUND_MIN);
   const [maxPrice, setMaxPrice] = useState(committedFilters.maxPrice ?? PRICE_BOUND_MAX);
 
+  const [nearbyCount, setNearbyCount] = useState<number | null>(null);
+  const [nearbyCountLoading, setNearbyCountLoading] = useState(false);
+
+  // Only meaningful once we actually have a point to count around — re-fires whenever the radius
+  // (or the resolved coords) changes, debounced so typing into the radius field doesn't fire one
+  // request per keystroke.
+  useEffect(() => {
+    if (!(useCurrentLocation && deviceLat !== undefined && deviceLng !== undefined)) {
+      setNearbyCount(null);
+      setNearbyCountLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setNearbyCountLoading(true);
+    const timer = setTimeout(() => {
+      listingsApi
+        .getListingsCount({ lat: deviceLat, lng: deviceLng, radiusKm: Number(effectiveRadiusKm) })
+        .then((result) => {
+          if (!cancelled) setNearbyCount(result.count);
+        })
+        .catch(() => {
+          if (!cancelled) setNearbyCount(null);
+        })
+        .finally(() => {
+          if (!cancelled) setNearbyCountLoading(false);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [useCurrentLocation, applyRadius, deviceLat, deviceLng, effectiveRadiusKm]);
+
   const hasActiveFilters =
     selectedCategoryIds.size > 0 ||
     useCurrentLocation ||
@@ -113,14 +148,21 @@ export default function FilterByModal() {
     setSelectedCategoryIds((prev) => (prev.has(id) ? new Set() : new Set([id])));
   }
 
+  // getDeviceLocation() is async — if the toggle is flipped off again (or Reset fires) before it
+  // resolves, a stale resolution must not be allowed to silently flip the toggle back on. Every
+  // call bumps this and only the most recent one is allowed to apply its result.
+  const locationRequestId = useRef(0);
+
   // Turning this on is the moment location access actually matters — getDeviceLocation() checks
   // (and, if needed, prompts for) permission itself; a denial/failure reverts the toggle.
   function handleToggleCurrentLocation(next: boolean) {
+    const requestId = ++locationRequestId.current;
     if (!next) {
       setUseCurrentLocation(false);
       return;
     }
     getDeviceLocation().then((device) => {
+      if (locationRequestId.current !== requestId) return; // superseded by a later toggle/reset
       if (!device) {
         showWarningToast('Location needed', 'Enable location access to search near you.');
         return;
@@ -133,8 +175,10 @@ export default function FilterByModal() {
   }
 
   function handleReset() {
+    locationRequestId.current++; // invalidate any in-flight getDeviceLocation() from the toggle
     setSelectedCategoryIds(new Set());
     setUseCurrentLocation(false);
+    setLocationLabel(null);
     setDeviceLat(undefined);
     setDeviceLng(undefined);
     setState(undefined);
@@ -185,9 +229,7 @@ export default function FilterByModal() {
       }
       footer={
         <View style={styles.footerRow}>
-          <View style={styles.resultsPill}>
-            <Text style={styles.resultsPillText}>No Results</Text>
-          </View>
+          <Text style={styles.resultsPillText}>No Results</Text>
           <Pressable onPress={guard(handleShow)} style={styles.showButton}>
             <Text style={styles.showButtonLabel}>Show</Text>
           </Pressable>
@@ -280,7 +322,10 @@ export default function FilterByModal() {
             </View>
             <View style={styles.infoBannerText}>
               <Text style={styles.infoBannerTitle}>Showing results near {locationLabel ?? 'you'}</Text>
-              <Text style={styles.infoBannerSubtitle}>— items found within {effectiveRadiusKm}km</Text>
+              <Text style={styles.infoBannerSubtitle}>
+                {nearbyCountLoading ? 'Counting…' : nearbyCount !== null ? `${nearbyCount} item${nearbyCount === 1 ? '' : 's'}` : '—'} found
+                within {effectiveRadiusKm}km
+              </Text>
             </View>
           </View>
         </>
@@ -468,15 +513,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacingX.md,
-    paddingBottom: spacingY.md,
-  },
-  resultsPill: {
-    paddingHorizontal: spacingX.lg,
+    paddingHorizontal: spacingX.md,
     paddingVertical: spacingY.md,
     borderRadius: radius.full,
     borderCurve: 'continuous',
     backgroundColor: colors.gray100,
   },
+  
   resultsPillText: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
