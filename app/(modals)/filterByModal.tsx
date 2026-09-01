@@ -12,6 +12,7 @@ import { extractErrorMessage } from '@/api/client';
 import type { Category } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
+import { formatNumber } from '@/utils/helpers';
 import { showWarningToast } from '@/lib/toast';
 import { toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
 import type { SearchFilters } from '@/contexts/SearchFilterContext';
@@ -61,11 +62,10 @@ export default function FilterByModal() {
   const [state, setState] = useState<string | undefined>(committedFilters.state);
   const [city, setCity] = useState<string | undefined>(committedFilters.city);
   const [area, setArea] = useState<string | undefined>(committedFilters.area);
-  // Only defer to a previously-committed value when a location filter was actually in play —
-  // otherwise (fresh mount, no committed filters) this must default true, since it's not visible
-  // until the location toggle is on and shouldn't count as an active filter on its own either way.
+  // Off by default (unlimited distance) — only defer to a previously-committed value when a
+  // location filter was actually in play.
   const [applyRadius, setApplyRadius] = useState(
-    committedFilters.useMyLocation ? committedFilters.searchWithin !== undefined : true
+    committedFilters.useMyLocation ? committedFilters.searchWithin !== undefined : false
   );
   // Left blank (shows the "0.00" placeholder) until the user overrides it — an empty box still
   // means the default radius applies, matching the design's banner text ("within 5km") below it.
@@ -132,7 +132,10 @@ export default function FilterByModal() {
       useMyLocation: useCurrentLocation,
       lat: useCurrentLocation ? deviceLat : undefined,
       lng: useCurrentLocation ? deviceLng : undefined,
-      searchWithin: useCurrentLocation && applyRadius ? Number(effectiveRadiusKm) : undefined,
+      // Sent whenever location is on, whether or not Apply Radius is — effectiveRadiusKm already
+      // falls back to the 5km default in the background when the field is blank/untouched.
+      // Never sent when location is off, regardless of what's left in the field.
+      searchWithin: useCurrentLocation ? Number(effectiveRadiusKm) : undefined,
       state: !useCurrentLocation ? state : undefined,
       city: !useCurrentLocation ? city : undefined,
       area: !useCurrentLocation ? area : undefined,
@@ -182,13 +185,14 @@ export default function FilterByModal() {
     };
   }, [draftFilters, keyword]);
 
+  // applyRadius isn't included here — it's only visible/meaningful once useCurrentLocation is on,
+  // which is already covered below, so it can't be "active" independently of that.
   const hasActiveFilters =
     selectedCategoryIds.size > 0 ||
     useCurrentLocation ||
     state !== undefined ||
     city !== undefined ||
     area !== undefined ||
-    !applyRadius ||
     radiusKm !== '' ||
     includeNew ||
     includeNeatlyUsed ||
@@ -248,6 +252,15 @@ export default function FilterByModal() {
     });
   }
 
+  // Turning Apply Radius on gives the field a genuinely visible "5" rather than leaving it on an
+  // empty "0.00" placeholder that silently defaults to 5 in the background.
+  function handleToggleApplyRadius(next: boolean) {
+    setApplyRadius(next);
+    if (next && radiusKm === '') {
+      setRadiusKm(String(DEFAULT_NEARBY_RADIUS_KM));
+    }
+  }
+
   function handleReset() {
     locationRequestId.current++; // invalidate any in-flight getDeviceLocation() from the toggle
     setSelectedCategoryIds(new Set());
@@ -258,7 +271,7 @@ export default function FilterByModal() {
     setState(undefined);
     setCity(undefined);
     setArea(undefined);
-    setApplyRadius(true);
+    setApplyRadius(false);
     setRadiusKm('');
     setIncludeNew(false);
     setIncludeNeatlyUsed(false);
@@ -362,7 +375,7 @@ export default function FilterByModal() {
       ) : (
         <View style={styles.toggleRow}>
           <Text style={styles.rowLabel}>Apply Radius</Text>
-          <Switch value={applyRadius} onValueChange={setApplyRadius} {...switchProps} />
+          <Switch value={applyRadius} onValueChange={handleToggleApplyRadius} {...switchProps} />
         </View>
       )}
 
@@ -423,8 +436,8 @@ export default function FilterByModal() {
         <Text style={styles.rowLabel}>Min</Text>
         <AmountField
           unitLabel="Naira"
-          value={String(minPrice)}
-          onChangeText={(text) => setMinPrice(clamp(Number(text) || 0, PRICE_BOUND_MIN, maxPrice))}
+          value={formatNumber(minPrice)}
+          onChangeText={(text) => setMinPrice(clamp(Number(text.replace(/[^0-9]/g, '')) || 0, PRICE_BOUND_MIN, maxPrice))}
           keyboardType="number-pad"
         />
       </View>
@@ -432,8 +445,8 @@ export default function FilterByModal() {
         <Text style={styles.rowLabel}>Max</Text>
         <AmountField
           unitLabel="Naira"
-          value={String(maxPrice)}
-          onChangeText={(text) => setMaxPrice(clamp(Number(text) || 0, minPrice, PRICE_BOUND_MAX))}
+          value={formatNumber(maxPrice)}
+          onChangeText={(text) => setMaxPrice(clamp(Number(text.replace(/[^0-9]/g, '')) || 0, minPrice, PRICE_BOUND_MAX))}
           keyboardType="number-pad"
         />
       </View>

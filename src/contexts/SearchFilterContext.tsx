@@ -45,12 +45,18 @@ function computeHasActiveFilters(filters: SearchFilters): boolean {
 
 /** Maps the shared filter state + the active keyword into the GET /listings query shape. */
 export function toListingSearchParams(filters: SearchFilters, keyword: string): Omit<ListingSearchParams, 'page' | 'limit'> {
+  // useMyLocation flips on optimistically (see filterByModal's handleToggleCurrentLocation),
+  // before getDeviceLocation() has actually resolved lat/lng — the endpoint requires them
+  // together, so an incomplete location filter is treated the same as no location filter at all
+  // (dropped entirely), rather than sending useMyLocation=true with nothing to anchor it to.
+  const hasCoords = filters.useMyLocation && filters.lat !== undefined && filters.lng !== undefined;
+
   return {
     categoryId: filters.categoryId,
-    useMyLocation: filters.useMyLocation || undefined,
-    lat: filters.useMyLocation ? filters.lat : undefined,
-    lng: filters.useMyLocation ? filters.lng : undefined,
-    searchWithin: filters.useMyLocation ? filters.searchWithin : undefined,
+    useMyLocation: hasCoords || undefined,
+    lat: hasCoords ? filters.lat : undefined,
+    lng: hasCoords ? filters.lng : undefined,
+    searchWithin: hasCoords ? filters.searchWithin : undefined,
     state: !filters.useMyLocation ? filters.state : undefined,
     city: !filters.useMyLocation ? filters.city : undefined,
     area: !filters.useMyLocation ? filters.area : undefined,
