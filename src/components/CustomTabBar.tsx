@@ -74,7 +74,7 @@ function TabButton({ route, index, state, navigation }: TabButtonProps) {
   const { user } = useAuth();
   const isFocused = state.index === index;
   const isProfile = route.name === 'profile';
-  const color = isFocused ? colors.primary : colors.gray400;
+  const color = isFocused ? colors.primary400 : colors.gray400;
 
   function onPress() {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     height: verticalScale(60),
     borderRadius: radius.full,
     borderCurve: 'continuous',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryHover,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: spacingX.md,
