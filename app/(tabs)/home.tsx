@@ -14,7 +14,6 @@ import { extractErrorMessage } from '@/api/client';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
-import { showWarningToast } from '@/lib/toast';
 
 const SECTION_LIMIT = 2;
 
@@ -102,9 +101,8 @@ export default function HomeScreen() {
     router.push('/(modals)/newListingsModal');
   }
 
-  function goToListing() {
-    // No listing detail screen yet — nothing to navigate to.
-    showWarningToast('Coming soon', "Listing details aren't built yet.");
+  function goToListing(listingId: string) {
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listingId } });
   }
 
   return (
@@ -159,7 +157,7 @@ export default function HomeScreen() {
               listing={listing}
               userLat={userLat}
               userLng={userLng}
-              onPress={goToListing}
+              onPress={() => goToListing(listing.id)}
               showFavorite
               favorited={favoriteIds.has(listing.id)}
               onToggleFavorite={() => toggleFavorite(listing.id)}
@@ -182,7 +180,7 @@ export default function HomeScreen() {
               listing={listing}
               userLat={userLat}
               userLng={userLng}
-              onPress={goToListing}
+              onPress={() => goToListing(listing.id)}
               showFavorite
               favorited={favoriteIds.has(listing.id)}
               onToggleFavorite={() => toggleFavorite(listing.id)}

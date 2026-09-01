@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCardSkeleton, RecentListingCard, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
+import type { Listing } from '@/api/types';
 import { getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
-import { showWarningToast } from '@/lib/toast';
 
 const SKELETON_COUNT = 6;
 
@@ -27,9 +28,8 @@ export default function NewListingsModal() {
     });
   }, []);
 
-  function onPressListing() {
-    // No listing detail screen yet — nothing to navigate to.
-    showWarningToast('Coming soon', "Listing details aren't built yet.");
+  function onPressListing(listing: Listing) {
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing.id } });
   }
 
   return (
@@ -49,7 +49,7 @@ export default function NewListingsModal() {
               listing={item}
               userLat={coords?.lat}
               userLng={coords?.lng}
-              onPress={onPressListing}
+              onPress={() => onPressListing(item)}
               showFavorite
               favorited={favoriteIds.has(item.id)}
               onToggleFavorite={() => toggleFavorite(item.id)}

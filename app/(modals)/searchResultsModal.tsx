@@ -13,8 +13,8 @@ import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { addRecentSearch } from '@/lib/recentSearches';
 import { listingsApi } from '@/api';
+import type { Listing } from '@/api/types';
 import { summarizeFilters, toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
-import { showWarningToast } from '@/lib/toast';
 
 const SKELETON_COUNT = 6;
 
@@ -81,9 +81,8 @@ export default function SearchResultsModal() {
     router.back();
   }
 
-  function onPressListing() {
-    // No listing detail screen yet — nothing to navigate to.
-    showWarningToast('Coming soon', "Listing details aren't built yet.");
+  function onPressListing(listing: Listing) {
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing.id } });
   }
 
   const filterSummary = hasActiveFilters ? summarizeFilters(filters) : [];
@@ -157,7 +156,7 @@ export default function SearchResultsModal() {
                 listing={item}
                 userLat={filters.useMyLocation ? filters.lat : undefined}
                 userLng={filters.useMyLocation ? filters.lng : undefined}
-                onPress={onPressListing}
+                onPress={() => onPressListing(item)}
                 showFavorite
                 favorited={favoriteIds.has(item.id)}
                 onToggleFavorite={() => toggleFavorite(item.id)}

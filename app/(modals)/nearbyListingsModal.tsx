@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
+import type { Listing } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { showWarningToast } from '@/lib/toast';
 
 const SKELETON_COUNT = 6;
 
@@ -55,9 +56,8 @@ export default function NearbyListingsModal() {
     coords !== null
   );
 
-  function onPressListing() {
-    // No listing detail screen yet — nothing to navigate to.
-    showWarningToast('Coming soon', "Listing details aren't built yet.");
+  function onPressListing(listing: Listing) {
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing.id } });
   }
 
   return (
@@ -90,7 +90,7 @@ export default function NearbyListingsModal() {
                 listing={item}
                 userLat={coords?.lat}
                 userLng={coords?.lng}
-                onPress={onPressListing}
+                onPress={() => onPressListing(item)}
                 showFavorite
                 favorited={favoriteIds.has(item.id)}
                 onToggleFavorite={() => toggleFavorite(item.id)}
