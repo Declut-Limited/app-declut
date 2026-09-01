@@ -448,6 +448,8 @@ export default function AddItemModal() {
     <View style={styles.flex}>
       <ScreenContainer
         background={colors.white}
+        // Step 1 owns its own KeyboardAwareScrollView — avoid nesting it inside this ScrollView too.
+        scroll={step !== 1}
         header={
           <ScreenHeader
             title={isPreview ? 'Preview' : 'Add Item'}

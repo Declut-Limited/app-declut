@@ -13,7 +13,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 // fades in, sheet slides up — applies to every consumer since it's all funneled through here.
 export function BottomSheetCard({ style, children, onBackdropPress, ...rest }: BottomSheetCardProps) {
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <AnimatedPressable entering={FadeIn.duration(200)} style={styles.backdrop} onPress={onBackdropPress} disabled={!onBackdropPress}>
         {/* Swallows the tap so it doesn't bubble up and trigger the backdrop's dismiss. */}
         <AnimatedPressable entering={SlideInDown.duration(300)} style={styles.sheet} onPress={() => {}}>
@@ -58,7 +58,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacingX.xl,
     paddingTop: spacingY.sm,
-    paddingBottom: spacingY.xl,
     gap: spacingY.md,
   },
 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
+import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as Icons from 'phosphor-react-native';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -69,9 +70,14 @@ export function AddItemBasicInfoStep({
   const conditionLabel = CONDITION_OPTIONS.find((option) => option.value === condition)?.label;
 
   return (
-    // iOS keyboard avoidance already comes from ScreenContainer's own KeyboardAvoidingView — this
-    // only needs to cover Android, which relies on native window resize that isn't kicking in here.
-    <KeyboardAvoidingView behavior={Platform.OS === 'android' ? 'height' : undefined}>
+    // Owns its own scroll (ScreenContainer renders this with scroll={false} for step 1) so the
+    // focused input actually scrolls above the keyboard, not just gets padded away from it.
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      extraScrollHeight={spacingY.sm}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.sectionTitle}>Basic Info</Text>
       <View style={styles.sectionGap}>
         <LabeledInput
@@ -158,7 +164,7 @@ export function AddItemBasicInfoStep({
           />
         ) : null}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -254,6 +260,9 @@ function RadioOption({ label, selected, onPress }: { label: string; selected: bo
 const FIELD_VALUE_FONT_SIZE = fontSize.md + verticalScale(1);
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   sectionTitle: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize.md,
