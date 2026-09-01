@@ -58,5 +58,5 @@ export function usePaginatedListings(fetchPage: FetchPage, enabled = true, reset
     load(1, 'refresh');
   }
 
-  return { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh };
+  return { items, total, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh };
 }

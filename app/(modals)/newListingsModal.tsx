@@ -42,6 +42,7 @@ export default function NewListingsModal() {
       <FlatList
         data={loading || refreshing ? [] : items}
         keyExtractor={(item) => item.id}
+        showsHorizontalScrollIndicator={false}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 70)}>
             <RecentListingCard

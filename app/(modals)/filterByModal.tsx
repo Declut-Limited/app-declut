@@ -281,7 +281,7 @@ export default function FilterByModal() {
 
   function handleShow() {
     commitFilters(draftFilters);
-    router.back();
+    router.replace('/(modals)/searchResultsModal');
   }
 
   // Only Lagos LGAs exist in this app's data today (see formOptions.ts) — City and Area both

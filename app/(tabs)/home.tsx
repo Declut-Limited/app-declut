@@ -91,7 +91,7 @@ export default function HomeScreen() {
   }
 
   function goToSearch() {
-    router.push('/(tabs)/search');
+    router.push('/(modals)/searchResultsModal');
   }
 
   function goToNearbyListings() {

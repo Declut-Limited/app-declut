@@ -70,6 +70,7 @@ export default function RootLayout() {
                           <Stack.Screen name="(modals)/nearbyListingsModal" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/newListingsModal" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/filterByModal" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/searchResultsModal" options={{ presentation: 'modal' }} />
                         </Stack>
                       {/* </View> */}
                     </SearchFilterProvider>

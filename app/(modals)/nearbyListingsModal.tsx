@@ -83,6 +83,7 @@ export default function NearbyListingsModal() {
         <FlatList
           data={loading || refreshing ? [] : items}
           keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 70)}>
               <ListingCard

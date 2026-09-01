@@ -57,7 +57,7 @@ function RecentSkeletonCard() {
 }
 
 /** Placeholder cards shown while a listing section is fetching or refetching — a simple Reanimated opacity pulse, no native dependencies beyond what's already installed. */
-export function ListingCardSkeleton({ count = 2, variant = 'recent' }: { count?: number; variant?: string }) {
+export function ListingCardSkeleton({ count = 2, variant = 'all' }: { count?: number; variant?: string }) {
   const opacity = useSharedValue(0.5);
 
   useEffect(() => {
