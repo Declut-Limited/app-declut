@@ -30,3 +30,10 @@ export function validateRequired(value: string, label: string): string | undefin
   if (!value.trim()) return `${label} is required.`;
   return undefined;
 }
+
+export function validatePrice(value: string): string | undefined {
+  if (!value.trim()) return 'Price is required.';
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Enter a valid price.';
+  return undefined;
+}

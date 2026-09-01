@@ -9,10 +9,27 @@ const PLATFORM_FEE_RATE = 0.08;
 export interface AddItemPriceStepProps {
   price: string;
   onPriceChange: (value: string) => void;
+  error?: string;
+}
+
+// Strips commas back to a plain "digits[.digits]" string — the raw form `price` is stored/validated as.
+function sanitizePriceInput(text: string): string {
+  const digitsAndDot = text.replace(/,/g, '').replace(/[^0-9.]/g, '');
+  const firstDot = digitsAndDot.indexOf('.');
+  if (firstDot === -1) return digitsAndDot;
+  return digitsAndDot.slice(0, firstDot + 1) + digitsAndDot.slice(firstDot + 1).replace(/\./g, '');
+}
+
+// Comma-groups the integer part for display, preserving whatever decimal digits are mid-typing.
+function formatPriceDisplay(raw: string): string {
+  if (!raw) return '';
+  const [intPart, decPart] = raw.split('.');
+  const groupedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return decPart !== undefined ? `${groupedInt}.${decPart}` : groupedInt;
 }
 
 // "Add Item" — step 3 of 3: price + the 8%-fee "you get" preview.
-export function AddItemPriceStep({ price, onPriceChange }: AddItemPriceStepProps) {
+export function AddItemPriceStep({ price, onPriceChange, error }: AddItemPriceStepProps) {
   const [focused, setFocused] = useState(false);
   const numericPrice = Number(price) || 0;
   const youGet = numericPrice * (1 - PLATFORM_FEE_RATE);
@@ -25,11 +42,11 @@ export function AddItemPriceStep({ price, onPriceChange }: AddItemPriceStepProps
         <View style={styles.currencyPill}>
           <Text style={styles.currencyPillText}>Naira</Text>
         </View>
-        <View style={[styles.priceInputWrap, focused && styles.priceInputWrapFocused]}>
+        <View style={[styles.priceInputWrap, focused && styles.priceInputWrapFocused, error ? styles.priceInputWrapError : null]}>
           <TextInput
             style={styles.priceInput}
-            value={price}
-            onChangeText={onPriceChange}
+            value={formatPriceDisplay(price)}
+            onChangeText={(text) => onPriceChange(sanitizePriceInput(text))}
             placeholder="0.00"
             placeholderTextColor={colors.gray300}
             keyboardType="decimal-pad"
@@ -38,6 +55,7 @@ export function AddItemPriceStep({ price, onPriceChange }: AddItemPriceStepProps
           />
         </View>
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <View style={styles.divider} />
 
@@ -69,7 +87,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacingX.md,
-    marginBottom: spacingY.lg,
   },
   currencyPill: {
     backgroundColor: colors.gray100,
@@ -97,16 +114,27 @@ const styles = StyleSheet.create({
   priceInputWrapFocused: {
     borderColor: colors.primary,
   },
+  priceInputWrapError: {
+    borderColor: colors.danger,
+  },
   priceInput: {
     fontFamily: fontFamily.bold,
     fontSize: verticalScale(46),
-    color: colors.gray400,
+    color: colors.gray500,
     textAlign: 'right',
     padding: 0,
+  },
+  errorText: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.xs,
+    color: colors.danger,
+    textAlign: 'right',
+    marginTop: spacingY.xs,
   },
   divider: {
     height: 1,
     backgroundColor: colors.gray100,
+    marginTop: spacingY.lg,
     marginBottom: spacingY.lg,
   },
   youGetRow: {

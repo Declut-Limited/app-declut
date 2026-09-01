@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import { AddItemBasicInfoStep } from '@/components/addItem/AddItemBasicInfoStep';
+import type { AddItemBasicInfoStepErrors } from '@/components/addItem/AddItemBasicInfoStep';
 import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
 import { MediaSourceSheet } from '@/components/addItem/MediaSourceSheet';
 import { AddItemMediaStep, REQUIRED_PHOTO_COUNT } from '@/components/addItem/AddItemMediaStep';
@@ -15,6 +16,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
+import { validatePrice, validateRequired } from '@/lib/validators';
 import { categoriesApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
 import type { Category } from '@/api/types';
@@ -51,6 +53,7 @@ export default function AddItemModal() {
   const [settingsPrompt, setSettingsPrompt] = useState<{ target: string; message: string } | null>(null);
   const [hasDefects, setHasDefects] = useState<boolean | null>(null);
   const [defectsDescription, setDefectsDescription] = useState('');
+  const [basicInfoErrors, setBasicInfoErrors] = useState<AddItemBasicInfoStepErrors>({});
 
   // Step 2 — Media
   const [photos, setPhotos] = useState<(ImagePicker.ImagePickerAsset | undefined)[]>([]);
@@ -59,6 +62,7 @@ export default function AddItemModal() {
 
   // Step 3 — Price
   const [price, setPrice] = useState('');
+  const [priceError, setPriceError] = useState<string | undefined>(undefined);
 
   const photoCount = photos.filter(Boolean).length;
   const mediaComplete = photoCount >= REQUIRED_PHOTO_COUNT && video !== null;
@@ -210,6 +214,27 @@ export default function AddItemModal() {
 
   const categoryLabel = categories.find((c) => c.id === category)?.title;
 
+  function clearBasicInfoError(field: keyof AddItemBasicInfoStepErrors) {
+    setBasicInfoErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  }
+
+  // Item brand is the one optional field in this step — everything else needs a value before Next.
+  function validateBasicInfo(): boolean {
+    const errors: AddItemBasicInfoStepErrors = {
+      itemName: validateRequired(itemName, 'Item name'),
+      itemDescription: validateRequired(itemDescription, 'Item description'),
+      category: validateRequired(category, 'Category'),
+      state: validateRequired(state, 'State'),
+      area: validateRequired(area, 'Area'),
+      address: validateRequired(address, 'Address'),
+      condition: validateRequired(condition, 'Item condition'),
+      hasDefects: hasDefects === null ? 'Select whether the item has any defects.' : undefined,
+      defectsDescription: hasDefects ? validateRequired(defectsDescription, 'Defect description') : undefined,
+    };
+    setBasicInfoErrors(errors);
+    return !Object.values(errors).some(Boolean);
+  }
+
   function handlePrevious() {
     if (step > 1) setStep(step - 1);
   }
@@ -221,6 +246,7 @@ export default function AddItemModal() {
 
   function handleNext() {
     if (step === 1) {
+      if (!validateBasicInfo()) return;
       setStep(2);
       return;
     }
@@ -229,6 +255,11 @@ export default function AddItemModal() {
       return;
     }
     if (step === 3) {
+      const error = validatePrice(price);
+      if (error) {
+        setPriceError(error);
+        return;
+      }
       setStep(PREVIEW_STEP);
     }
   }
@@ -237,6 +268,7 @@ export default function AddItemModal() {
     setState(value);
     setArea(''); // areas are state-dependent — clear a now-invalid selection
     setActiveSheet(null);
+    clearBasicInfoError('state');
   }
 
   function handlePublish() {
@@ -306,9 +338,15 @@ export default function AddItemModal() {
         {step === 1 ? (
           <AddItemBasicInfoStep
             itemName={itemName}
-            onItemNameChange={setItemName}
+            onItemNameChange={(value) => {
+              setItemName(value);
+              clearBasicInfoError('itemName');
+            }}
             itemDescription={itemDescription}
-            onItemDescriptionChange={setItemDescription}
+            onItemDescriptionChange={(value) => {
+              setItemDescription(value);
+              clearBasicInfoError('itemDescription');
+            }}
             categoryLabel={categoryLabel}
             onOpenCategorySheet={() => setActiveSheet('category')}
             itemBrand={itemBrand}
@@ -318,13 +356,23 @@ export default function AddItemModal() {
             area={area}
             onOpenAreaSheet={() => setActiveSheet('area')}
             address={address}
-            onAddressChange={setAddress}
+            onAddressChange={(value) => {
+              setAddress(value);
+              clearBasicInfoError('address');
+            }}
             condition={condition}
             onOpenConditionSheet={() => setActiveSheet('condition')}
             hasDefects={hasDefects}
-            onHasDefectsChange={setHasDefects}
+            onHasDefectsChange={(value) => {
+              setHasDefects(value);
+              clearBasicInfoError('hasDefects');
+            }}
             defectsDescription={defectsDescription}
-            onDefectsDescriptionChange={setDefectsDescription}
+            onDefectsDescriptionChange={(value) => {
+              setDefectsDescription(value);
+              clearBasicInfoError('defectsDescription');
+            }}
+            errors={basicInfoErrors}
           />
         ) : step === 2 ? (
           <AddItemMediaStep
@@ -344,7 +392,14 @@ export default function AddItemModal() {
             onVideoThumbnailUriChange={setVideoThumbnailUri}
           />
         ) : step === 3 ? (
-          <AddItemPriceStep price={price} onPriceChange={setPrice} />
+          <AddItemPriceStep
+            price={price}
+            onPriceChange={(value) => {
+              setPrice(value);
+              if (priceError) setPriceError(undefined);
+            }}
+            error={priceError}
+          />
         ) : (
           <AddItemPreviewStep
             photos={photos}
@@ -379,6 +434,7 @@ export default function AddItemModal() {
               onSelect={(value) => {
                 setCategory(value);
                 setActiveSheet(null);
+                clearBasicInfoError('category');
               }}
               onClose={() => setActiveSheet(null)}
               loading={categoriesLoading}
@@ -395,6 +451,7 @@ export default function AddItemModal() {
               onSelect={(value) => {
                 setCondition(value);
                 setActiveSheet(null);
+                clearBasicInfoError('condition');
               }}
               onClose={() => setActiveSheet(null)}
             />
@@ -414,6 +471,7 @@ export default function AddItemModal() {
               onSelect={(value) => {
                 setArea(value);
                 setActiveSheet(null);
+                clearBasicInfoError('area');
               }}
               onClose={() => setActiveSheet(null)}
             />

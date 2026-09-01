@@ -1,11 +1,22 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 import * as Icons from 'phosphor-react-native';
-import { Input } from '@/components';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
+
+export interface AddItemBasicInfoStepErrors {
+  itemName?: string;
+  itemDescription?: string;
+  category?: string;
+  state?: string;
+  area?: string;
+  address?: string;
+  condition?: string;
+  hasDefects?: string;
+  defectsDescription?: string;
+}
 
 export interface AddItemBasicInfoStepProps {
   itemName: string;
@@ -28,6 +39,7 @@ export interface AddItemBasicInfoStepProps {
   onHasDefectsChange: (value: boolean) => void;
   defectsDescription: string;
   onDefectsDescriptionChange: (value: string) => void;
+  errors?: AddItemBasicInfoStepErrors;
 }
 
 // "Add Item" — step 1 of 3: Basic Info / Category / Item Location / Item Condition.
@@ -52,6 +64,7 @@ export function AddItemBasicInfoStep({
   onHasDefectsChange,
   defectsDescription,
   onDefectsDescriptionChange,
+  errors = {},
 }: AddItemBasicInfoStepProps) {
   const conditionLabel = CONDITION_OPTIONS.find((option) => option.value === condition)?.label;
 
@@ -59,8 +72,14 @@ export function AddItemBasicInfoStep({
     <View>
       <Text style={styles.sectionTitle}>Basic Info</Text>
       <View style={styles.sectionGap}>
-        <Input label="Item name" placeholder="e.g. Macbook Pro M1 2021" value={itemName} onChangeText={onItemNameChange} />
-        <Input
+        <LabeledInput
+          label="Item name"
+          placeholder="e.g. Macbook Pro M1 2021"
+          value={itemName}
+          onChangeText={onItemNameChange}
+          error={errors.itemName}
+        />
+        <LabeledInput
           label="Item description"
           placeholder="Describe the item's features and condition"
           value={itemDescription}
@@ -68,51 +87,64 @@ export function AddItemBasicInfoStep({
           multiline
           numberOfLines={4}
           style={styles.multilineInput}
+          error={errors.itemDescription}
         />
       </View>
 
       <Text style={styles.sectionTitle}>Category</Text>
       <View style={styles.sectionGap}>
-        <PickerField label="Category" value={categoryLabel} placeholder="Select a category" onPress={onOpenCategorySheet} />
-        <Input label="Item brand" placeholder="e.g. Apple" value={itemBrand} onChangeText={onItemBrandChange} />
+        <LabeledPicker
+          label="Category"
+          value={categoryLabel}
+          placeholder="Select a category"
+          onPress={onOpenCategorySheet}
+          error={errors.category}
+        />
+        <LabeledInput label="Item brand" placeholder="e.g. Apple" value={itemBrand} onChangeText={onItemBrandChange} />
       </View>
 
       <Text style={styles.sectionTitle}>Item Location</Text>
       <View style={styles.sectionGap}>
-        <PickerField label="State" value={state} placeholder="Select a state" onPress={onOpenStateSheet} />
-        <PickerField
+        <LabeledPicker label="State" value={state} placeholder="Select a state" onPress={onOpenStateSheet} error={errors.state} />
+        <LabeledPicker
           label="Area"
           value={area}
           placeholder="Select a state first"
           onPress={onOpenAreaSheet}
           disabled={!state}
+          error={errors.area}
         />
-        <Input
+        <LabeledInput
           label="Address"
           placeholder="e.g. 3B Community Road"
           value={address}
           onChangeText={onAddressChange}
-          customIcon={<Icons.MapTrifoldIcon size={verticalScale(20)} color={colors.gray400} />}
+          trailingIcon={<Icons.MapTrifoldIcon size={verticalScale(20)} color={colors.gray400} />}
+          error={errors.address}
         />
       </View>
 
       <Text style={styles.sectionTitle}>Item Condition</Text>
       <View style={styles.sectionGap}>
-        <PickerField
+        <LabeledPicker
           label="Select condition"
           value={conditionLabel}
           placeholder="Select the item's condition"
           onPress={onOpenConditionSheet}
+          error={errors.condition}
         />
 
-        <Text style={styles.defectsLabel}>Does the item have any defect(s)</Text>
-        <View style={styles.radioRow}>
-          <RadioOption label="Yes" selected={hasDefects === true} onPress={() => onHasDefectsChange(true)} />
-          <RadioOption label="No" selected={hasDefects === false} onPress={() => onHasDefectsChange(false)} />
+        <View>
+          <Text style={styles.defectsLabel}>Does the item have any defect(s)</Text>
+          <View style={styles.radioRow}>
+            <RadioOption label="Yes" selected={hasDefects === true} onPress={() => onHasDefectsChange(true)} />
+            <RadioOption label="No" selected={hasDefects === false} onPress={() => onHasDefectsChange(false)} />
+          </View>
+          {errors.hasDefects ? <Text style={styles.errorText}>{errors.hasDefects}</Text> : null}
         </View>
 
         {hasDefects ? (
-          <Input
+          <LabeledInput
             label="Describe defects"
             placeholder="Describe the defect(s)"
             value={defectsDescription}
@@ -120,6 +152,7 @@ export function AddItemBasicInfoStep({
             multiline
             numberOfLines={3}
             style={styles.multilineInputSmall}
+            error={errors.defectsDescription}
           />
         ) : null}
       </View>
@@ -127,34 +160,80 @@ export function AddItemBasicInfoStep({
   );
 }
 
-// Same box treatment as FormDropdown — just opens a bottom sheet instead of a native menu.
-function PickerField({
-  label,
-  value,
-  placeholder,
-  onPress,
-  disabled,
-}: {
+interface LabeledInputProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  multiline?: boolean;
+  numberOfLines?: number;
+  style?: StyleProp<TextStyle>;
+  trailingIcon?: React.ReactNode;
+  error?: string;
+}
+
+// Label sits inside the field, above the value — not above-and-outside like the shared Input.
+function LabeledInput({ label, placeholder, value, onChangeText, multiline, numberOfLines, style, trailingIcon, error }: LabeledInputProps) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View>
+      <View
+        style={[
+          styles.fieldBox,
+          focused && styles.fieldBoxFocused,
+          multiline && styles.fieldBoxMultiline,
+          error ? styles.fieldBoxError : null,
+        ]}
+      >
+        <View style={styles.fieldTextColumn}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          <TextInput
+            style={[styles.fieldValue, multiline && styles.multilineText, multiline && style]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={colors.gray400}
+            multiline={multiline}
+            numberOfLines={numberOfLines}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          />
+        </View>
+        {trailingIcon ? <View style={styles.fieldTrailingIcon}>{trailingIcon}</View> : null}
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
+interface LabeledPickerProps {
   label: string;
   value?: string;
   placeholder: string;
   onPress: () => void;
   disabled?: boolean;
-}) {
+  error?: string;
+}
+
+function LabeledPicker({ label, value, placeholder, onPress, disabled, error }: LabeledPickerProps) {
   const guard = useSingleTap();
 
   return (
     <View>
-      <Text style={styles.fieldLabel}>{label}</Text>
       <Pressable
         onPress={guard(onPress)}
         disabled={disabled}
-        style={[styles.pickerField, disabled && styles.pickerFieldDisabled]}
+        style={[styles.fieldBox, disabled && styles.fieldBoxDisabled, error ? styles.fieldBoxError : null]}
         accessibilityState={{ disabled }}
       >
-        <Text style={value ? styles.pickerValue : styles.pickerPlaceholder}>{value || placeholder}</Text>
+        <View style={styles.fieldTextColumn}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          <Text style={[styles.fieldValue, !value && styles.fieldValuePlaceholder]}>{value || placeholder}</Text>
+        </View>
         <Icons.CaretDownIcon size={verticalScale(16)} color={disabled ? colors.gray300 : colors.gray400} />
       </Pressable>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -170,6 +249,8 @@ function RadioOption({ label, selected, onPress }: { label: string; selected: bo
   );
 }
 
+const FIELD_VALUE_FONT_SIZE = fontSize.md + verticalScale(1);
+
 const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: fontFamily.bold,
@@ -181,44 +262,69 @@ const styles = StyleSheet.create({
     gap: spacingY.md,
     marginBottom: spacingY['2xl'],
   },
-  multilineInput: {
-    height: verticalScale(90),
-    textAlignVertical: 'top',
+  fieldBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.sm,
+    minHeight: verticalScale(64),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray50,
+    borderWidth: 1,
+    borderColor: colors.gray50,
+    paddingHorizontal: spacingX.md,
+    paddingVertical: spacingY.sm,
+  },
+  fieldBoxFocused: {
+    borderColor: colors.primary,
+  },
+  fieldBoxError: {
+    borderColor: colors.danger,
+  },
+  fieldBoxDisabled: {
+    backgroundColor: colors.gray50,
+    opacity: 0.6,
+  },
+  fieldBoxMultiline: {
+    alignItems: 'flex-start',
+  },
+  fieldTextColumn: {
+    flex: 1,
   },
   fieldLabel: {
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
-    color: colors.gray700,
-    marginBottom: spacingY.xs,
+    color: colors.gray400,
+    marginBottom: verticalScale(2),
   },
-  pickerField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: verticalScale(56),
-    borderRadius: radius.lg,
-    borderCurve: 'continuous',
-    backgroundColor: colors.gray100,
-    borderWidth: 1,
-    borderColor: colors.gray100,
-    paddingHorizontal: spacingX.md,
-  },
-  pickerFieldDisabled: {
-    backgroundColor: colors.gray50,
-  },
-  pickerPlaceholder: {
+  errorText: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.md,
+    fontSize: fontSize.xs,
+    color: colors.danger,
+    marginTop: spacingY.xs,
+  },
+  fieldValue: {
+    fontFamily: fontFamily.semibold,
+    fontSize: FIELD_VALUE_FONT_SIZE,
+    color: colors.gray600,
+    padding: 0,
+  },
+  fieldValuePlaceholder: {
+    fontFamily: fontFamily.medium,
     color: colors.gray400,
   },
-  pickerValue: {
-    fontFamily: fontFamily.medium,
-    fontSize: fontSize.md,
-    color: colors.gray900,
+  fieldTrailingIcon: {
+    marginTop: verticalScale(2),
+  },
+  multilineText: {
+    textAlignVertical: 'top',
+  },
+  multilineInput: {
+    minHeight: verticalScale(80),
   },
   multilineInputSmall: {
-    height: verticalScale(70),
-    textAlignVertical: 'top',
+    minHeight: verticalScale(50),
   },
   defectsLabel: {
     fontFamily: fontFamily.medium,
