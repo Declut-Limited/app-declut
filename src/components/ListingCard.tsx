@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(3),
     borderRadius: radius.full,
     borderCurve: 'continuous',
-    backgroundColor: colors.warningLight,
+    backgroundColor: colors.warning25,
   },
   badgeLabel: {
     fontFamily: fontFamily.bold,

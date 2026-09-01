@@ -160,7 +160,7 @@ function PlayableHeroVideo({ uri }: { uri: string }) {
 const styles = StyleSheet.create({
   tipBanner: {
     marginHorizontal: -spacingX['2xl'],
-    backgroundColor: colors.warningLight,
+    backgroundColor: colors.warning25,
     paddingHorizontal: spacingX['2xl'],
     paddingVertical: spacingY.lg,
     marginBottom: spacingY.lg,
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     fontSize: fontSize.md,
     lineHeight: fontSize.md * 1.5,
-    color: colors.ink,
+    color: colors.textSecondary,
   },
   hero: {
     marginHorizontal: -spacingX['2xl'],

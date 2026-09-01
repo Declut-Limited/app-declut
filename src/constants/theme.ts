@@ -11,10 +11,14 @@ export const colors = {
   background: '#F4F7FA',
   backgroundLight: '#F9FAFB',
 
+  textPrimary: '',
+  textSecondary: '#475467',
+
   ink: '#111827',
   success: '#16A34A',
   successLight: '#DCFCE7',
   warning: '#F97316',
+  warning25: '#FFFCF5',
   warningLight: '#FFEDD5',
   danger: '#DC2626',
   dangerLight: '#FEE2E2',

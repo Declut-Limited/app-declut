@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingY.xl,
   },
   tipBanner: {
-    backgroundColor: colors.warningLight,
+    backgroundColor: colors.warning25,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
     padding: spacingX.lg,
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     fontSize: fontSize.md,
     lineHeight: fontSize.md * 1.5,
-    color: colors.ink,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 });
