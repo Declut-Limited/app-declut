@@ -158,19 +158,43 @@ export interface ListingLocation {
   coordinates: [number, number];
 }
 
+/** Cloudinary's own upload-response shape, camelCased — publicId/secureUrl are what /listings stores per image/video. */
+export interface CloudinaryMediaRef {
+  publicId: string;
+  url: string;
+  secureUrl: string;
+  /** Optional on the way in — defaulted server-side to array position/false when omitted. */
+  sortOrder?: number;
+  isPrimary?: boolean;
+}
+
+export type ListingCondition = 'new' | 'neatly_used';
+
 export interface Listing {
   id: string;
   _id: string;
   title: string;
   description: string;
   category: string;
-  condition: string;
+  condition: ListingCondition;
   price: number;
-  images: string[];
+  brand?: string;
+  images: CloudinaryMediaRef[];
+  video?: CloudinaryMediaRef;
+  /** Computed server-side from whichever image has isPrimary:true (falls back to the first). Never sent by the client. */
+  mainImageUrl: string;
+  hasDefect?: boolean;
+  defectDescription?: string | null;
   location: ListingLocation;
+  /** Computed server-side as "city, state". Never sent by the client. */
   locationLabel: string;
+  state?: string;
+  city?: string;
+  address?: string;
   status: 'active' | 'archived' | 'sold';
   sellerId: string;
+  /** Populated on GET /listings/:id (id or LST-#### slug) — not present on list/search results. */
+  seller?: Pick<User, 'id' | 'name' | 'trustScore'>;
   createdAt: string;
   /** Only present when a search included lat/lng (radius search). */
   distanceKm?: number;
@@ -178,12 +202,36 @@ export interface Listing {
   favorited?: boolean;
 }
 
-export type CreateListingPayload = Pick<
-  Listing,
-  'title' | 'description' | 'category' | 'condition' | 'price' | 'images' | 'location' | 'locationLabel'
->;
+/** Plain {lat,lng} on the way in — distinct from ListingLocation, the GeoJSON shape the response comes back as. */
+export interface CreateListingLocation {
+  lat: number;
+  lng: number;
+}
+
+export interface CreateListingPayload {
+  title: string;
+  description: string;
+  categoryId: string;
+  price: number;
+  brand?: string;
+  state: string;
+  city: string;
+  address: string;
+  location: CreateListingLocation;
+  condition: ListingCondition;
+  hasDefect: boolean;
+  defectDescription?: string | null;
+  /** Max 3. */
+  images: CloudinaryMediaRef[];
+  /** Single object, not an array — max 1. */
+  video?: CloudinaryMediaRef;
+}
 
 export type UpdateListingPayload = Partial<CreateListingPayload>;
+
+export interface DeleteImageResponse {
+  deleted: boolean;
+}
 
 /** GET /listings — all fields optional/combinable; shares its filter logic with GET /listings/count. */
 export interface ListingSearchParams {

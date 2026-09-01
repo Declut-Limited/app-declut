@@ -10,13 +10,7 @@ import type {
   NewListingsParams,
   PaginatedResponse,
   UpdateListingPayload,
-  UploadSignature,
 } from './types';
-
-export async function getUploadSignature() {
-  const res = await apiClient.get<ApiEnvelope<UploadSignature>>('/listings/upload-signature');
-  return res.data.data;
-}
 
 /**
  * GET /listings — search + filter, combined. Built as an explicit flat object (not a nested

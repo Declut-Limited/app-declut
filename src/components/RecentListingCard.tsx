@@ -25,8 +25,8 @@ export function RecentListingCard({ listing, onPress, userLat, userLng, showFavo
   return (
     <Pressable onPress={guard(onPress)} style={styles.card}>
       <View style={styles.imageWrap}>
-        {listing.images[0] ? (
-          <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" />
+        {listing.mainImageUrl || listing.images[0] ? (
+          <Image source={{ uri: listing.mainImageUrl || listing.images[0]?.secureUrl }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]} />
         )}

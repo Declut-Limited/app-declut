@@ -1,50 +1,50 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Icons from 'phosphor-react-native';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { getFilePath } from '@/utils/helpers';
+import type { CloudinaryMediaRef } from '@/api/types';
 
 export const REQUIRED_PHOTO_COUNT = 3;
 
-export interface AddItemMediaStepProps {
-  photos: (ImagePicker.ImagePickerAsset | undefined)[];
-  onPhotosChange: (photos: (ImagePicker.ImagePickerAsset | undefined)[]) => void;
-  onPressPhotoSlot: () => void;
-  video: ImagePicker.ImagePickerAsset | null;
-  onVideoChange: (video: ImagePicker.ImagePickerAsset | null) => void;
-  onPressVideoSlot: () => void;
-  videoThumbnailUri: string | null;
-  onVideoThumbnailUriChange: (uri: string | null) => void;
+/** A picked photo/video slot, tracked through its Cloudinary upload. */
+export interface MediaSlot {
+  /** Local file URI — used for the on-screen preview regardless of upload status. */
+  uri: string;
+  status: 'uploading' | 'uploaded' | 'failed';
+  /** Present once status === 'uploaded'. */
+  uploaded?: CloudinaryMediaRef;
 }
 
-// "Add Item" — step 2 of 3: 3 photo slots + 1 video slot, plus a selling tip banner.
-// Drag-to-reorder isn't wired up yet — the screenshot only shows the copy, not the interaction.
+export interface AddItemMediaStepProps {
+  photos: (MediaSlot | undefined)[];
+  onPressPhotoSlot: () => void;
+  onRemovePhoto: (index: number) => void;
+  onRetryPhoto: (index: number) => void;
+  video: MediaSlot | null;
+  onPressVideoSlot: () => void;
+  onRemoveVideo: () => void;
+  onRetryVideo: () => void;
+  videoThumbnailUri: string | null;
+}
+
+// "Add Item" — step 2 of 3: 3 photo slots + 1 video slot, plus a selling tip banner. Every slot
+// uploads to Cloudinary as soon as it's picked (see addItemModal.tsx) — this component only
+// renders whatever upload state it's handed, it doesn't own the upload itself.
 export function AddItemMediaStep({
   photos,
-  onPhotosChange,
   onPressPhotoSlot,
+  onRemovePhoto,
+  onRetryPhoto,
   video,
-  onVideoChange,
   onPressVideoSlot,
+  onRemoveVideo,
+  onRetryVideo,
   videoThumbnailUri,
-  onVideoThumbnailUriChange,
 }: AddItemMediaStepProps) {
   const guard = useSingleTap();
-
-  function removePhoto(slotIndex: number) {
-    const next = [...photos];
-    next[slotIndex] = undefined;
-    onPhotosChange(next);
-  }
-
-  function removeVideo() {
-    onVideoChange(null);
-    onVideoThumbnailUriChange(null);
-  }
 
   return (
     <View>
@@ -52,43 +52,29 @@ export function AddItemMediaStep({
 
       <View style={styles.photoRow}>
         {Array.from({ length: REQUIRED_PHOTO_COUNT }, (_, index) => {
-          const asset = photos[index];
+          const slot = photos[index];
           return (
-            <Pressable key={index} onPress={guard(onPressPhotoSlot)} style={[styles.mediaSlot, styles.photoSlot]}>
-              {asset ? (
-                <>
-                  <Image source={{ uri: getFilePath(asset) ?? undefined }} style={styles.slotImage} resizeMode="cover" />
-                  <Pressable onPress={guard(() => removePhoto(index))} style={styles.removeButton} hitSlop={8}>
-                    <Icons.XCircleIcon size={verticalScale(24)} weight="fill" color={colors.ink} />
-                  </Pressable>
-                </>
-              ) : (
-                <PlaceholderGlyph icon={<Icon name="image" variant="linear" size={verticalScale(28)} color={colors.gray400} />} />
-              )}
-            </Pressable>
+            <MediaSlotView
+              key={index}
+              slot={slot}
+              slotStyle={styles.photoSlot}
+              placeholderIcon={<Icon name="image" variant="linear" size={verticalScale(28)} color={colors.gray400} />}
+              onPress={guard(slot?.status === 'failed' ? () => onRetryPhoto(index) : onPressPhotoSlot)}
+              onRemove={guard(() => onRemovePhoto(index))}
+            />
           );
         })}
       </View>
 
-      <Pressable onPress={guard(onPressVideoSlot)} style={[styles.mediaSlot, styles.videoSlot]}>
-        {video ? (
-          <>
-            {videoThumbnailUri ? (
-              <Image source={{ uri: videoThumbnailUri }} style={styles.slotImage} resizeMode="cover" />
-            ) : (
-              <View style={[styles.slotImage, styles.videoThumbnailFallback]} />
-            )}
-            <View style={styles.videoPlayBadge}>
-              <Icons.PlayIcon size={verticalScale(16)} weight="fill" color={colors.white} />
-            </View>
-            <Pressable onPress={guard(removeVideo)} style={styles.removeButton} hitSlop={8}>
-              <Icons.XCircleIcon size={verticalScale(24)} weight="fill" color={colors.ink} />
-            </Pressable>
-          </>
-        ) : (
-          <PlaceholderGlyph icon={<Icons.FilmStripIcon size={verticalScale(28)} color={colors.gray400} />} />
-        )}
-      </Pressable>
+      <MediaSlotView
+        slot={video}
+        slotStyle={styles.videoSlot}
+        placeholderIcon={<Icons.FilmStripIcon size={verticalScale(28)} color={colors.gray400} />}
+        thumbnailUri={videoThumbnailUri ?? undefined}
+        isVideo
+        onPress={guard(video?.status === 'failed' ? onRetryVideo : onPressVideoSlot)}
+        onRemove={guard(onRemoveVideo)}
+      />
 
       <Text style={styles.helperText}>Tap to edit, drag to reorder</Text>
       <Text style={styles.requirementText}>3 photos and 1 video required</Text>
@@ -99,6 +85,62 @@ export function AddItemMediaStep({
         </Text>
       </View>
     </View>
+  );
+}
+
+interface MediaSlotViewProps {
+  slot: MediaSlot | null | undefined;
+  slotStyle: object;
+  placeholderIcon: React.ReactNode;
+  thumbnailUri?: string;
+  isVideo?: boolean;
+  onPress: () => void;
+  onRemove: () => void;
+}
+
+function MediaSlotView({ slot, slotStyle, placeholderIcon, thumbnailUri, isVideo, onPress, onRemove }: MediaSlotViewProps) {
+  if (!slot) {
+    return (
+      <Pressable onPress={onPress} style={[styles.mediaSlot, slotStyle]}>
+        <PlaceholderGlyph icon={placeholderIcon} />
+      </Pressable>
+    );
+  }
+
+  // For a photo, the local file itself is the preview. For a video, only the generated thumbnail
+  // is renderable as an <Image> — the raw video file isn't, so show a plain fallback until it's ready.
+  const previewUri = isVideo ? thumbnailUri : slot.uri;
+
+  return (
+    <Pressable onPress={onPress} style={[styles.mediaSlot, slotStyle]}>
+      {slot.status === 'failed' ? (
+        <View style={[styles.slotImage, styles.failedOverlay]}>
+          <Icons.WarningCircleIcon size={verticalScale(24)} weight="fill" color={colors.danger} />
+          <Text style={styles.failedText}>Tap to retry</Text>
+        </View>
+      ) : (
+        <>
+          {previewUri ? (
+            <Image source={{ uri: previewUri }} style={styles.slotImage} resizeMode="cover" />
+          ) : (
+            <View style={[styles.slotImage, styles.videoThumbnailFallback]} />
+          )}
+          {slot.status === 'uploading' ? (
+            <View style={styles.uploadingOverlay}>
+              <ActivityIndicator color={colors.white} />
+            </View>
+          ) : null}
+          {isVideo && slot.status === 'uploaded' ? (
+            <View style={styles.videoPlayBadge}>
+              <Icons.PlayIcon size={verticalScale(16)} weight="fill" color={colors.white} />
+            </View>
+          ) : null}
+        </>
+      )}
+      <Pressable onPress={onRemove} style={styles.removeButton} hitSlop={8}>
+        <Icons.XCircleIcon size={verticalScale(24)} weight="fill" color={colors.ink} />
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -149,6 +191,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  videoThumbnailFallback: {
+    backgroundColor: colors.gray100,
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  failedOverlay: {
+    backgroundColor: colors.dangerLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: verticalScale(4),
+  },
+  failedText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.xs,
+    color: colors.danger,
+  },
   placeholderWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -171,9 +237,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacingY.xs,
     right: spacingX.xs,
-  },
-  videoThumbnailFallback: {
-    backgroundColor: colors.gray100,
   },
   videoPlayBadge: {
     position: 'absolute',

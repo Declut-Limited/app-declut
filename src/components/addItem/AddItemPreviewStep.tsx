@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { getFilePath } from '@/utils/helpers';
+import type { MediaSlot } from './AddItemMediaStep';
 
 interface MediaItem {
   /** Real, playable source — the video file itself for a video item. */
@@ -17,8 +16,8 @@ interface MediaItem {
 }
 
 export interface AddItemPreviewStepProps {
-  photos: (ImagePicker.ImagePickerAsset | undefined)[];
-  video: ImagePicker.ImagePickerAsset | null;
+  photos: (MediaSlot | undefined)[];
+  video: MediaSlot | null;
   videoThumbnailUri: string | null;
   itemName: string;
   itemDescription: string;
@@ -48,14 +47,10 @@ export function AddItemPreviewStep({
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const items: MediaItem[] = photos
-      .filter((asset): asset is ImagePicker.ImagePickerAsset => !!asset)
-      .map((asset) => {
-        const uri = getFilePath(asset) ?? '';
-        return { uri, thumbnailUri: uri, isVideo: false };
-      });
+      .filter((slot): slot is MediaSlot => !!slot)
+      .map((slot) => ({ uri: slot.uri, thumbnailUri: slot.uri, isVideo: false }));
     if (video) {
-      const uri = getFilePath(video) ?? '';
-      items.push({ uri, thumbnailUri: videoThumbnailUri ?? uri, isVideo: true });
+      items.push({ uri: video.uri, thumbnailUri: videoThumbnailUri ?? video.uri, isVideo: true });
     }
     return items;
   }, [photos, video, videoThumbnailUri]);

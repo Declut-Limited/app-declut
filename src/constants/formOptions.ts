@@ -21,11 +21,12 @@ export const CATEGORY_OPTIONS: DropdownOption[] = [
   { label: 'Other', value: 'other' },
 ];
 
-// value === label (matching states/areas below) — Preview displays this value as plain text directly.
-export const CONDITION_OPTIONS: DropdownOption[] = ['New', 'Neatly used'].map((name) => ({
-  label: name,
-  value: name,
-}));
+// Values match the backend's Listing.condition enum ('new' | 'neatly_used') exactly — POST/PATCH
+// /listings sends `condition` verbatim, so this can't be a display label like the other option lists.
+export const CONDITION_OPTIONS: DropdownOption[] = [
+  { label: 'New', value: 'new' },
+  { label: 'Neatly used', value: 'neatly_used' },
+];
 
 // Real states, from country-state-city — replaces the old hand-typed 36-state list.
 export const NIGERIAN_STATE_OPTIONS: DropdownOption[] = State.getStatesOfCountry(NIGERIA_COUNTRY_CODE).map((s) => ({

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -9,24 +9,25 @@ import type { AddItemBasicInfoStepErrors } from '@/components/addItem/AddItemBas
 import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
 import { MediaSourceSheet } from '@/components/addItem/MediaSourceSheet';
 import { AddItemMediaStep, REQUIRED_PHOTO_COUNT } from '@/components/addItem/AddItemMediaStep';
+import type { MediaSlot } from '@/components/addItem/AddItemMediaStep';
 import { AddItemPriceStep } from '@/components/addItem/AddItemPriceStep';
 import { AddItemPreviewStep } from '@/components/addItem/AddItemPreviewStep';
 import { CONDITION_OPTIONS, NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { showErrorToast, showWarningToast } from '@/lib/toast';
+import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
 import { validatePrice, validateRequired } from '@/lib/validators';
-import { categoriesApi } from '@/api';
+import { getDeviceLocation } from '@/lib/location';
+import { categoriesApi, listingsApi, mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
-import type { Category } from '@/api/types';
+import type { Category, CreateListingPayload, ListingCondition, UploadSignature } from '@/api/types';
 
 const TOTAL_STEPS = 3;
 const PREVIEW_STEP = TOTAL_STEPS + 1;
 const CATEGORY_PAGE_LIMIT = 20;
 
-// "Add Item" — steps 1-3 of 3, then a Preview screen beyond the numbered steps. Preview's own
-// content isn't designed yet — only the navigation into it (from step 3's Next) was specified.
+// "Add Item" — steps 1-3 of 3, then a Preview screen beyond the numbered steps.
 export default function AddItemModal() {
   const guard = useSingleTap();
   const [step, setStep] = useState(1);
@@ -55,17 +56,26 @@ export default function AddItemModal() {
   const [defectsDescription, setDefectsDescription] = useState('');
   const [basicInfoErrors, setBasicInfoErrors] = useState<AddItemBasicInfoStepErrors>({});
 
-  // Step 2 — Media
-  const [photos, setPhotos] = useState<(ImagePicker.ImagePickerAsset | undefined)[]>([]);
-  const [video, setVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  // Step 2 — Media. Each slot uploads to Cloudinary the moment it's picked — `photos`/`video`
+  // always reflect upload state (uploading/uploaded/failed), not just local file selection.
+  const [photos, setPhotos] = useState<(MediaSlot | undefined)[]>([]);
+  const [video, setVideo] = useState<MediaSlot | null>(null);
   const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
+  // Bumped whenever a slot is cleared/replaced — an upload that completes for a stale generation
+  // is an orphan and gets deleted from Cloudinary instead of being applied.
+  const photoUploadGeneration = useRef<Record<number, number>>({});
+  const videoUploadGeneration = useRef(0);
 
   // Step 3 — Price
   const [price, setPrice] = useState('');
   const [priceError, setPriceError] = useState<string | undefined>(undefined);
 
+  // Publish
+  const [publishing, setPublishing] = useState(false);
+
   const photoCount = photos.filter(Boolean).length;
-  const mediaComplete = photoCount >= REQUIRED_PHOTO_COUNT && video !== null;
+  const uploadedPhotoCount = photos.filter((p) => p?.status === 'uploaded').length;
+  const mediaComplete = uploadedPhotoCount >= REQUIRED_PHOTO_COUNT && video?.status === 'uploaded';
 
   // Hard-denied permissions never re-show the OS dialog, so this is the one case that still gets the custom PermissionModal card.
   function promptOpenSettings(target: string, message: string) {
@@ -99,6 +109,41 @@ export default function AddItemModal() {
     return true;
   }
 
+  function setPhotoSlot(index: number, slot: MediaSlot | undefined) {
+    setPhotos((prev) => {
+      const next = [...prev];
+      next[index] = slot;
+      return next;
+    });
+  }
+
+  // Shared by the camera (one fresh signature) and library (one signature pulled from a bulk
+  // batch) paths — a stale generation (slot cleared/replaced mid-upload) deletes the orphan
+  // instead of applying it, so a leftover Cloudinary asset never silently outlives its slot.
+  async function uploadPhotoAt(index: number, uri: string, signaturePromise: Promise<UploadSignature>) {
+    const generation = (photoUploadGeneration.current[index] = (photoUploadGeneration.current[index] ?? 0) + 1);
+    try {
+      const signature = await signaturePromise;
+      const uploaded = await mediaApi.uploadToCloudinary(uri, signature, 'image');
+      if (photoUploadGeneration.current[index] !== generation) {
+        mediaApi.deleteImage(uploaded.publicId).catch(() => {});
+        return;
+      }
+      setPhotoSlot(index, { uri, status: 'uploaded', uploaded });
+    } catch {
+      if (photoUploadGeneration.current[index] !== generation) return;
+      setPhotoSlot(index, { uri, status: 'failed' });
+      showErrorToast('Upload failed', 'That photo could not be uploaded — try again.');
+    }
+  }
+
+  function retryPhotoUpload(index: number) {
+    const slot = photos[index];
+    if (!slot) return;
+    setPhotoSlot(index, { uri: slot.uri, status: 'uploading' });
+    uploadPhotoAt(index, slot.uri, mediaApi.getUploadSignature());
+  }
+
   // Single capture — fills the next empty slot; sheet is dismissed first.
   async function pickPhotoFromCamera() {
     setActiveSheet(null);
@@ -108,10 +153,11 @@ export default function AddItemModal() {
     try {
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
       if (result.canceled || !result.assets[0]) return;
+      const uri = result.assets[0].uri;
       const emptyIndex = photos.findIndex((p) => !p);
-      const next = [...photos];
-      next[emptyIndex === -1 ? photos.length : emptyIndex] = result.assets[0];
-      setPhotos(next);
+      const slotIndex = emptyIndex === -1 ? photos.length : emptyIndex;
+      setPhotoSlot(slotIndex, { uri, status: 'uploading' });
+      uploadPhotoAt(slotIndex, uri, mediaApi.getUploadSignature());
     } catch {
       showErrorToast('Something went wrong', 'That photo could not be added — try again.');
     }
@@ -135,14 +181,26 @@ export default function AddItemModal() {
       // Hard cap regardless of what the OS actually returns — never fill more than the 3 required slots.
       const picked = result.assets.slice(0, remaining);
       const next = [...photos];
+      const filledSlotIndexes: number[] = [];
       let pickedIndex = 0;
       for (let slot = 0; slot < REQUIRED_PHOTO_COUNT && pickedIndex < picked.length; slot++) {
         if (!next[slot]) {
-          next[slot] = picked[pickedIndex];
+          next[slot] = { uri: picked[pickedIndex].uri, status: 'uploading' };
+          filledSlotIndexes.push(slot);
           pickedIndex++;
         }
       }
       setPhotos(next);
+
+      // One bulk signature call for every newly-filled slot, instead of one call per slot.
+      const signatures = mediaApi.getBulkUploadSignatures(filledSlotIndexes.length);
+      filledSlotIndexes.forEach((slotIndex, i) => {
+        uploadPhotoAt(
+          slotIndex,
+          next[slotIndex]!.uri,
+          signatures.then((list) => list[i])
+        );
+      });
     } catch {
       showErrorToast('Something went wrong', 'Those images could not be added — try different ones.');
     }
@@ -157,6 +215,30 @@ export default function AddItemModal() {
     }
   }
 
+  async function uploadVideo(uri: string) {
+    const generation = ++videoUploadGeneration.current;
+    setVideo({ uri, status: 'uploading' });
+    generateVideoThumbnail(uri);
+    try {
+      const signature = await mediaApi.getUploadSignature();
+      const uploaded = await mediaApi.uploadToCloudinary(uri, signature, 'video');
+      if (videoUploadGeneration.current !== generation) {
+        mediaApi.deleteImage(uploaded.publicId).catch(() => {});
+        return;
+      }
+      setVideo({ uri, status: 'uploaded', uploaded });
+    } catch {
+      if (videoUploadGeneration.current !== generation) return;
+      setVideo({ uri, status: 'failed' });
+      showErrorToast('Upload failed', 'That video could not be uploaded — try again.');
+    }
+  }
+
+  function retryVideoUpload() {
+    if (!video) return;
+    uploadVideo(video.uri);
+  }
+
   // The OS's own prompt covers microphone access once recording starts — no separate JS-level check exists.
   async function pickVideoFromCamera() {
     setActiveSheet(null);
@@ -165,9 +247,7 @@ export default function AddItemModal() {
     try {
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], quality: 1 });
       if (result.canceled || !result.assets[0]) return;
-      const asset = result.assets[0];
-      setVideo(asset);
-      await generateVideoThumbnail(asset.uri);
+      uploadVideo(result.assets[0].uri);
     } catch {
       showErrorToast('Something went wrong', 'That video could not be added — try again.');
     }
@@ -180,12 +260,55 @@ export default function AddItemModal() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
       if (result.canceled || !result.assets[0]) return;
-      const asset = result.assets[0];
-      setVideo(asset);
-      await generateVideoThumbnail(asset.uri);
+      uploadVideo(result.assets[0].uri);
     } catch {
       showErrorToast('Something went wrong', 'That video could not be added — try a different one.');
     }
+  }
+
+  async function removePhoto(index: number) {
+    const slot = photos[index];
+    if (!slot) return;
+    photoUploadGeneration.current[index] = (photoUploadGeneration.current[index] ?? 0) + 1; // invalidate any in-flight upload
+    setPhotoSlot(index, undefined);
+    if (slot.uploaded) {
+      try {
+        await mediaApi.deleteImage(slot.uploaded.publicId);
+      } catch {
+        // Best-effort — the listing is never submitted with this asset either way.
+      }
+    }
+  }
+
+  function confirmRemovePhoto(index: number) {
+    if (!photos[index]) return;
+    Alert.alert('Remove photo?', 'This photo will be removed from your listing.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removePhoto(index) },
+    ]);
+  }
+
+  async function removeVideo() {
+    const slot = video;
+    if (!slot) return;
+    videoUploadGeneration.current++; // invalidate any in-flight upload
+    setVideo(null);
+    setVideoThumbnailUri(null);
+    if (slot.uploaded) {
+      try {
+        await mediaApi.deleteImage(slot.uploaded.publicId);
+      } catch {
+        // Best-effort — the listing is never submitted with this asset either way.
+      }
+    }
+  }
+
+  function confirmRemoveVideo() {
+    if (!video) return;
+    Alert.alert('Remove video?', 'This video will be removed from your listing.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: removeVideo },
+    ]);
   }
 
   // Fetched once for the whole modal (not re-fetched every time the sheet opens/closes) — mirrors
@@ -271,9 +394,51 @@ export default function AddItemModal() {
     clearBasicInfoError('state');
   }
 
-  function handlePublish() {
-    // Real submission (image upload + POST /listings) comes once the backend contract is provided.
-    showWarningToast('Coming soon', "Publishing isn't wired up yet.");
+  async function handlePublish() {
+    if (!mediaComplete || publishing) return;
+    setPublishing(true);
+    try {
+      const device = await getDeviceLocation();
+      if (!device) {
+        showErrorToast('Location needed', 'Enable location access so buyers can find this listing.');
+        return;
+      }
+
+      const uploadedPhotos = photos.filter((p): p is MediaSlot & { uploaded: NonNullable<MediaSlot['uploaded']> } => !!p?.uploaded);
+
+      const payload: CreateListingPayload = {
+        title: itemName.trim(),
+        description: itemDescription.trim(),
+        categoryId: category,
+        price: Number(price),
+        brand: itemBrand.trim() || undefined,
+        state,
+        city: area,
+        address: address.trim(),
+        location: { lat: device.lat, lng: device.lng },
+        condition: condition as ListingCondition,
+        hasDefect: !!hasDefects,
+        defectDescription: hasDefects ? defectsDescription.trim() : undefined,
+        images: uploadedPhotos.map((p, index) => ({
+          publicId: p.uploaded.publicId,
+          url: p.uploaded.url,
+          secureUrl: p.uploaded.secureUrl,
+          sortOrder: index,
+          isPrimary: index === 0,
+        })),
+        video: video?.uploaded
+          ? { publicId: video.uploaded.publicId, url: video.uploaded.url, secureUrl: video.uploaded.secureUrl }
+          : undefined,
+      };
+
+      await listingsApi.createListing(payload);
+      showSuccessToast('Listing published', 'Your item is now live.');
+      router.back();
+    } catch (e) {
+      showErrorToast('Could not publish listing', extractErrorMessage(e));
+    } finally {
+      setPublishing(false);
+    }
   }
 
   const nextDisabled = step === 2 && !mediaComplete;
@@ -307,8 +472,16 @@ export default function AddItemModal() {
         footer={
           isPreview ? (
             <View style={styles.footer}>
-              <Pressable onPress={guard(handlePublish)} style={[styles.footerButton, styles.publishButton]}>
-                <Text style={styles.publishLabel}>Publish Item</Text>
+              <Pressable
+                onPress={guard(handlePublish)}
+                disabled={publishing}
+                style={[styles.footerButton, styles.publishButton, publishing && styles.publishButtonLoading]}
+              >
+                {publishing ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.publishLabel}>Publish Item</Text>
+                )}
               </Pressable>
             </View>
           ) : (
@@ -377,19 +550,20 @@ export default function AddItemModal() {
         ) : step === 2 ? (
           <AddItemMediaStep
             photos={photos}
-            onPhotosChange={setPhotos}
             onPressPhotoSlot={() => {
               setMediaSourceTarget('photo');
               setActiveSheet('mediaSource');
             }}
+            onRemovePhoto={confirmRemovePhoto}
+            onRetryPhoto={retryPhotoUpload}
             video={video}
-            onVideoChange={setVideo}
             onPressVideoSlot={() => {
               setMediaSourceTarget('video');
               setActiveSheet('mediaSource');
             }}
+            onRemoveVideo={confirmRemoveVideo}
+            onRetryVideo={retryVideoUpload}
             videoThumbnailUri={videoThumbnailUri}
-            onVideoThumbnailUriChange={setVideoThumbnailUri}
           />
         ) : step === 3 ? (
           <AddItemPriceStep
@@ -408,7 +582,7 @@ export default function AddItemModal() {
             itemName={itemName}
             itemDescription={itemDescription}
             itemBrand={itemBrand}
-            condition={condition}
+            condition={conditionLabel(condition)}
             area={area}
             state={state}
             hasDefects={hasDefects}
@@ -496,6 +670,10 @@ export default function AddItemModal() {
   );
 }
 
+function conditionLabel(value: string): string {
+  return CONDITION_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
@@ -539,6 +717,9 @@ const styles = StyleSheet.create({
   publishButton: {
     flex: 1,
     backgroundColor: colors.primary,
+  },
+  publishButtonLoading: {
+    opacity: 0.7,
   },
   publishLabel: {
     fontFamily: fontFamily.semibold,
