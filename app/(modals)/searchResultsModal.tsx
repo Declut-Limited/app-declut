@@ -150,6 +150,7 @@ export default function SearchResultsModal() {
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 70)}>
               <ListingCard

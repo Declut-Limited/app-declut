@@ -42,9 +42,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacingX.lg,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    backgroundColor: colors.gray100,
   },
   content: {
     flexDirection: 'row',
@@ -53,8 +51,8 @@ const styles = StyleSheet.create({
     gap: spacingX.sm,
   },
   icon: {
-    width: scale(20),
-    height: scale(20),
+    width: scale(16),
+    height: scale(16),
   },
   label: {
     fontFamily: fontFamily.semibold,

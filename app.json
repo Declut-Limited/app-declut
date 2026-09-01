@@ -43,7 +43,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Declut uses your photo library to upload listing photos and videos."
+          "photosPermission": "Declut uses your photo library to upload listing photos and videos.",
+          "cameraPermission": "Declut uses your camera to capture listing photos and videos.",
+          "microphonePermission": "Declut uses your microphone to record audio for listing videos."
         }
       ],
       "expo-font",

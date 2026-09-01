@@ -1,8 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Icons from 'phosphor-react-native';
-import { FormDropdown, Input } from '@/components';
-import { CATEGORY_OPTIONS, CONDITION_OPTIONS, NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
+import { Input } from '@/components';
+import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -12,18 +12,18 @@ export interface AddItemBasicInfoStepProps {
   onItemNameChange: (value: string) => void;
   itemDescription: string;
   onItemDescriptionChange: (value: string) => void;
-  category: string;
-  onCategoryChange: (value: string) => void;
+  categoryLabel?: string;
+  onOpenCategorySheet: () => void;
   itemBrand: string;
   onItemBrandChange: (value: string) => void;
   state: string;
-  onStateChange: (value: string) => void;
+  onOpenStateSheet: () => void;
   area: string;
-  onAreaChange: (value: string) => void;
+  onOpenAreaSheet: () => void;
   address: string;
   onAddressChange: (value: string) => void;
   condition: string;
-  onConditionChange: (value: string) => void;
+  onOpenConditionSheet: () => void;
   hasDefects: boolean | null;
   onHasDefectsChange: (value: boolean) => void;
   defectsDescription: string;
@@ -36,27 +36,24 @@ export function AddItemBasicInfoStep({
   onItemNameChange,
   itemDescription,
   onItemDescriptionChange,
-  category,
-  onCategoryChange,
+  categoryLabel,
+  onOpenCategorySheet,
   itemBrand,
   onItemBrandChange,
   state,
-  onStateChange,
+  onOpenStateSheet,
   area,
-  onAreaChange,
+  onOpenAreaSheet,
   address,
   onAddressChange,
   condition,
-  onConditionChange,
+  onOpenConditionSheet,
   hasDefects,
   onHasDefectsChange,
   defectsDescription,
   onDefectsDescriptionChange,
 }: AddItemBasicInfoStepProps) {
-  function handleStateChange(value: string) {
-    onStateChange(value);
-    onAreaChange(''); // areas are state-dependent — clear a now-invalid selection
-  }
+  const conditionLabel = CONDITION_OPTIONS.find((option) => option.value === condition)?.label;
 
   return (
     <View>
@@ -76,14 +73,20 @@ export function AddItemBasicInfoStep({
 
       <Text style={styles.sectionTitle}>Category</Text>
       <View style={styles.sectionGap}>
-        <FormDropdown label="Category" placeholder="Select a category" data={CATEGORY_OPTIONS} value={category} onChange={onCategoryChange} />
+        <PickerField label="Category" value={categoryLabel} placeholder="Select a category" onPress={onOpenCategorySheet} />
         <Input label="Item brand" placeholder="e.g. Apple" value={itemBrand} onChangeText={onItemBrandChange} />
       </View>
 
       <Text style={styles.sectionTitle}>Item Location</Text>
       <View style={styles.sectionGap}>
-        <FormDropdown label="State" placeholder="Select a state" data={NIGERIAN_STATE_OPTIONS} value={state} onChange={handleStateChange} />
-        <FormDropdown label="Area" placeholder="Select an area" data={getAreaOptions(state)} value={area} onChange={onAreaChange} />
+        <PickerField label="State" value={state} placeholder="Select a state" onPress={onOpenStateSheet} />
+        <PickerField
+          label="Area"
+          value={area}
+          placeholder="Select a state first"
+          onPress={onOpenAreaSheet}
+          disabled={!state}
+        />
         <Input
           label="Address"
           placeholder="e.g. 3B Community Road"
@@ -95,12 +98,11 @@ export function AddItemBasicInfoStep({
 
       <Text style={styles.sectionTitle}>Item Condition</Text>
       <View style={styles.sectionGap}>
-        <FormDropdown
+        <PickerField
           label="Select condition"
+          value={conditionLabel}
           placeholder="Select the item's condition"
-          data={CONDITION_OPTIONS}
-          value={condition}
-          onChange={onConditionChange}
+          onPress={onOpenConditionSheet}
         />
 
         <Text style={styles.defectsLabel}>Does the item have any defect(s)</Text>
@@ -121,6 +123,38 @@ export function AddItemBasicInfoStep({
           />
         ) : null}
       </View>
+    </View>
+  );
+}
+
+// Same box treatment as FormDropdown — just opens a bottom sheet instead of a native menu.
+function PickerField({
+  label,
+  value,
+  placeholder,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  value?: string;
+  placeholder: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const guard = useSingleTap();
+
+  return (
+    <View>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable
+        onPress={guard(onPress)}
+        disabled={disabled}
+        style={[styles.pickerField, disabled && styles.pickerFieldDisabled]}
+        accessibilityState={{ disabled }}
+      >
+        <Text style={value ? styles.pickerValue : styles.pickerPlaceholder}>{value || placeholder}</Text>
+        <Icons.CaretDownIcon size={verticalScale(16)} color={disabled ? colors.gray300 : colors.gray400} />
+      </Pressable>
     </View>
   );
 }
@@ -150,6 +184,37 @@ const styles = StyleSheet.create({
   multilineInput: {
     height: verticalScale(90),
     textAlignVertical: 'top',
+  },
+  fieldLabel: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray700,
+    marginBottom: spacingY.xs,
+  },
+  pickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray100,
+    paddingHorizontal: spacingX.md,
+  },
+  pickerFieldDisabled: {
+    backgroundColor: colors.gray50,
+  },
+  pickerPlaceholder: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray400,
+  },
+  pickerValue: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray900,
   },
   multilineInputSmall: {
     height: verticalScale(70),

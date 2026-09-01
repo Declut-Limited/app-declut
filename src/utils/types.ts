@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import type { PressableProps, RefreshControlProps, TextInputProps, ViewProps } from 'react-native';
+import type { PressableProps, RefreshControlProps, StyleProp, TextInputProps, ViewProps, ViewStyle } from 'react-native';
 import type { Edge } from 'react-native-safe-area-context';
 import type { Listing } from '@/api/types';
 import type { DropdownOption } from '@/constants/formOptions';
@@ -36,6 +36,8 @@ export interface InputProps extends TextInputProps {
   isPassword?: boolean;
   /** Trailing slot on the opposite side from btnIcon — e.g. a picker's chevron, or a map icon. Ignored when isPassword is set. */
   customIcon?: ReactNode;
+  /** Overrides the field container (background/border), not the text style — `style` already covers the TextInput itself. */
+  fieldStyle?: StyleProp<ViewStyle>;
 }
 
 export interface PhoneInputProps {
@@ -136,7 +138,10 @@ export interface LegalDocumentBodyProps {
   sections: LegalSection[];
 }
 
-export interface BottomSheetCardProps extends ViewProps {}
+export interface BottomSheetCardProps extends ViewProps {
+  /** When provided, the backdrop becomes tappable-to-dismiss. Omitted (default) keeps the backdrop inert — the KYC chain relies on that to stay non-dismissible. */
+  onBackdropPress?: () => void;
+}
 
 export interface TextLinkProps {
   text: string;

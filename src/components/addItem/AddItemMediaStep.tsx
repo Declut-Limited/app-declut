@@ -1,22 +1,22 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as Icons from 'phosphor-react-native';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { getFilePath } from '@/utils/helpers';
-import { showErrorToast, showWarningToast } from '@/lib/toast';
 
 export const REQUIRED_PHOTO_COUNT = 3;
 
 export interface AddItemMediaStepProps {
   photos: (ImagePicker.ImagePickerAsset | undefined)[];
   onPhotosChange: (photos: (ImagePicker.ImagePickerAsset | undefined)[]) => void;
+  onPressPhotoSlot: () => void;
   video: ImagePicker.ImagePickerAsset | null;
   onVideoChange: (video: ImagePicker.ImagePickerAsset | null) => void;
+  onPressVideoSlot: () => void;
   videoThumbnailUri: string | null;
   onVideoThumbnailUriChange: (uri: string | null) => void;
 }
@@ -26,75 +26,19 @@ export interface AddItemMediaStepProps {
 export function AddItemMediaStep({
   photos,
   onPhotosChange,
+  onPressPhotoSlot,
   video,
   onVideoChange,
+  onPressVideoSlot,
   videoThumbnailUri,
   onVideoThumbnailUriChange,
 }: AddItemMediaStepProps) {
   const guard = useSingleTap();
 
-  async function requestLibraryAccess() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showWarningToast('Permission needed', 'Allow photo library access to upload media.');
-      return false;
-    }
-    return true;
-  }
-
-  async function pickPhotos() {
-    const filledCount = photos.filter(Boolean).length;
-    const remaining = REQUIRED_PHOTO_COUNT - filledCount;
-    if (remaining <= 0) return;
-    if (!(await requestLibraryAccess())) return;
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        selectionLimit: remaining,
-        quality: 1,
-      });
-      if (result.canceled || result.assets.length === 0) return;
-
-      // Hard cap regardless of what the OS actually returns — never fill more than the 3 required slots.
-      const picked = result.assets.slice(0, remaining);
-      const next = [...photos];
-      let pickedIndex = 0;
-      for (let slot = 0; slot < REQUIRED_PHOTO_COUNT && pickedIndex < picked.length; slot++) {
-        if (!next[slot]) {
-          next[slot] = picked[pickedIndex];
-          pickedIndex++;
-        }
-      }
-      onPhotosChange(next);
-    } catch {
-      showErrorToast('Something went wrong', 'Those images could not be added — try different ones.');
-    }
-  }
-
   function removePhoto(slotIndex: number) {
     const next = [...photos];
     next[slotIndex] = undefined;
     onPhotosChange(next);
-  }
-
-  async function pickVideo() {
-    if (!(await requestLibraryAccess())) return;
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
-      if (result.canceled || !result.assets[0]) return;
-      const asset = result.assets[0];
-      onVideoChange(asset);
-      try {
-        const thumbnail = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 0 });
-        onVideoThumbnailUriChange(thumbnail.uri);
-      } catch {
-        onVideoThumbnailUriChange(null);
-      }
-    } catch {
-      showErrorToast('Something went wrong', 'That video could not be added — try a different one.');
-    }
   }
 
   function removeVideo() {
@@ -110,7 +54,7 @@ export function AddItemMediaStep({
         {Array.from({ length: REQUIRED_PHOTO_COUNT }, (_, index) => {
           const asset = photos[index];
           return (
-            <Pressable key={index} onPress={guard(pickPhotos)} style={[styles.mediaSlot, styles.photoSlot]}>
+            <Pressable key={index} onPress={guard(onPressPhotoSlot)} style={[styles.mediaSlot, styles.photoSlot]}>
               {asset ? (
                 <>
                   <Image source={{ uri: getFilePath(asset) ?? undefined }} style={styles.slotImage} resizeMode="cover" />
@@ -126,7 +70,7 @@ export function AddItemMediaStep({
         })}
       </View>
 
-      <Pressable onPress={guard(pickVideo)} style={[styles.mediaSlot, styles.videoSlot]}>
+      <Pressable onPress={guard(onPressVideoSlot)} style={[styles.mediaSlot, styles.videoSlot]}>
         {video ? (
           <>
             {videoThumbnailUri ? (
