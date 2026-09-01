@@ -15,11 +15,11 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { EmptyState } from '@/components';
+import Icon from '@/components/Icon';
 import * as Icons from 'phosphor-react-native';
-import { Button, EmptyState } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -39,8 +39,14 @@ interface MediaItem {
   isVideo: boolean;
 }
 
+/** Adapts Icon's {name,variant,size,color} shape to EmptyState's Phosphor-shaped icon prop (size?: string | number). */
+function DangerIcon({ size, color }: { size?: number | string; color?: string }) {
+  return <Icon name="danger" variant="linear" size={typeof size === 'number' ? size : undefined} color={color} />;
+}
+
 interface AccordionEntry {
-  icon: React.ComponentType<{ size?: number; color?: string; weight?: 'regular' | 'bold' | 'fill' | 'duotone' | 'thin' | 'light' }>;
+  /** @gems-group/icons name, rendered via <Icon variant="bold" />. */
+  icon: string;
   title: string;
   body: string;
 }
@@ -48,23 +54,23 @@ interface AccordionEntry {
 // Static copy, not backend-driven — matches the Figma export verbatim.
 const SAFETY_TIPS: AccordionEntry[] = [
   {
-    icon: Icons.LockIcon,
+    icon: 'lock',
     title: 'How This Transaction Works',
     body:
       'We will never contact you first. Always interact only within Declut to stay protected. If this item fits your needs, tap "Show Interest" to proceed. Payments are held securely in escrow until you inspect and confirm the item. Once payment is successful, the seller’s details will be shared with you for pickup.',
   },
   {
-    icon: Icons.MapPinIcon,
+    icon: 'location',
     title: 'Before You Proceed',
     body: "Please check the item's location and be sure you can access it easily. You'll be responsible for any delivery or transportation costs.",
   },
   {
-    icon: Icons.MagnifyingGlassIcon,
+    icon: 'search-normal',
     title: 'Inspection & Pickup',
     body: 'You are expected to inspect and pick up the item within 48 hours of payment. Only confirm the item if you are fully satisfied with its condition.',
   },
   {
-    icon: Icons.WalletIcon,
+    icon: 'wallet-money',
     title: 'Refunds & Cancellations',
     body: 'If you decide not to proceed after payment (e.g., change of mind or logistics), a 10% service fee may apply. Refunds are processed once all conditions have been met.',
   },
@@ -72,22 +78,22 @@ const SAFETY_TIPS: AccordionEntry[] = [
 
 const ORDER_PROCESS: AccordionEntry[] = [
   {
-    icon: Icons.LockIcon,
+    icon: 'lock',
     title: 'Make Payment',
     body: 'To express your interest in the item, please proceed by making the required payment.',
   },
   {
-    icon: Icons.MapPinIcon,
+    icon: 'location',
     title: 'Details of the Item Owner/Seller',
     body: "Upon successful payment, you will promptly receive the details of the item's owner or seller. This step finalizes the transaction and is irreversible.",
   },
   {
-    icon: Icons.MagnifyingGlassIcon,
+    icon: 'search-normal',
     title: 'Inspection & Pickup',
     body: 'You are expected to inspect and pick up the item within 48 hours of payment. Only confirm the item if you are fully satisfied with its condition.',
   },
   {
-    icon: Icons.WalletIcon,
+    icon: 'wallet-money',
     title: 'Refunds & Cancellations',
     body: 'If you decide not to proceed after payment (e.g., change of mind or logistics), a 10% service fee may apply. Refunds are processed once all conditions have been met.',
   },
@@ -140,14 +146,13 @@ export default function ListingDetailsModal() {
   if (loading) {
     return (
       <View style={styles.root}>
-        <StatusBar style="light" />
         <ListingDetailsSkeleton />
         <Pressable
           onPress={guard(() => router.back())}
           style={[styles.overlayButton, { top: insets.top + spacingY.sm }]}
           hitSlop={8}
         >
-          <Icons.ArrowLeftIcon size={verticalScale(20)} color={colors.gray900} />
+          <Icon name="arrow-left" variant="linear" size={verticalScale(20)} color={colors.gray900} />
         </Pressable>
       </View>
     );
@@ -157,9 +162,9 @@ export default function ListingDetailsModal() {
     return (
       <SafeAreaView style={styles.centerFlex} edges={['top', 'bottom']}>
         <Pressable onPress={guard(() => router.back())} style={[styles.overlayButton, styles.plainBackButton]} hitSlop={8}>
-          <Icons.ArrowLeftIcon size={verticalScale(20)} color={colors.gray900} />
+          <Icon name="arrow-left" variant="linear" size={verticalScale(20)} color={colors.gray900} />
         </Pressable>
-        <EmptyState icon={Icons.WarningCircleIcon} message={error ?? 'Listing not found.'} />
+        <EmptyState icon={DangerIcon} message={error ?? 'Listing not found.'} />
       </SafeAreaView>
     );
   }
@@ -173,7 +178,6 @@ export default function ListingDetailsModal() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
           {activeMedia && !activeMedia.isVideo ? (
@@ -189,14 +193,15 @@ export default function ListingDetailsModal() {
             style={[styles.overlayButton, { top: insets.top + spacingY.sm }]}
             hitSlop={8}
           >
-            <Icons.ArrowLeftIcon size={verticalScale(20)} color={colors.gray900} />
+            <Icon name="arrow-left" variant="linear" size={verticalScale(20)} color={colors.gray900} />
           </Pressable>
           <Pressable
             onPress={guard(handleShare)}
-            style={[styles.overlayButton, styles.shareButton, { top: insets.top + spacingY.sm }]}
+            style={[styles.overlayButton, styles.shareButton, { top: insets.top + spacingY.sm, backgroundColor: colors.primary50 }]}
             hitSlop={8}
           >
-            <Icons.ShareIcon size={verticalScale(20)} color={colors.gray900} />
+            {/* <Icon name="share" variant="linear" size={verticalScale(20)} color={colors.gray900} /> */}
+            <Icons.ShareIcon size={verticalScale(20)} color={colors.primary} />
           </Pressable>
 
           {mediaItems.length > 1 ? (
@@ -210,7 +215,7 @@ export default function ListingDetailsModal() {
                   <Image source={{ uri: item.uri }} style={styles.thumbnailImage} resizeMode="cover" />
                   {item.isVideo ? (
                     <View style={styles.thumbnailPlayOverlay}>
-                      <Icons.PlayIcon size={verticalScale(16)} weight="fill" color={colors.white} />
+                      <Icon name="play" variant="bold" size={verticalScale(16)} color={colors.white} />
                     </View>
                   ) : null}
                 </Pressable>
@@ -231,14 +236,14 @@ export default function ListingDetailsModal() {
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Icons.MapPinIcon size={verticalScale(16)} weight="fill" color={colors.danger} />
+              <Icon name="location" variant="bold" size={verticalScale(16)} color={colors.danger} />
               <Text style={styles.metaText} numberOfLines={1}>
                 {listing.locationLabel}
               </Text>
             </View>
             {listing.seller?.trustScore !== undefined ? (
               <View style={styles.metaItem}>
-                <Icons.StarIcon size={verticalScale(16)} weight="fill" color={colors.primary} />
+                <Icon name="star" variant="bold" size={verticalScale(16)} color={colors.primary} />
                 <Text style={styles.metaText}>{listing.seller.trustScore.toFixed(1)}</Text>
               </View>
             ) : null}
@@ -249,10 +254,10 @@ export default function ListingDetailsModal() {
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.sectionBody}>{listing.description}</Text>
 
-          {listing.brand ? (
+          {listing?.specs?.brand ? (
             <Text style={styles.labeledRow}>
               <Text style={styles.labeledRowLabel}>Brand: </Text>
-              <Text style={styles.labeledRowValue}>{listing.brand}</Text>
+              <Text style={styles.labeledRowValue}>{listing.specs.brand}</Text>
             </Text>
           ) : null}
 
@@ -270,15 +275,18 @@ export default function ListingDetailsModal() {
 
           <View style={styles.accordionGroup}>
             <InfoAccordion title="Safety Tips" items={SAFETY_TIPS} />
+            <View style={styles.accordionGroupDivider} />
             <InfoAccordion title="Order Process" items={ORDER_PROCESS} />
           </View>
         </View>
       </ScrollView>
 
-      <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
-        <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price, 2)}</Text>
-        <View style={styles.buyButton}>
-          <Button label="Buy Now" onPress={guard(handleBuyNow)} />
+      <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
+        <View style={styles.footerPill}>
+          <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price, 2)}</Text>
+          <Pressable onPress={guard(handleBuyNow)} style={styles.buyButton}>
+            <Text style={styles.buyButtonLabel}>Buy Now</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </View>
@@ -295,16 +303,14 @@ function InfoAccordion({ title, items }: { title: string; items: AccordionEntry[
   }
 
   return (
-    <View style={styles.accordion}>
+    <View>
       <Pressable onPress={guard(toggle)} style={styles.accordionHeader}>
-        <View style={styles.accordionIconWrap}>
-          <Icons.WarningIcon size={verticalScale(16)} weight="fill" color={colors.warning} />
-        </View>
+        <Icon name="info-circle" variant="bold" size={verticalScale(24)} color={colors.rose} />
         <Text style={styles.accordionTitle}>{title}</Text>
         {open ? (
-          <Icons.CaretUpIcon size={verticalScale(18)} color={colors.gray400} />
+          <Icon name="arrow-up-2" variant="linear" size={verticalScale(20)} color={colors.gray400} />
         ) : (
-          <Icons.CaretDownIcon size={verticalScale(18)} color={colors.gray400} />
+          <Icon name="arrow-down-2" variant="linear" size={verticalScale(20)} color={colors.gray400} />
         )}
       </Pressable>
 
@@ -313,7 +319,7 @@ function InfoAccordion({ title, items }: { title: string; items: AccordionEntry[
           {items.map((item, index) => (
             <View key={index} style={styles.accordionRow}>
               <View style={styles.accordionRowIconWrap}>
-                <item.icon size={verticalScale(18)} weight="bold" color={colors.primary} />
+                <Icon name={item.icon} variant="bold" size={verticalScale(18)} color={colors.primary} />
               </View>
               <View style={styles.accordionRowText}>
                 <Text style={styles.accordionRowTitle}>{item.title}</Text>
@@ -471,7 +477,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: {
-    paddingHorizontal: spacingX['2xl'],
+    paddingHorizontal: spacingX.lg,
     paddingTop: spacingY.xl,
   },
   badgeRow: {
@@ -496,7 +502,7 @@ const styles = StyleSheet.create({
   postedText: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.sm,
-    color: colors.warning,
+    color: colors.goldClick,
   },
   title: {
     fontFamily: fontFamily.bold,
@@ -566,15 +572,16 @@ const styles = StyleSheet.create({
   },
   accordionGroup: {
     marginTop: spacingY.lg,
-    gap: spacingY.md,
-  },
-  accordion: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.white,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: colors.gray100,
     overflow: 'hidden',
+  },
+  accordionGroupDivider: {
+    height: 1,
+    backgroundColor: colors.gray100,
   },
   accordionHeader: {
     flexDirection: 'row',
@@ -633,15 +640,21 @@ const styles = StyleSheet.create({
     lineHeight: fontSize.sm * 1.5,
     color: colors.gray500,
   },
-  bottomBar: {
+  footerSafeArea: {
+    paddingHorizontal: spacingX.lg,
+    paddingTop: spacingY.md,
+    paddingBottom: spacingY.md,
+    backgroundColor: colors.white,
+  },
+  footerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacingX.lg,
-    paddingHorizontal: spacingX['2xl'],
-    paddingTop: spacingY.md,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
+    gap: spacingX.md,
+    paddingHorizontal: spacingX.md,
+    paddingVertical: spacingY.md,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray50,
   },
   bottomBarPrice: {
     fontFamily: fontFamily.bold,
@@ -650,5 +663,17 @@ const styles = StyleSheet.create({
   },
   buyButton: {
     flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  buyButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
   },
 });

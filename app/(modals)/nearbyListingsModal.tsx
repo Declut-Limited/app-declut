@@ -57,7 +57,7 @@ export default function NearbyListingsModal() {
   );
 
   function onPressListing(listing: Listing) {
-    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing.id } });
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing._id } });
   }
 
   return (

@@ -3,6 +3,7 @@ import { scale, verticalScale } from '@/utils/styling';
 export const colors = {
   primary: '#2563EB',
   primaryLight: '#EFF6FF',
+  primary50: '#DBEAFE',
   primary100: '#BFDBFE',
   primary400: '#3B82F6',
   primaryHover: '#1D4ED8',
@@ -22,6 +23,9 @@ export const colors = {
   warningLight: '#FFEDD5',
   danger: '#DC2626',
   dangerLight: '#FEE2E2',
+  goldClick: '#A28300',
+  rose: '#F9B4AF',
+  error: '#F04438',
 
   white: '#FFFFFF',
   black: '#000000',

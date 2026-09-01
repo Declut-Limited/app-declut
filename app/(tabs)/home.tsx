@@ -152,15 +152,15 @@ export default function HomeScreen() {
         error={nearbyError}
         onSeeAll={goToNearbyListings}
         renderCard={(listing, index) => (
-          <Animated.View key={listing.id} entering={FadeInDown.delay(index * 70)}>
+          <Animated.View key={listing._id} entering={FadeInDown.delay(index * 70)}>
             <ListingCard
               listing={listing}
               userLat={userLat}
               userLng={userLng}
-              onPress={() => goToListing(listing.id)}
+              onPress={() => goToListing(listing._id)}
               showFavorite
-              favorited={favoriteIds.has(listing.id)}
-              onToggleFavorite={() => toggleFavorite(listing.id)}
+              favorited={favoriteIds.has(listing._id)}
+              onToggleFavorite={() => toggleFavorite(listing._id)}
             />
           </Animated.View>
         )}
@@ -175,15 +175,15 @@ export default function HomeScreen() {
         error={recentError}
         onSeeAll={goToNewListings}
         renderCard={(listing, index) => (
-          <Animated.View key={listing.id} entering={FadeInDown.delay(index * 70)}>
+          <Animated.View key={listing._id} entering={FadeInDown.delay(index * 70)}>
             <RecentListingCard
               listing={listing}
               userLat={userLat}
               userLng={userLng}
-              onPress={() => goToListing(listing.id)}
+              onPress={() => goToListing(listing._id)}
               showFavorite
-              favorited={favoriteIds.has(listing.id)}
-              onToggleFavorite={() => toggleFavorite(listing.id)}
+              favorited={favoriteIds.has(listing._id)}
+              onToggleFavorite={() => toggleFavorite(listing._id)}
             />
           </Animated.View>
         )}

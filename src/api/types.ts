@@ -178,7 +178,7 @@ export interface Listing {
   category: string;
   condition: ListingCondition;
   price: number;
-  brand?: string;
+  specs?: { brand?: string };
   images: CloudinaryMediaRef[];
   video?: CloudinaryMediaRef;
   /** Computed server-side from whichever image has isPrimary:true (falls back to the first). Never sent by the client. */

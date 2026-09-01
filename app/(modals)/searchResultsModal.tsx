@@ -82,7 +82,7 @@ export default function SearchResultsModal() {
   }
 
   function onPressListing(listing: Listing) {
-    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing.id } });
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing._id } });
   }
 
   const filterSummary = hasActiveFilters ? summarizeFilters(filters) : [];
