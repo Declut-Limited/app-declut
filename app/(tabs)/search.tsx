@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
@@ -16,9 +17,13 @@ export default function SearchScreen() {
 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-  useEffect(() => {
-    getRecentSearches().then(setRecentSearches);
-  }, []);
+  // Tabs stay mounted, so a mount-only effect wouldn't pick up a search recorded on
+  // searchResultsModal after navigating back here — refetch every time this tab gains focus.
+  useFocusEffect(
+    useCallback(() => {
+      getRecentSearches().then(setRecentSearches);
+    }, [])
+  );
 
   function goToResults() {
     router.push('/(modals)/searchResultsModal');

@@ -1,7 +1,7 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
@@ -18,11 +18,9 @@ import { showWarningToast } from '@/lib/toast';
 
 const SKELETON_COUNT = 6;
 
-// FULL-SCREEN "SEARCH RESULT" MODAL — landed on from search.tsx/home.tsx's search bar, a recent
-// search item, or filterByModal's Show button. Owns the actual results list; search.tsx itself is
-// just the recent-searches launchpad now.
 export default function SearchResultsModal() {
   const guard = useSingleTap();
+  const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
   const { keyword, setKeyword, filters, hasActiveFilters, resetFilters } = useSearchFilter();
   const { favoriteIds, toggleFavorite } = useFavoriteToggle();
@@ -30,11 +28,17 @@ export default function SearchResultsModal() {
   const [query, setQuery] = useState(keyword);
   const [focused, setFocused] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      inputRef.current?.focus();
-    }, [])
-  );
+  // InteractionManager doesn't track the native modal's own slide-up transition (only JS-thread
+  // interaction handles), so .focus() called that way still races it and gets silently dropped —
+  // 'transitionEnd' is the event that actually fires once the native animation finishes.
+  useEffect(() => {
+    // 'transitionEnd' isn't in the base navigation event map typing (it's native-stack-specific).
+    const unsubscribe = (navigation as { addListener: typeof navigation.addListener }).addListener(
+      'transitionEnd' as never,
+      () => inputRef.current?.focus()
+    );
+    return unsubscribe;
+  }, [navigation]);
 
   const hasActiveSearch = keyword.trim() !== '' || hasActiveFilters;
 
@@ -70,6 +74,13 @@ export default function SearchResultsModal() {
     resetFilters();
   }
 
+  function handleBack() {
+    setQuery('');
+    setKeyword('');
+    resetFilters();
+    router.back();
+  }
+
   function onPressListing() {
     // No listing detail screen yet — nothing to navigate to.
     showWarningToast('Coming soon', "Listing details aren't built yet.");
@@ -82,9 +93,10 @@ export default function SearchResultsModal() {
       edges={['top']}
       background={colors.white}
       scroll={false}
+      style={{ paddingTop: 0 }}
       header={
         <>
-          <ScreenHeader title="Search Result" />
+          <ScreenHeader title="Search Result" onBack={guard(handleBack)} />
           <View style={styles.searchRowWrap}>
             <View style={styles.searchRow}>
               <View style={[styles.searchBar, focused && styles.searchBarActive]}>

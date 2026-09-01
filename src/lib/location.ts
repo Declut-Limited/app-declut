@@ -15,7 +15,10 @@ export async function getDeviceLocation(): Promise<DeviceLocation | null> {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return null;
 
-    const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    // Prefer the OS's own cached last-fix — near-instant, no GPS wait. Only fall back to a fresh
+    // fix when nothing's cached yet (e.g. the very first grant on this device).
+    const cached = await Location.getLastKnownPositionAsync();
+    const position = cached ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
     const { latitude: lat, longitude: lng } = position.coords;
 
     let label: string | null = null;
