@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -13,7 +13,8 @@ import type { Category } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
 import { showWarningToast } from '@/lib/toast';
-import { useSearchFilter } from '@/contexts/SearchFilterContext';
+import { toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
+import type { SearchFilters } from '@/contexts/SearchFilterContext';
 
 const CATEGORY_PAGE_LIMIT = 20;
 // No listings-count-by-filter endpoint exists yet — Price Range just needs sane outer bounds for the slider.
@@ -40,7 +41,7 @@ function clamp(value: number, lo: number, hi: number) {
 // FULL-SCREEN "FILTER BY" MODAL — triggered from Home's search-bar filter button.
 export default function FilterByModal() {
   const guard = useSingleTap();
-  const { filters: committedFilters, setFilters: commitFilters } = useSearchFilter();
+  const { keyword, filters: committedFilters, setFilters: commitFilters } = useSearchFilter();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesPage, setCategoriesPage] = useState(1);
@@ -60,7 +61,12 @@ export default function FilterByModal() {
   const [state, setState] = useState<string | undefined>(committedFilters.state);
   const [city, setCity] = useState<string | undefined>(committedFilters.city);
   const [area, setArea] = useState<string | undefined>(committedFilters.area);
-  const [applyRadius, setApplyRadius] = useState(committedFilters.searchWithin !== undefined);
+  // Only defer to a previously-committed value when a location filter was actually in play —
+  // otherwise (fresh mount, no committed filters) this must default true, since it's not visible
+  // until the location toggle is on and shouldn't count as an active filter on its own either way.
+  const [applyRadius, setApplyRadius] = useState(
+    committedFilters.useMyLocation ? committedFilters.searchWithin !== undefined : true
+  );
   // Left blank (shows the "0.00" placeholder) until the user overrides it — an empty box still
   // means the default radius applies, matching the design's banner text ("within 5km") below it.
   const [radiusKm, setRadiusKm] = useState(committedFilters.searchWithin !== undefined ? String(committedFilters.searchWithin) : '');
@@ -79,9 +85,19 @@ export default function FilterByModal() {
   // (or the resolved coords) changes, debounced so typing into the radius field doesn't fire one
   // request per keystroke.
   useEffect(() => {
-    if (!(useCurrentLocation && deviceLat !== undefined && deviceLng !== undefined)) {
+    // Banner isn't shown at all unless the toggle+radius are on — nothing to do.
+    if (!(useCurrentLocation && applyRadius)) {
       setNearbyCount(null);
       setNearbyCountLoading(false);
+      return;
+    }
+
+    // Toggle+radius are on, but getDeviceLocation() hasn't resolved yet — the banner is already
+    // visible at this point (it renders as soon as the toggle is optimistically flipped on), so
+    // it should read as loading here too, not drop to "—" while we wait on coords.
+    if (deviceLat === undefined || deviceLng === undefined) {
+      setNearbyCount(null);
+      setNearbyCountLoading(true);
       return;
     }
 
@@ -106,6 +122,56 @@ export default function FilterByModal() {
       clearTimeout(timer);
     };
   }, [useCurrentLocation, applyRadius, deviceLat, deviceLng, effectiveRadiusKm]);
+
+  // The exact shape handleShow() commits — memoized so the results effect below only re-fires
+  // when something in it actually changed, not on every render.
+  const draftFilters: SearchFilters = useMemo(
+    () => ({
+      categoryId: selectedCategoryIds.size > 0 ? Array.from(selectedCategoryIds)[0] : undefined,
+      useMyLocation: useCurrentLocation,
+      lat: useCurrentLocation ? deviceLat : undefined,
+      lng: useCurrentLocation ? deviceLng : undefined,
+      searchWithin: useCurrentLocation && applyRadius ? Number(effectiveRadiusKm) : undefined,
+      state: !useCurrentLocation ? state : undefined,
+      city: !useCurrentLocation ? city : undefined,
+      area: !useCurrentLocation ? area : undefined,
+      conditionNew: includeNew,
+      conditionNeatlyUsed: includeNeatlyUsed,
+      minPrice: minPrice !== PRICE_BOUND_MIN ? minPrice : undefined,
+      maxPrice: maxPrice !== PRICE_BOUND_MAX ? maxPrice : undefined,
+    }),
+    [selectedCategoryIds, useCurrentLocation, deviceLat, deviceLng, applyRadius, effectiveRadiusKm, state, city, area, includeNew, includeNeatlyUsed, minPrice, maxPrice]
+  );
+
+  const [resultsTotal, setResultsTotal] = useState<number | null>(null);
+  const [resultsLoading, setResultsLoading] = useState(false);
+
+  // No dedicated "count matching every filter" endpoint exists (the /listings/count above is
+  // location-only) — GET /listings itself returns `total` in its paginated response, so a
+  // page:1/limit:1 call doubles as a count. Every change to the draft filters (or the active
+  // keyword) re-fires this, 3s debounced.
+  useEffect(() => {
+    let cancelled = false;
+    setResultsLoading(true);
+    const timer = setTimeout(() => {
+      listingsApi
+        .searchListings({ ...toListingSearchParams(draftFilters, keyword), page: 1, limit: 1 })
+        .then((result) => {
+          if (!cancelled) setResultsTotal(result.total);
+        })
+        .catch(() => {
+          if (!cancelled) setResultsTotal(null);
+        })
+        .finally(() => {
+          if (!cancelled) setResultsLoading(false);
+        });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [draftFilters, keyword]);
 
   const hasActiveFilters =
     selectedCategoryIds.size > 0 ||
@@ -153,24 +219,23 @@ export default function FilterByModal() {
   // call bumps this and only the most recent one is allowed to apply its result.
   const locationRequestId = useRef(0);
 
-  // Turning this on is the moment location access actually matters — getDeviceLocation() checks
-  // (and, if needed, prompts for) permission itself; a denial/failure reverts the toggle.
+  // Optimistic — the switch flips immediately instead of waiting on getDeviceLocation() (which
+  // checks/prompts for permission itself), reverting back off only if that actually fails.
   function handleToggleCurrentLocation(next: boolean) {
     const requestId = ++locationRequestId.current;
-    if (!next) {
-      setUseCurrentLocation(false);
-      return;
-    }
+    setUseCurrentLocation(next);
+    if (!next) return;
+
     getDeviceLocation().then((device) => {
       if (locationRequestId.current !== requestId) return; // superseded by a later toggle/reset
       if (!device) {
+        setUseCurrentLocation(false);
         showWarningToast('Location needed', 'Enable location access to search near you.');
         return;
       }
       setLocationLabel(device.label);
       setDeviceLat(device.lat);
       setDeviceLng(device.lng);
-      setUseCurrentLocation(true);
     });
   }
 
@@ -193,20 +258,7 @@ export default function FilterByModal() {
   }
 
   function handleShow() {
-    commitFilters({
-      categoryId: selectedCategoryIds.size > 0 ? Array.from(selectedCategoryIds)[0] : undefined,
-      useMyLocation: useCurrentLocation,
-      lat: useCurrentLocation ? deviceLat : undefined,
-      lng: useCurrentLocation ? deviceLng : undefined,
-      searchWithin: useCurrentLocation && applyRadius ? Number(effectiveRadiusKm) : undefined,
-      state: !useCurrentLocation ? state : undefined,
-      city: !useCurrentLocation ? city : undefined,
-      area: !useCurrentLocation ? area : undefined,
-      conditionNew: includeNew,
-      conditionNeatlyUsed: includeNeatlyUsed,
-      minPrice: minPrice !== PRICE_BOUND_MIN ? minPrice : undefined,
-      maxPrice: maxPrice !== PRICE_BOUND_MAX ? maxPrice : undefined,
-    });
+    commitFilters(draftFilters);
     router.back();
   }
 
@@ -229,7 +281,9 @@ export default function FilterByModal() {
       }
       footer={
         <View style={styles.footerRow}>
-          <Text style={styles.resultsPillText}>No Results</Text>
+          <Text style={styles.resultsPillText}>
+            {resultsLoading ? 'Counting…' : resultsTotal !== null ? `${resultsTotal} Result${resultsTotal === 1 ? '' : 's'}` : 'No Results'}
+          </Text>
           <Pressable onPress={guard(handleShow)} style={styles.showButton}>
             <Text style={styles.showButtonLabel}>Show</Text>
           </Pressable>
