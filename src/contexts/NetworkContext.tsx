@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import { reloadAppAsync } from 'expo';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -15,6 +16,7 @@ const NetworkContext = createContext<NetworkContextValue>({ isConnected: true })
 const RECONNECTED_BANNER_DURATION_MS = 2000;
 
 export function NetworkProvider({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
   const [isConnected, setIsConnected] = useState(true);
   const [showReconnected, setShowReconnected] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -54,6 +56,10 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
           Animated.timing(slideAnim, { toValue: -100, duration: 300, useNativeDriver: true }),
         ]).start(() => {
           wasDisconnected.current = false;
+          // Without this, the banner (and the StatusBar override below) would be considered
+          // "active" forever after the very first reconnect — invisible from the animation, but
+          // never actually unmounted, since showBanner below never turns false again.
+          setShowReconnected(false);
         });
       }, RECONNECTED_BANNER_DURATION_MS);
     });
@@ -61,40 +67,44 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, [fadeAnim, slideAnim]);
 
+  // One flag for both the banner and its StatusBar override, so neither renders — and neither
+  // claims the status bar's space — outside the window where a banner is actually relevant.
+  const showBanner = !isConnected || showReconnected;
+
   return (
     <NetworkContext.Provider value={{ isConnected }}>
       {children}
-      {/* Android only tints via backgroundColor; on iOS the status bar is inherently transparent —
-          the opaque banner's own top padding is what shows through there. Only overrides the
-          screen's own StatusBar while the banner is actually visible; otherwise this unmounts and
-          normal per-screen styling (ScreenContainer) takes back over. */}
-      {!isConnected || showReconnected ? (
-        <StatusBar style="light" backgroundColor={showReconnected ? colors.success : colors.danger} animated />
-      ) : null}
+      {showBanner ? (
+        <>
+          {/* Android only tints via backgroundColor; on iOS the status bar is inherently transparent — the banner's own paddingTop (below) is what shows through there. */}
+          <StatusBar style="light" backgroundColor={showReconnected ? colors.success : colors.danger} animated />
 
-      <Animated.View
-        style={[
-          styles.banner,
-          {
-            backgroundColor: showReconnected ? colors.success : colors.danger,
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-        pointerEvents="none"
-      >
-        <View style={styles.content}>
-          <View style={styles.iconContainer}>
-            <Text style={styles.icon}>{showReconnected ? '✓' : '⚠'}</Text>
-          </View>
-          <View style={styles.textContainer}>
-            <Text style={styles.title}>{showReconnected ? 'Back Online' : 'No Internet Connection'}</Text>
-            <Text style={styles.subtitle}>
-              {showReconnected ? 'Your connection has been restored' : 'Please check your network settings'}
-            </Text>
-          </View>
-        </View>
-      </Animated.View>
+          <Animated.View
+            style={[
+              styles.banner,
+              {
+                paddingTop: insets.top + spacingY.sm,
+                backgroundColor: showReconnected ? colors.success : colors.danger,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <View style={styles.content}>
+              <View style={styles.iconContainer}>
+                <Text style={styles.icon}>{showReconnected ? '✓' : '⚠'}</Text>
+              </View>
+              <View style={styles.textContainer}>
+                <Text style={styles.title}>{showReconnected ? 'Back Online' : 'No Internet Connection'}</Text>
+                <Text style={styles.subtitle}>
+                  {showReconnected ? 'Your connection has been restored' : 'Please check your network settings'}
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        </>
+      ) : null}
     </NetworkContext.Provider>
   );
 }
@@ -106,7 +116,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9999,
-    paddingTop: Platform.OS === 'ios' ? verticalScale(50) : verticalScale(30),
     paddingBottom: spacingY.lg,
     paddingHorizontal: spacingX.xl,
     shadowColor: colors.black,

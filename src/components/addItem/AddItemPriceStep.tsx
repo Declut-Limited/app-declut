@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   priceInput: {
     fontFamily: fontFamily.bold,
     fontSize: verticalScale(46),
-    color: colors.gray500,
+    color: colors.gray700,
     textAlign: 'right',
     padding: 0,
   },

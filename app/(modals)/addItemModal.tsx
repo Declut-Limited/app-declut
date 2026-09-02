@@ -3,7 +3,8 @@ import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } 
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
+import { BottomSheetCard, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
+import Icon from '@/components/Icon';
 import { AddItemBasicInfoStep } from '@/components/addItem/AddItemBasicInfoStep';
 import type { AddItemBasicInfoStepErrors } from '@/components/addItem/AddItemBasicInfoStep';
 import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
@@ -16,8 +17,9 @@ import { CONDITION_OPTIONS, NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/con
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
-import { validatePrice, validateRequired } from '@/lib/validators';
+import { useAuth } from '@/contexts/AuthContext';
+import { showErrorToast, showWarningToast } from '@/lib/toast';
+import { validateLength, validateOptionalMaxLength, validatePrice, validateRequired } from '@/lib/validators';
 import { getDeviceLocation } from '@/lib/location';
 import { categoriesApi, listingsApi, mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
@@ -30,6 +32,7 @@ const CATEGORY_PAGE_LIMIT = 20;
 // "Add Item" — steps 1-3 of 3, then a Preview screen beyond the numbered steps.
 export default function AddItemModal() {
   const guard = useSingleTap();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
 
   // Step 1 — Basic Info
@@ -72,6 +75,7 @@ export default function AddItemModal() {
 
   // Publish
   const [publishing, setPublishing] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState(false);
 
   const photoCount = photos.filter(Boolean).length;
   const uploadedPhotoCount = photos.filter((p) => p?.status === 'uploaded').length;
@@ -344,12 +348,13 @@ export default function AddItemModal() {
   // Item brand is the one optional field in this step — everything else needs a value before Next.
   function validateBasicInfo(): boolean {
     const errors: AddItemBasicInfoStepErrors = {
-      itemName: validateRequired(itemName, 'Item name'),
-      itemDescription: validateRequired(itemDescription, 'Item description'),
+      itemName: validateLength(itemName, 'Item name', 3, 120),
+      itemDescription: validateLength(itemDescription, 'Item description', 10, 2000),
       category: validateRequired(category, 'Category'),
+      itemBrand: validateOptionalMaxLength(itemBrand, 'Brand', 60),
       state: validateRequired(state, 'State'),
       area: validateRequired(area, 'Area'),
-      address: validateRequired(address, 'Address'),
+      address: validateLength(address, 'Address', 3, 200),
       condition: validateRequired(condition, 'Item condition'),
       hasDefects: hasDefects === null ? 'Select whether the item has any defects.' : undefined,
       defectsDescription: hasDefects ? validateRequired(defectsDescription, 'Defect description') : undefined,
@@ -413,7 +418,7 @@ export default function AddItemModal() {
         price: Number(price),
         brand: itemBrand.trim() || undefined,
         state,
-        city: area,
+        area,
         address: address.trim(),
         location: { lat: device.lat, lng: device.lng },
         condition: condition as ListingCondition,
@@ -432,12 +437,22 @@ export default function AddItemModal() {
       };
 
       await listingsApi.createListing(payload);
-      showSuccessToast('Listing published', 'Your item is now live.');
-      router.back();
+      setPublishSuccess(true);
     } catch (e) {
       showErrorToast('Could not publish listing', extractErrorMessage(e));
     } finally {
       setPublishing(false);
+    }
+  }
+
+  // Before landing back home, make sure the seller actually has somewhere for payouts to go —
+  // skip straight home if they already do, otherwise hand off to its own full-screen modal
+  // (replacing this one in the stack, same pattern filterByModal uses for its own handoff).
+  function handleSuccessClose() {
+    if (user?.hasPayoutDetails) {
+      router.dismissTo('/(tabs)/home');
+    } else {
+      router.replace('/(modals)/payoutDetailsModal');
     }
   }
 
@@ -525,7 +540,10 @@ export default function AddItemModal() {
             categoryLabel={categoryLabel}
             onOpenCategorySheet={() => setActiveSheet('category')}
             itemBrand={itemBrand}
-            onItemBrandChange={setItemBrand}
+            onItemBrandChange={(value) => {
+              setItemBrand(value);
+              clearBasicInfoError('itemBrand');
+            }}
             state={state}
             onOpenStateSheet={() => setActiveSheet('state')}
             area={area}
@@ -670,12 +688,40 @@ export default function AddItemModal() {
           />
         </View>
       ) : null}
+
+      {publishSuccess ? (
+        <View style={StyleSheet.absoluteFill}>
+          <PublishSuccessSheet onClose={guard(handleSuccessClose)} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 function conditionLabel(value: string): string {
   return CONDITION_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+// Shown once createListing() actually succeeds, in place of the old toast+immediate-back — the
+// user gets a clear confirmation beat before landing back wherever they came from.
+function PublishSuccessSheet({ onClose }: { onClose: () => void }) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)}>
+      <View style={styles.successIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(72)} color={colors.success} />
+      </View>
+      <Text style={styles.successTitle}>Success</Text>
+      <Text style={styles.successSubtitle}>
+        Congratulations! Your products are now live and available for potential buyers to explore. Best of luck with
+        your sales!
+      </Text>
+      <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
+        <Text style={styles.successCloseLabel}>Close</Text>
+      </Pressable>
+    </BottomSheetCard>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -745,5 +791,41 @@ const styles = StyleSheet.create({
   },
   footerLabelDisabled: {
     color: colors.gray400,
+  },
+  successIconWrap: {
+    alignSelf: 'center',
+    marginTop: spacingY.xl,
+    marginBottom: spacingY.xl,
+  },
+  successTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  successSubtitle: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY['2xl'],
+  },
+  successCloseButton: {
+    alignSelf: 'center',
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX['3xl'],
+    marginBottom: spacingY.md,
+  },
+  successCloseLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
   },
 });

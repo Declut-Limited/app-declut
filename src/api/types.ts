@@ -31,6 +31,8 @@ export interface User {
   bankName?: string;
   accountNumber?: string;
   accountName?: string;
+  /** True once a BankAccount row exists for this user (see POST /bank-accounts) — drives whether the post-publish payout prompt shows. */
+  hasPayoutDetails?: boolean;
 }
 
 export interface AuthTokens {
@@ -138,6 +140,37 @@ export interface UpdateProfilePayload {
   accountName?: string;
 }
 
+/** GET /banks — Paystack passthrough, active Nigerian banks only. Nothing persisted. */
+export interface Bank {
+  name: string;
+  code: string;
+}
+
+/** GET /banks/resolve — also a Paystack passthrough, used to show the resolved name before submitting. */
+export interface ResolveBankAccountResponse {
+  accountNumber: string;
+  accountName: string;
+}
+
+export interface CreateBankAccountPayload {
+  bankCode: string;
+  accountNumber: string;
+}
+
+/** POST /bank-accounts — accountHolderName is re-resolved server-side against Paystack, never taken from the client. */
+export interface BankAccount {
+  id: string;
+  userId: string;
+  bankCode: string;
+  shortName: string;
+  fullName: string;
+  accountNumber: string;
+  maskedAccountNumber: string;
+  accountHolderName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PaginatedResponse<T> {
   results: T[];
   page: number;
@@ -215,7 +248,7 @@ export interface CreateListingPayload {
   price: number;
   brand?: string;
   state: string;
-  city: string;
+  area: string;
   address: string;
   location: CreateListingLocation;
   condition: ListingCondition;

@@ -31,6 +31,21 @@ export function validateRequired(value: string, label: string): string | undefin
   return undefined;
 }
 
+/** Required + bounded length — matches the backend's own field constraints (e.g. listing title 3-120 chars). */
+export function validateLength(value: string, label: string, min: number, max: number): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return `${label} is required.`;
+  if (trimmed.length < min) return `${label} must be at least ${min} characters.`;
+  if (trimmed.length > max) return `${label} must be ${max} characters or fewer.`;
+  return undefined;
+}
+
+/** For optional fields that still have a backend max length (e.g. listing brand, max 60 chars). */
+export function validateOptionalMaxLength(value: string, label: string, max: number): string | undefined {
+  if (value.trim().length > max) return `${label} must be ${max} characters or fewer.`;
+  return undefined;
+}
+
 export function validatePrice(value: string): string | undefined {
   if (!value.trim()) return 'Price is required.';
   const numeric = Number(value);

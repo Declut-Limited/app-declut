@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   UIManager,
+  useWindowDimensions,
   View,
   ViewStyle,
 } from 'react-native';
@@ -18,7 +19,15 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as WebBrowser from 'expo-web-browser';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { BottomSheetCard, EmptyState } from '@/components';
 import Icon from '@/components/Icon';
 import * as Icons from 'phosphor-react-native';
@@ -127,6 +136,18 @@ export default function ListingDetailsModal() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const heroScrollRef = useRef<ScrollView>(null);
+
+  // Drives the floating back/share header's background fade-in — transparent over the hero,
+  // solid once scrolled roughly past it.
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+  const floatingHeaderStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [HERO_HEIGHT * 0.6, HERO_HEIGHT], [0, 1], 'clamp'),
+  }));
 
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,6 +187,13 @@ export default function ListingDetailsModal() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [listing]);
+
+  // Thumbnail taps drive the carousel programmatically; swiping drives activeIndex the other way
+  // via the ScrollView's onMomentumScrollEnd below — both paths stay in sync either way.
+  function goToMediaIndex(index: number) {
+    setActiveIndex(index);
+    heroScrollRef.current?.scrollTo({ x: index * screenWidth, animated: true });
+  }
 
   async function handleShare() {
     if (!listing) return;
@@ -232,42 +260,47 @@ export default function ListingDetailsModal() {
     ...listing.images.map((img) => ({ uri: img.secureUrl, isVideo: false })),
     ...(listing.video ? [{ uri: listing.video.secureUrl, isVideo: true }] : []),
   ];
-  const activeMedia = mediaItems[activeIndex];
   const conditionLabel = CONDITION_OPTIONS.find((option) => option.value === listing.condition)?.label ?? listing.condition;
 
   return (
     <View style={styles.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <Animated.ScrollView
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.hero}>
-          {activeMedia && !activeMedia.isVideo ? (
-            <Image source={{ uri: activeMedia.uri }} style={styles.heroImage} resizeMode="cover" />
-          ) : activeMedia ? (
-            <PlayableHeroVideo uri={activeMedia.uri} />
+          {mediaItems.length > 0 ? (
+            <ScrollView
+              ref={heroScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / screenWidth));
+              }}
+            >
+              {mediaItems.map((item, index) =>
+                item.isVideo ? (
+                  <View key={index} style={{ width: screenWidth }}>
+                    <PlayableHeroVideo uri={item.uri} />
+                  </View>
+                ) : (
+                  <Image key={index} source={{ uri: item.uri }} style={[styles.heroImage, { width: screenWidth }]} resizeMode="cover" />
+                )
+              )}
+            </ScrollView>
           ) : (
             <View style={[styles.heroImage, styles.heroEmpty]} />
           )}
-
-          <Pressable
-            onPress={guard(() => router.back())}
-            style={[styles.overlayButton, { top: insets.top + spacingY.sm }]}
-            hitSlop={8}
-          >
-            <Icon name="arrow-left" variant="linear" size={verticalScale(22)} color={colors.gray900} />
-          </Pressable>
-          <Pressable
-            onPress={guard(handleShare)}
-            style={[styles.overlayButton, styles.shareButton, { top: insets.top + spacingY.sm, backgroundColor: colors.primary50 }]}
-            hitSlop={8}
-          >
-            <Icons.ExportIcon size={verticalScale(24)} color={colors.primary} />
-          </Pressable>
 
           {mediaItems.length > 1 ? (
             <View style={styles.thumbnailRow}>
               {mediaItems.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={guard(() => setActiveIndex(index))}
+                  onPress={guard(() => goToMediaIndex(index))}
                   style={[styles.thumbnail, index === activeIndex && styles.thumbnailActive]}
                 >
                   <Image source={{ uri: item.uri }} style={styles.thumbnailImage} resizeMode="cover" />
@@ -337,7 +370,23 @@ export default function ListingDetailsModal() {
             <InfoAccordion title="Order Process" items={ORDER_PROCESS} />
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+
+      <View style={styles.floatingHeaderWrap}>
+        <Animated.View style={[styles.floatingHeaderBackground, floatingHeaderStyle]} />
+        <View style={[styles.floatingHeaderRow, { paddingTop: insets.top + spacingY.sm }]}>
+          <Pressable onPress={guard(() => router.back())} style={styles.floatingHeaderButton} hitSlop={8}>
+            <Icon name="arrow-left" variant="linear" size={verticalScale(22)} color={colors.gray900} />
+          </Pressable>
+          <Pressable
+            onPress={guard(handleShare)}
+            style={[styles.floatingHeaderButton, { backgroundColor: colors.primary50 }]}
+            hitSlop={8}
+          >
+            <Icons.ExportIcon size={verticalScale(24)} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
 
       <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
         <View style={styles.footerPill}>
@@ -654,6 +703,38 @@ const styles = StyleSheet.create({
   shareButton: {
     left: undefined,
     right: spacingX.xl,
+  },
+  floatingHeaderWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  floatingHeaderBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.white,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,a
+    elevation: 3,
+  },
+  floatingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacingX.xl,
+    paddingBottom: spacingY.sm,
+  },
+  floatingHeaderButton: {
+    width: verticalScale(40),
+    height: verticalScale(40),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   thumbnailRow: {
     position: 'absolute',

@@ -11,6 +11,7 @@ export interface AddItemBasicInfoStepErrors {
   itemName?: string;
   itemDescription?: string;
   category?: string;
+  itemBrand?: string;
   state?: string;
   area?: string;
   address?: string;
@@ -109,7 +110,13 @@ export function AddItemBasicInfoStep({
           onPress={onOpenCategorySheet}
           error={errors.category}
         />
-        <LabeledInput label="Item brand" placeholder="e.g. Apple" value={itemBrand} onChangeText={onItemBrandChange} />
+        <LabeledInput
+          label="Item brand"
+          placeholder="e.g. Apple"
+          value={itemBrand}
+          onChangeText={onItemBrandChange}
+          error={errors.itemBrand}
+        />
       </View>
 
       <Text style={styles.sectionTitle}>Item Location</Text>
