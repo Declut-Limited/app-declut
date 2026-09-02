@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import { EmptyState } from '@/components';
+import { BottomSheetCard, EmptyState } from '@/components';
 import Icon from '@/components/Icon';
 import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -108,6 +108,8 @@ export default function ListingDetailsModal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  // 'terms' (Before You Pay) -> 'escrow' (Pay into Escrow) -> Paystack (not built yet).
+  const [paymentStep, setPaymentStep] = useState<'none' | 'terms' | 'escrow'>('none');
 
   useEffect(() => {
     if (!id) return;
@@ -140,6 +142,11 @@ export default function ListingDetailsModal() {
   }
 
   function handleBuyNow() {
+    setPaymentStep('terms');
+  }
+
+  function handleMakePayment() {
+    setPaymentStep('none');
     showWarningToast('Coming soon', "Checkout isn't built yet.");
   }
 
@@ -193,15 +200,14 @@ export default function ListingDetailsModal() {
             style={[styles.overlayButton, { top: insets.top + spacingY.sm }]}
             hitSlop={8}
           >
-            <Icon name="arrow-left" variant="linear" size={verticalScale(20)} color={colors.gray900} />
+            <Icon name="arrow-left" variant="linear" size={verticalScale(22)} color={colors.gray900} />
           </Pressable>
           <Pressable
             onPress={guard(handleShare)}
             style={[styles.overlayButton, styles.shareButton, { top: insets.top + spacingY.sm, backgroundColor: colors.primary50 }]}
             hitSlop={8}
           >
-            {/* <Icon name="share" variant="linear" size={verticalScale(20)} color={colors.gray900} /> */}
-            <Icons.ShareIcon size={verticalScale(20)} color={colors.primary} />
+            <Icons.ExportIcon size={verticalScale(24)} color={colors.primary} />
           </Pressable>
 
           {mediaItems.length > 1 ? (
@@ -215,7 +221,7 @@ export default function ListingDetailsModal() {
                   <Image source={{ uri: item.uri }} style={styles.thumbnailImage} resizeMode="cover" />
                   {item.isVideo ? (
                     <View style={styles.thumbnailPlayOverlay}>
-                      <Icon name="play" variant="bold" size={verticalScale(16)} color={colors.white} />
+                      <Icon name="play-circle" variant="bold" size={verticalScale(20)} color={colors.white} />
                     </View>
                   ) : null}
                 </Pressable>
@@ -289,6 +295,21 @@ export default function ListingDetailsModal() {
           </Pressable>
         </View>
       </SafeAreaView>
+
+      {paymentStep !== 'none' ? (
+        <View style={StyleSheet.absoluteFill}>
+          {paymentStep === 'terms' ? (
+            <BeforeYouPaySheet onClose={() => setPaymentStep('none')} onContinue={() => setPaymentStep('escrow')} />
+          ) : (
+            <PayIntoEscrowSheet
+              listing={listing}
+              onClose={() => setPaymentStep('none')}
+              onCancelPurchase={() => setPaymentStep('none')}
+              onMakePayment={handleMakePayment}
+            />
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -330,6 +351,111 @@ function InfoAccordion({ title, items }: { title: string; items: AccordionEntry[
         </View>
       ) : null}
     </View>
+  );
+}
+
+interface BeforeYouPaySheetProps {
+  onClose: () => void;
+  onContinue: () => void;
+}
+
+// Gate before checkout — same content as the "Safety Tips" accordion, laid out as a numbered
+// checklist instead.
+function BeforeYouPaySheet({ onClose, onContinue }: BeforeYouPaySheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)}>
+      <Text style={styles.paySheetTitle}>Before you pay</Text>
+      <Text style={styles.paySheetSubtitle}>Four things to know — this protects both sides.</Text>
+
+      <ScrollView style={styles.paySheetList} nestedScrollEnabled showsVerticalScrollIndicator>
+        {SAFETY_TIPS.map((item, index) => (
+          <View key={item.title} style={styles.paySheetRow}>
+            <View style={styles.paySheetNumberBadge}>
+              <Text style={styles.paySheetNumberText}>{index + 1}</Text>
+            </View>
+            <View style={styles.paySheetRowText}>
+              <Text style={styles.paySheetRowTitle}>{item.title}</Text>
+              <Text style={styles.paySheetRowBody}>{item.body}</Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      <View style={styles.paySheetButtonGroup}>
+        <Pressable onPress={guard(onContinue)} style={styles.paySheetContinueButton}>
+          <Text style={styles.paySheetContinueLabel}>I understand - Continue to Payment</Text>
+        </Pressable>
+
+        <Pressable onPress={guard(onClose)} hitSlop={8} style={styles.paySheetCancel}>
+          <Text style={styles.paySheetCancelLabel}>Cancel</Text>
+        </Pressable>
+      </View>
+    </BottomSheetCard>
+  );
+}
+
+// Matches admin settings' buyerServiceFeePercentage (1.5%) — display-only for now; that field
+// isn't wired into checkout/payout logic server-side yet, per the Postman collection's own note.
+const ESCROW_FEE_PERCENT = 1.5;
+
+interface PayIntoEscrowSheetProps {
+  listing: Listing;
+  onClose: () => void;
+  onCancelPurchase: () => void;
+  onMakePayment: () => void;
+}
+
+// Step 2 of checkout — order summary + the actual "pay" trigger. Buttons positioned the same
+// way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
+function PayIntoEscrowSheet({ listing, onClose, onCancelPurchase, onMakePayment }: PayIntoEscrowSheetProps) {
+  const guard = useSingleTap();
+  const fee = listing.price * (ESCROW_FEE_PERCENT / 100);
+  const total = listing.price + fee;
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)}>
+      <View style={styles.securePill}>
+        <Icon name="shield-tick" variant="bold" size={verticalScale(16)} color={colors.success700} />
+        <Text style={styles.securePillText}>100% secure</Text>
+      </View>
+
+      <Text style={styles.paySheetTitle}>Pay into Escrow</Text>
+      <Text style={styles.paySheetSubtitle}>Declut holds your money. The seller is only paid after you confirm the item.</Text>
+
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Item</Text>
+          <Text style={styles.summaryValue} numberOfLines={1}>
+            {listing.title}
+          </Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Price</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(listing.price, 2)}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Escrow Protection Fee ({ESCROW_FEE_PERCENT}%)</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(fee, 2)}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryTotalLabel}>Total</Text>
+          <Text style={styles.summaryTotalValue}>{formatCurrency(total, 2)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.paySheetButtonGroup}>
+        <Pressable onPress={guard(onMakePayment)} style={styles.paySheetContinueButton}>
+          <Text style={styles.paySheetContinueLabel}>Make Payment</Text>
+        </Pressable>
+
+        <Pressable onPress={guard(onCancelPurchase)} hitSlop={8} style={styles.paySheetCancel}>
+          <Text style={styles.paySheetCancelLabel}>Cancel Purchase</Text>
+        </Pressable>
+      </View>
+    </BottomSheetCard>
   );
 }
 
@@ -675,5 +801,143 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.lg,
     color: colors.white,
+  },
+  paySheetTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+  },
+  paySheetSubtitle: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.lg,
+  },
+  paySheetList: {
+    maxHeight: verticalScale(490),
+  },
+  paySheetRow: {
+    flexDirection: 'row',
+    gap: spacingX.md,
+    paddingVertical: spacingY.md,
+  },
+  paySheetNumberBadge: {
+    width: verticalScale(28),
+    height: verticalScale(28),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paySheetNumberText: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.sm,
+    color: colors.white,
+  },
+  paySheetRowText: {
+    flex: 1,
+    gap: verticalScale(4),
+  },
+  paySheetRowTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+  },
+  paySheetRowBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.sm,
+    lineHeight: fontSize.sm * 1.5,
+    color: colors.gray500,
+  },
+  paySheetContinueButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  paySheetContinueLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
+  },
+  paySheetCancel: {
+    alignSelf: 'center',
+    paddingVertical: spacingY.md,
+  },
+  paySheetCancelLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray500,
+  },
+  securePill: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.xs,
+    backgroundColor: colors.success50,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    paddingHorizontal: spacingX.md,
+    paddingVertical: spacingY.xs,
+    marginBottom: spacingY.md,
+  },
+  securePillText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.success700,
+  },
+  summaryCard: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.gray100,
+    padding: spacingX.lg,
+    marginTop: spacingY.xl,
+    marginBottom: spacingY.xl,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.md,
+    paddingVertical: spacingY.sm,
+  },
+  summaryLabel: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+  },
+  summaryValue: {
+    flexShrink: 1,
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.ink,
+    textAlign: 'right',
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: colors.gray200,
+    marginVertical: spacingY.xs,
+  },
+  summaryTotalLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+  },
+  summaryTotalValue: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.primary,
+  },
+  paySheetButtonGroup: {
+    paddingTop: spacingY.sm,
+    paddingBottom: spacingY.md,
   },
 });

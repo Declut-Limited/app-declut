@@ -18,6 +18,8 @@ export const colors = {
   ink: '#111827',
   success: '#16A34A',
   successLight: '#DCFCE7',
+  success50: '#ECFDF3',
+  success700: '#027A48',
   warning: '#F97316',
   warning25: '#FFFCF5',
   warningLight: '#FFEDD5',
