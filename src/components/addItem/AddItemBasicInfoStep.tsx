@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { Keyboard, Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import * as Icons from 'phosphor-react-native';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
+
+const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
 export interface AddItemBasicInfoStepErrors {
   itemName?: string;
@@ -130,12 +133,11 @@ export function AddItemBasicInfoStep({
           disabled={!state}
           error={errors.area}
         />
-        <LabeledInput
+        <LabeledAddressInput
           label="Address"
           placeholder="e.g. 3B Community Road"
           value={address}
           onChangeText={onAddressChange}
-          trailingIcon={<Icons.MapTrifoldIcon size={verticalScale(20)} color={colors.gray400} />}
           error={errors.address}
         />
       </View>
@@ -217,6 +219,67 @@ function LabeledInput({ label, placeholder, value, onChangeText, multiline, numb
           />
         </View>
         {trailingIcon ? <View style={styles.fieldTrailingIcon}>{trailingIcon}</View> : null}
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
+interface LabeledAddressInputProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  error?: string;
+}
+
+// Same visual language as LabeledInput/LabeledPicker (label stacked above value, inside one
+// bordered box) — the label lives inside `addressBox` alongside the autocomplete field itself,
+// rather than the dropdown's own container, so it never gets pushed around as predictions expand
+// the box downward. The pin icon rides inside GooglePlacesAutocomplete's own input row (via
+// renderRightButton) instead of as an outer row sibling — an outer sibling would re-center
+// vertically across the whole box every time the box grows to fit the dropdown.
+function LabeledAddressInput({ label, placeholder, value, onChangeText, error }: LabeledAddressInputProps) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View>
+      <View style={[styles.addressBox, focused && styles.fieldBoxFocused, error ? styles.fieldBoxError : null]}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <GooglePlacesAutocomplete
+          placeholder={placeholder}
+          query={{ key: GOOGLE_PLACES_API_KEY, language: 'en', components: 'country:ng' }}
+          fetchDetails={false}
+          enablePoweredByContainer
+          keyboardShouldPersistTaps="handled"
+          debounce={300}
+          minLength={3}
+          onPress={(data) => onChangeText(data.description)}
+          onFail={(err) => console.warn('[GooglePlacesAutocomplete]', err)}
+          textInputProps={{
+            value,
+            onChangeText,
+            placeholder,
+            placeholderTextColor: colors.gray400,
+            onFocus: () => setFocused(true),
+            onBlur: () => setFocused(false),
+          }}
+          renderRightButton={() => (
+            <View style={styles.addressTrailingIcon}>
+              <Icons.MapTrifoldIcon size={verticalScale(20)} color={colors.gray400} />
+            </View>
+          )}
+          styles={{
+            container: styles.placesContainer,
+            textInputContainer: styles.placesInputContainer,
+            textInput: styles.placesTextInput,
+            listView: styles.placesListView,
+            row: styles.placesRow,
+            description: styles.placesDescription,
+            separator: styles.placesSeparator,
+            poweredContainer: styles.placesPoweredContainer,
+          }}
+        />
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
@@ -349,6 +412,69 @@ const styles = StyleSheet.create({
   fieldTrailingIcon: {
     marginTop: verticalScale(2),
   },
+  addressBox: {
+    minHeight: verticalScale(64),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray50,
+    borderWidth: 1,
+    borderColor: colors.gray50,
+    paddingHorizontal: spacingX.md,
+    paddingTop: spacingY.sm,
+    paddingBottom: spacingY.sm,
+    justifyContent: 'center',
+  },
+  addressTrailingIcon: {
+    paddingLeft: spacingX.sm,
+  },
+  placesContainer: {
+    flex: 0,
+  },
+  placesInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    paddingHorizontal: 0,
+  },
+  placesTextInput: {
+    flex: 1,
+    height: verticalScale(24),
+    fontFamily: fontFamily.semibold,
+    fontSize: FIELD_VALUE_FONT_SIZE,
+    color: colors.gray600,
+    backgroundColor: 'transparent',
+    marginTop: 0,
+    marginBottom: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  placesListView: {
+    backgroundColor: colors.gray50,
+    marginTop: spacingY.sm,
+  },
+  placesRow: {
+    paddingVertical: spacingY.sm,
+    backgroundColor: colors.gray50,
+  },
+  placesDescription: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray700,
+  },
+  placesSeparator: {
+    height: 1,
+    backgroundColor: colors.gray200,
+  },
+  placesPoweredContainer: {
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+    backgroundColor: colors.gray50,
+    marginTop: spacingY.xs,
+  },
   multilineText: {
     textAlignVertical: 'top',
   },
@@ -362,6 +488,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray900,
+    marginBottom: spacingY.md,
   },
   radioRow: {
     flexDirection: 'row',

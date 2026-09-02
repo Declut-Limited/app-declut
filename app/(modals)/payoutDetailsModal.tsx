@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { ScreenContainer, ScreenHeader } from '@/components';
+import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -35,6 +35,7 @@ export default function PayoutDetailsModal() {
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const bankName = banks.find((b) => b.code === bankCode)?.name;
 
@@ -87,7 +88,7 @@ export default function PayoutDetailsModal() {
     try {
       await bankAccountsApi.createBankAccount({ bankCode, accountNumber });
       refreshUser(); // picks up the now-true hasPayoutDetails for next time
-      router.dismissTo('/(tabs)/home');
+      setSaveSuccess(true);
     } catch (e) {
       showErrorToast('Could not save bank account', extractErrorMessage(e));
     } finally {
@@ -191,7 +192,34 @@ export default function PayoutDetailsModal() {
           />
         </View>
       ) : null}
+
+      {saveSuccess ? (
+        <View style={StyleSheet.absoluteFill}>
+          <PayoutSuccessSheet onClose={guard(() => router.dismissTo('/(tabs)/home'))} />
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+// Shown once the bank account is actually saved, in place of an immediate dismiss — mirrors the
+// listing-publish success sheet so both post-publish confirmations feel consistent.
+function PayoutSuccessSheet({ onClose }: { onClose: () => void }) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)}>
+      <View style={styles.successIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(72)} color={colors.success} />
+      </View>
+      <Text style={styles.successTitle}>Success</Text>
+      <Text style={styles.successSubtitle}>
+        Your payout details have been saved. We'll send your earnings here whenever your sales are paid out.
+      </Text>
+      <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
+        <Text style={styles.successCloseLabel}>Close</Text>
+      </Pressable>
+    </BottomSheetCard>
   );
 }
 
@@ -315,5 +343,41 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray500,
+  },
+  successIconWrap: {
+    alignSelf: 'center',
+    marginTop: spacingY.xl,
+    marginBottom: spacingY.xl,
+  },
+  successTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  successSubtitle: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY['2xl'],
+  },
+  successCloseButton: {
+    alignSelf: 'center',
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX['3xl'],
+    marginBottom: spacingY.md,
+  },
+  successCloseLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
   },
 });
