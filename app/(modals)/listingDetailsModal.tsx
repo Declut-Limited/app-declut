@@ -156,6 +156,17 @@ export default function ListingDetailsModal() {
     };
   }, [id]);
 
+  // Registers a view 5s after the listing actually loads — the backend owns de-duping (one
+  // counted view per viewer/listing per hour), so this just needs to fire once; no toast either
+  // way, a view registration is never something the buyer needs to see confirmed or fail.
+  useEffect(() => {
+    if (!listing) return;
+    const timer = setTimeout(() => {
+      listingsApi.registerListingView(listing._id).catch(() => {});
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [listing]);
+
   async function handleShare() {
     if (!listing) return;
     try {

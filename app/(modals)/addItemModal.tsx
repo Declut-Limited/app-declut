@@ -638,6 +638,7 @@ export default function AddItemModal() {
               value={state}
               onSelect={handleSelectState}
               onClose={() => setActiveSheet(null)}
+              searchable
             />
           ) : (
             <OptionPickerSheet
@@ -650,6 +651,7 @@ export default function AddItemModal() {
                 clearBasicInfoError('area');
               }}
               onClose={() => setActiveSheet(null)}
+              searchable
             />
           )}
         </View>

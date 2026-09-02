@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacingX['2xl'],
+    paddingHorizontal: spacingX.lg,
     paddingVertical: spacingY.lg,
   },
   side: {

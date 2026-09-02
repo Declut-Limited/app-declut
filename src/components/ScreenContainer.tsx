@@ -60,20 +60,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacingX['2xl'],
+    paddingHorizontal: spacingX.lg,
     paddingTop: spacingY.xl,
     paddingBottom: spacingY['2xl'],
   },
-  // `flex: 1` (not `flexGrow`) — a non-scrolling child like a FlatList needs a definite bounded
-  // height from its parent to virtualize/scroll against; flexGrow alone doesn't reliably provide one.
   flexContent: {
     flex: 1,
-    paddingHorizontal: spacingX['2xl'],
+    paddingHorizontal: spacingX.lg,
     paddingTop: spacingY.xl,
     paddingBottom: spacingY['2xl'],
   },
   footer: {
-    paddingHorizontal: spacingX['2xl'],
+    paddingHorizontal: spacingX.lg,
     paddingTop: spacingY.md,
     borderTopWidth: 1,
     borderTopColor: colors.gray100,

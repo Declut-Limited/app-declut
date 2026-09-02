@@ -1,5 +1,5 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Icons from 'phosphor-react-native';
 import { BottomSheetCard } from '@/components';
 import type { DropdownOption } from '@/constants/formOptions';
@@ -21,11 +21,14 @@ interface OptionPickerSheetProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Adds a filter box above the list — for long static lists (State/Area). Paginated remote lists (Category) don't use this, since filtering a page at a time wouldn't search the full set. */
+  searchable?: boolean;
 }
 
-// Shared bottom-sheet picker for AddItemBasicInfoStep's Condition/State/Area/Category fields — same
-// row treatment throughout. Bounded + scrollable so longer lists (states, paginated categories)
-// don't get clipped by BottomSheetCard's own maxHeight; short lists render under that bound with no scrollbar.
+// Shared bottom-sheet picker for AddItemBasicInfoStep's Condition/State/Area/Category fields (and
+// filterByModal's State/Area) — same row treatment throughout. Bounded + scrollable so longer lists
+// (states, paginated categories) don't get clipped by BottomSheetCard's own maxHeight; short lists
+// render under that bound with no scrollbar.
 export function OptionPickerSheet({
   title,
   options,
@@ -37,8 +40,16 @@ export function OptionPickerSheet({
   hasMore,
   loadingMore,
   onLoadMore,
+  searchable,
 }: OptionPickerSheetProps) {
   const guard = useSingleTap();
+  const [search, setSearch] = useState('');
+
+  const visibleOptions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!searchable || !query) return options;
+    return options.filter((option) => option.label.toLowerCase().includes(query));
+  }, [options, search, searchable]);
 
   return (
     <BottomSheetCard onBackdropPress={onClose}>
@@ -49,31 +60,55 @@ export function OptionPickerSheet({
         </Pressable>
       </View>
 
+      {searchable ? (
+        <View style={styles.searchBox}>
+          <Icons.MagnifyingGlassIcon size={verticalScale(18)} color={colors.gray400} />
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            placeholder={`Search ${title.toLowerCase()}…`}
+            placeholderTextColor={colors.gray400}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={guard(() => setSearch(''))} hitSlop={8}>
+              <Icons.XCircleIcon size={verticalScale(18)} color={colors.gray300} weight="fill" />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {loading ? (
         <ActivityIndicator color={colors.primary} style={styles.loadingIndicator} />
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {options.map((option) => {
-            const selected = option.value === value;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={guard(() => onSelect(option.value))}
-                style={[styles.option, selected && styles.optionSelected]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-              >
-                <Text style={styles.optionLabel}>{option.label}</Text>
-                {selected ? (
-                  <View style={styles.checkCircle}>
-                    <Icons.CheckIcon size={verticalScale(11)} color={colors.white} weight="bold" />
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })}
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {visibleOptions.length === 0 ? (
+            <Text style={styles.emptyText}>No matches found.</Text>
+          ) : (
+            visibleOptions.map((option) => {
+              const selected = option.value === value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={guard(() => onSelect(option.value))}
+                  style={[styles.option, selected && styles.optionSelected]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={styles.optionLabel}>{option.label}</Text>
+                  {selected ? (
+                    <View style={styles.checkCircle}>
+                      <Icons.CheckIcon size={verticalScale(11)} color={colors.white} weight="bold" />
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })
+          )}
 
           {hasMore ? (
             <Pressable onPress={guard(() => onLoadMore?.())} style={styles.loadMoreButton} disabled={loadingMore}>
@@ -95,6 +130,33 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     color: colors.ink,
     textAlign: 'center',
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.sm,
+    minHeight: verticalScale(48),
+    backgroundColor: colors.gray50,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.gray100,
+    paddingHorizontal: spacingX.md,
+    marginBottom: spacingY.md,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    padding: 0,
+  },
+  emptyText: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray400,
+    textAlign: 'center',
+    paddingVertical: spacingY.xl,
   },
   closeButton: {
     position: 'absolute',

@@ -17,47 +17,66 @@ const AVATAR_SIZE = verticalScale(24);
 
 const iconNameByRoute: Record<string, string> = {
   home: 'home-2',
-  search: 'search-normal',
   history: 'clock',
 };
 
 const labelByRoute: Record<string, string> = {
   home: 'Home',
-  search: 'Search',
   history: 'History',
   profile: 'Profile',
 };
 
-// CUSTOM TAB BAR — 4 real routes + a non-routed center action (create listing)
+// CUSTOM TAB BAR — 3 real routes (home/history/profile) + two non-routed actions (search, create
+// listing) laid out in fixed visual slots: Home, Search, Create, History, Profile. Search used to
+// be its own tab (app/(tabs)/search.tsx, now removed) — tapping it always just redirected into a
+// search flow, so it's a plain redirect button here instead, same as Create.
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const guard = useSingleTap();
-  const middleIndex = Math.ceil(state.routes.length / 2);
+
+  const homeRoute = state.routes.find((route) => route.name === 'home');
+  const historyRoute = state.routes.find((route) => route.name === 'history');
+  const profileRoute = state.routes.find((route) => route.name === 'profile');
 
   function handleCreatePress() {
     router.push('/(modals)/addItemModal');
   }
 
+  function handleSearchPress() {
+    router.push('/(modals)/searchResultsModal');
+  }
+
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom || spacingY.sm }]}>
-      {state.routes.map((route, index) => {
-        if (index === middleIndex) {
-          return (
-            <React.Fragment key="create">
-              <Pressable
-                onPress={guard(handleCreatePress)}
-                style={styles.createButton}
-                accessibilityRole="button"
-                accessibilityLabel="Create listing"
-              >
-                <Icon name="add" variant="linear" size={verticalScale(40)} color={colors.white} />
-              </Pressable>
-              <TabButton route={route} index={index} state={state} navigation={navigation} />
-            </React.Fragment>
-          );
-        }
-        return <TabButton key={route.key} route={route} index={index} state={state} navigation={navigation} />;
-      })}
+      {homeRoute ? (
+        <TabButton route={homeRoute} index={state.routes.indexOf(homeRoute)} state={state} navigation={navigation} />
+      ) : null}
+
+      <Pressable
+        onPress={guard(handleSearchPress)}
+        style={styles.tabButton}
+        accessibilityRole="button"
+        accessibilityLabel="Search"
+      >
+        <Icon name="search-normal" variant="linear" size={TAB_ICON_SIZE} color={colors.gray400} />
+        <Text style={[styles.tabLabel, { color: colors.gray400 }]}>Search</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={guard(handleCreatePress)}
+        style={styles.createButton}
+        accessibilityRole="button"
+        accessibilityLabel="Create listing"
+      >
+        <Icon name="add" variant="linear" size={verticalScale(40)} color={colors.white} />
+      </Pressable>
+
+      {historyRoute ? (
+        <TabButton route={historyRoute} index={state.routes.indexOf(historyRoute)} state={state} navigation={navigation} />
+      ) : null}
+      {profileRoute ? (
+        <TabButton route={profileRoute} index={state.routes.indexOf(profileRoute)} state={state} navigation={navigation} />
+      ) : null}
     </View>
   );
 }

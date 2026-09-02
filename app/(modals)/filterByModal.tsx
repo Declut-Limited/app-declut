@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { FormDropdown, ScreenContainer, ScreenHeader } from '@/components';
+import { ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
+import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -60,8 +61,8 @@ export default function FilterByModal() {
   const [deviceLat, setDeviceLat] = useState<number | undefined>(committedFilters.lat);
   const [deviceLng, setDeviceLng] = useState<number | undefined>(committedFilters.lng);
   const [state, setState] = useState<string | undefined>(committedFilters.state);
-  const [city, setCity] = useState<string | undefined>(committedFilters.city);
   const [area, setArea] = useState<string | undefined>(committedFilters.area);
+  const [activeSheet, setActiveSheet] = useState<'state' | 'area' | null>(null);
   // Off by default (unlimited distance) — only defer to a previously-committed value when a
   // location filter was actually in play.
   const [applyRadius, setApplyRadius] = useState(
@@ -137,24 +138,43 @@ export default function FilterByModal() {
       // Never sent when location is off, regardless of what's left in the field.
       searchWithin: useCurrentLocation ? Number(effectiveRadiusKm) : undefined,
       state: !useCurrentLocation ? state : undefined,
-      city: !useCurrentLocation ? city : undefined,
       area: !useCurrentLocation ? area : undefined,
       conditionNew: includeNew,
       conditionNeatlyUsed: includeNeatlyUsed,
       minPrice: minPrice !== PRICE_BOUND_MIN ? minPrice : undefined,
       maxPrice: maxPrice !== PRICE_BOUND_MAX ? maxPrice : undefined,
     }),
-    [selectedCategoryIds, categories, useCurrentLocation, deviceLat, deviceLng, applyRadius, effectiveRadiusKm, state, city, area, includeNew, includeNeatlyUsed, minPrice, maxPrice]
+    [selectedCategoryIds, categories, useCurrentLocation, deviceLat, deviceLng, applyRadius, effectiveRadiusKm, state, area, includeNew, includeNeatlyUsed, minPrice, maxPrice]
   );
 
   const [resultsTotal, setResultsTotal] = useState<number | null>(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+
+  // applyRadius isn't included here — it's only visible/meaningful once useCurrentLocation is on,
+  // which is already covered below, so it can't be "active" independently of that.
+  const hasActiveFilters =
+    selectedCategoryIds.size > 0 ||
+    useCurrentLocation ||
+    state !== undefined ||
+    area !== undefined ||
+    radiusKm !== '' ||
+    includeNew ||
+    includeNeatlyUsed ||
+    minPrice !== PRICE_BOUND_MIN ||
+    maxPrice !== PRICE_BOUND_MAX;
 
   // No dedicated "count matching every filter" endpoint exists (the /listings/count above is
   // location-only) — GET /listings itself returns `total` in its paginated response, so a
   // page:1/limit:1 call doubles as a count. Every change to the draft filters (or the active
   // keyword) re-fires this, 3s debounced.
   useEffect(() => {
+    // Nothing to count with no filter set — skip the request entirely and just read as "No Result".
+    if (!hasActiveFilters) {
+      setResultsTotal(null);
+      setResultsLoading(false);
+      return;
+    }
+
     // The location toggle flips on optimistically, before getDeviceLocation() resolves — firing
     // now would send useMyLocation=true with no lat/lng, which the endpoint requires together.
     // Wait for coords instead of sending (and counting) a request that's missing them.
@@ -183,21 +203,7 @@ export default function FilterByModal() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [draftFilters, keyword]);
-
-  // applyRadius isn't included here — it's only visible/meaningful once useCurrentLocation is on,
-  // which is already covered below, so it can't be "active" independently of that.
-  const hasActiveFilters =
-    selectedCategoryIds.size > 0 ||
-    useCurrentLocation ||
-    state !== undefined ||
-    city !== undefined ||
-    area !== undefined ||
-    radiusKm !== '' ||
-    includeNew ||
-    includeNeatlyUsed ||
-    minPrice !== PRICE_BOUND_MIN ||
-    maxPrice !== PRICE_BOUND_MAX;
+  }, [draftFilters, keyword, hasActiveFilters]);
 
   const loadCategories = useCallback(async (page: number) => {
     if (page === 1) setCategoriesLoading(true);
@@ -269,7 +275,6 @@ export default function FilterByModal() {
     setDeviceLat(undefined);
     setDeviceLng(undefined);
     setState(undefined);
-    setCity(undefined);
     setArea(undefined);
     setApplyRadius(false);
     setRadiusKm('');
@@ -284,34 +289,51 @@ export default function FilterByModal() {
     router.replace('/(modals)/searchResultsModal');
   }
 
-  // Only Lagos LGAs exist in this app's data today (see formOptions.ts) — City and Area both
-  // fall back to that same placeholder list until a real per-state/city dataset exists.
-  const localityOptions = getAreaOptions(state ?? 'Lagos');
+  function handleSelectState(value: string) {
+    setState(value);
+    setArea(undefined); // areas are state-dependent — clear a now-invalid selection
+    setActiveSheet(null);
+  }
+
+  // Only Lagos LGAs exist in this app's data today (see formOptions.ts) — falls back to that same
+  // placeholder list until a real per-state dataset exists.
+  const areaOptions = getAreaOptions(state ?? 'Lagos');
 
   return (
-    <ScreenContainer
-      background={colors.white}
-      header={
-        <ScreenHeader
-          title="Filter By"
-          rightElement={
-            <Pressable onPress={guard(handleReset)} hitSlop={8} disabled={!hasActiveFilters}>
-              <Text style={[styles.resetText, !hasActiveFilters && styles.resetTextDisabled]}>Reset</Text>
+    <View style={styles.flex}>
+      <ScreenContainer
+        background={colors.white}
+        header={
+          <ScreenHeader
+            title="Filter By"
+            rightElement={
+              <Pressable onPress={guard(handleReset)} hitSlop={8} disabled={!hasActiveFilters}>
+                <Text style={[styles.resetText, !hasActiveFilters && styles.resetTextDisabled]}>Reset</Text>
+              </Pressable>
+            }
+          />
+        }
+        footer={
+          <View style={styles.footerRow}>
+            <Text style={styles.resultsPillText}>
+              {!hasActiveFilters
+                ? 'No Result'
+                : resultsLoading
+                ? 'Counting…'
+                : resultsTotal !== null
+                ? `${resultsTotal} Result${resultsTotal === 1 ? '' : 's'}`
+                : 'No Results'}
+            </Text>
+            <Pressable
+              onPress={guard(handleShow)}
+              disabled={!hasActiveFilters}
+              style={[styles.showButton, !hasActiveFilters && styles.showButtonDisabled]}
+            >
+              <Text style={[styles.showButtonLabel, !hasActiveFilters && styles.showButtonLabelDisabled]}>Show</Text>
             </Pressable>
-          }
-        />
-      }
-      footer={
-        <View style={styles.footerRow}>
-          <Text style={styles.resultsPillText}>
-            {resultsLoading ? 'Counting…' : resultsTotal !== null ? `${resultsTotal} Result${resultsTotal === 1 ? '' : 's'}` : 'No Results'}
-          </Text>
-          <Pressable onPress={guard(handleShow)} style={styles.showButton}>
-            <Text style={styles.showButtonLabel}>Show</Text>
-          </Pressable>
-        </View>
-      }
-    >
+          </View>
+        }
+      >
       <Text style={styles.sectionTitle}>Categories</Text>
       {categoriesLoading ? (
         <CategoryChipsSkeleton />
@@ -363,13 +385,16 @@ export default function FilterByModal() {
         <>
           <Text style={styles.subheading}>Explore Locations</Text>
           <View style={styles.fieldGap}>
-            <FormDropdown label="State" placeholder="Select--" data={NIGERIAN_STATE_OPTIONS} value={state} onChange={setState} />
+            <LocationPickerField label="State" placeholder="Select a state" value={state} onPress={() => setActiveSheet('state')} />
           </View>
           <View style={styles.fieldGap}>
-            <FormDropdown label="City" placeholder="Select--" data={localityOptions} value={city} onChange={setCity} />
-          </View>
-          <View style={styles.fieldGap}>
-            <FormDropdown label="Area" placeholder="Select--" data={localityOptions} value={area} onChange={setArea} />
+            <LocationPickerField
+              label="Area"
+              placeholder={state ? 'Select an area' : 'Select a state first'}
+              value={area}
+              onPress={() => setActiveSheet('area')}
+              disabled={!state}
+            />
           </View>
         </>
       ) : (
@@ -450,7 +475,35 @@ export default function FilterByModal() {
           keyboardType="number-pad"
         />
       </View>
-    </ScreenContainer>
+      </ScreenContainer>
+
+      {activeSheet ? (
+        <View style={StyleSheet.absoluteFill}>
+          {activeSheet === 'state' ? (
+            <OptionPickerSheet
+              title="Select state"
+              options={NIGERIAN_STATE_OPTIONS}
+              value={state ?? ''}
+              onSelect={handleSelectState}
+              onClose={() => setActiveSheet(null)}
+              searchable
+            />
+          ) : (
+            <OptionPickerSheet
+              title="Select area"
+              options={areaOptions}
+              value={area ?? ''}
+              onSelect={(value) => {
+                setArea(value);
+                setActiveSheet(null);
+              }}
+              onClose={() => setActiveSheet(null)}
+              searchable
+            />
+          )}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -564,6 +617,36 @@ function PriceRangeSlider({ min, max, bound, onChange }: PriceRangeSliderProps) 
   );
 }
 
+interface LocationPickerFieldProps {
+  label: string;
+  placeholder: string;
+  value?: string;
+  onPress: () => void;
+  disabled?: boolean;
+}
+
+// Bottom-sheet trigger field — same look/behavior as AddItemBasicInfoStep's LabeledPicker (label
+// inside a gray box, above the value/placeholder, chevron on the right), opening OptionPickerSheet
+// instead of the old inline FormDropdown menu.
+function LocationPickerField({ label, placeholder, value, onPress, disabled }: LocationPickerFieldProps) {
+  const guard = useSingleTap();
+
+  return (
+    <Pressable
+      onPress={guard(onPress)}
+      disabled={disabled}
+      style={[styles.locationFieldBox, disabled && styles.locationFieldBoxDisabled]}
+      accessibilityState={{ disabled }}
+    >
+      <View style={styles.locationFieldTextColumn}>
+        <Text style={styles.locationFieldLabel}>{label}</Text>
+        <Text style={[styles.locationFieldValue, !value && styles.locationFieldValuePlaceholder]}>{value || placeholder}</Text>
+      </View>
+      <Icon name="arrow-down-2" variant="linear" size={verticalScale(16)} color={disabled ? colors.gray300 : colors.gray400} />
+    </Pressable>
+  );
+}
+
 interface AmountFieldProps {
   unitLabel: string;
   value: string;
@@ -598,6 +681,42 @@ function AmountField({ unitLabel, value, onChangeText, keyboardType, placeholder
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  locationFieldBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.sm,
+    minHeight: verticalScale(56),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray100,
+    paddingHorizontal: spacingX.md,
+  },
+  locationFieldBoxDisabled: {
+    opacity: 0.6,
+  },
+  locationFieldTextColumn: {
+    flex: 1,
+  },
+  locationFieldLabel: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray700,
+    marginBottom: verticalScale(2),
+  },
+  locationFieldValue: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray900,
+  },
+  locationFieldValuePlaceholder: {
+    color: colors.gray400,
+  },
   resetText: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.sm,
@@ -637,6 +756,12 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.lg,
     color: colors.white,
+  },
+  showButtonDisabled: {
+    backgroundColor: colors.gray200,
+  },
+  showButtonLabelDisabled: {
+    color: colors.gray400,
   },
   sectionTitle: {
     fontFamily: fontFamily.bold,

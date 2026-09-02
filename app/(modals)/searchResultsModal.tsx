@@ -10,7 +10,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
-import { addRecentSearch } from '@/lib/recentSearches';
+import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recentSearches';
 import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { summarizeFilters, toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
@@ -25,6 +25,7 @@ export default function SearchResultsModal() {
 
   const [query, setQuery] = useState(keyword);
   const [focused, setFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   // InteractionManager doesn't track the native modal's own slide-up transition (only JS-thread
   // interaction handles), so .focus() called that way still races it and gets silently dropped —
@@ -38,29 +39,73 @@ export default function SearchResultsModal() {
     return unsubscribe;
   }, [navigation]);
 
+  // This is a modal (pushed fresh each time, unlike the old tab screen it replaced), so a
+  // mount-only fetch is enough — no focus-effect re-fetch needed to catch searches saved elsewhere.
+  useEffect(() => {
+    getRecentSearches().then(setRecentSearches);
+  }, []);
+
+  // Drives the actual fetch below (stays debounced — filters combine with whatever keyword the
+  // network call last committed to, never dropped or reset by typing).
   const hasActiveSearch = keyword.trim() !== '' || hasActiveFilters;
+  // Drives which branch renders — reacts to `query` immediately so the results area (and its
+  // skeleton) mounts the instant you type, instead of sitting on "Start typing…" for 500ms.
+  const showResultsArea = query.trim() !== '' || hasActiveFilters;
+  // True for the window between a keystroke and the debounce below actually committing it —
+  // treated the same as network loading so typing never flashes an empty/"no results" state.
+  const isPendingDebounce = query.trim() !== keyword.trim();
 
   const { items, total, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
     ({ page, limit }) => listingsApi.searchListings({ ...toListingSearchParams(filters, keyword), page, limit }),
     hasActiveSearch,
     `${keyword}|${JSON.stringify(filters)}`
   );
+  // Text feedback ("Searching…") reacts to any pending state, including debounce.
+  const isSearching = loading || refreshing || isPendingDebounce;
+  // But the list itself only clears to empty for a genuine network fetch — a pending debounce
+  // alone must never wipe results already on screen (e.g. a filtered list you're refining with a
+  // keyword), or every keystroke flashes them away and back. Forcing the skeleton for a pending
+  // debounce is still fine when there's nothing on screen yet to lose.
+  const isFetching = loading || refreshing;
+  const showSkeleton = isFetching || (isPendingDebounce && items.length === 0);
+
+  // Fetch-as-you-type — 500ms after the user stops typing, the query becomes the active keyword
+  // (which drives the search above via resetKey). Submit/leaving-to-filter below commit instantly
+  // instead of waiting on this, since those are already deliberate, discrete actions.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed === keyword.trim()) return;
+    const timer = setTimeout(() => setKeyword(trimmed), 500);
+    return () => clearTimeout(timer);
+  }, [query, keyword, setKeyword]);
+
+  // Only ever saved once a keyword's search actually comes back with results — never on
+  // submit/keystroke alone. savedKeywordRef stops a re-save on every unrelated state change
+  // (e.g. a filter tweak) for a keyword that's already been recorded.
+  const savedKeywordRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || refreshing || error) return;
+    const trimmed = keyword.trim();
+    if (!trimmed || savedKeywordRef.current === trimmed) return;
+    if (total !== null && total > 0) {
+      savedKeywordRef.current = trimmed;
+      addRecentSearch(trimmed).then(setRecentSearches);
+    }
+  }, [keyword, loading, refreshing, error, total]);
 
   function goToFilter() {
     // Typed-but-unsubmitted text would otherwise be silently dropped from the filtered results —
     // it's still sitting visibly in the box, so commit it as the active keyword before leaving.
-    const trimmed = query.trim();
-    if (trimmed && trimmed !== keyword) commitSearch(trimmed);
+    commitKeyword(query);
     router.push('/(modals)/filterByModal');
   }
 
-  // A "search" is only ever recorded here (submit) — never on keystroke.
-  async function commitSearch(term: string) {
+  // Commits immediately, bypassing the debounce above — for deliberate actions (submit, leaving
+  // to filter) that shouldn't wait an extra 300ms.
+  function commitKeyword(term: string) {
     const trimmed = term.trim();
-    if (!trimmed) return;
     setQuery(trimmed);
     setKeyword(trimmed);
-    await addRecentSearch(trimmed);
   }
 
   function clearQuery() {
@@ -70,6 +115,15 @@ export default function SearchResultsModal() {
 
   function handleClearFilters() {
     resetFilters();
+  }
+
+  function goToRecentSearch(term: string) {
+    commitKeyword(term);
+  }
+
+  async function handleClearRecent() {
+    await clearRecentSearches();
+    setRecentSearches([]);
   }
 
   function handleBack() {
@@ -84,6 +138,9 @@ export default function SearchResultsModal() {
   }
 
   const filterSummary = hasActiveFilters ? summarizeFilters(filters) : [];
+  // Filtering only makes sense once there's something to filter — a typed query or an already-
+  // resolved result set. Not gated on hasActiveFilters itself, since Clear should stay reachable.
+  const canOpenFilter = query.trim() !== '' || (total !== null && total > 0);
 
   return (
     <ScreenContainer
@@ -93,7 +150,20 @@ export default function SearchResultsModal() {
       style={{ paddingTop: 0 }}
       header={
         <>
-          <ScreenHeader title="Search Result" onBack={guard(handleBack)} />
+          <ScreenHeader
+            title="Search Result"
+            onBack={guard(handleBack)}
+            rightElement={
+              <Pressable
+                onPress={canOpenFilter ? guard(goToFilter) : undefined}
+                disabled={!canOpenFilter}
+                style={[styles.headerFilterButton, !canOpenFilter && styles.headerFilterButtonDisabled]}
+                hitSlop={8}
+              >
+                <Icon name="setting-3" variant="bold" size={verticalScale(18)} color={canOpenFilter ? colors.gray700 : colors.gray300} />
+              </Pressable>
+            }
+          />
           <View style={styles.searchRowWrap}>
             <View style={styles.searchRow}>
               <View style={[styles.searchBar, focused && styles.searchBarActive]}>
@@ -106,7 +176,7 @@ export default function SearchResultsModal() {
                   placeholder="What are you looking for?"
                   placeholderTextColor={colors.gray400}
                   returnKeyType="search"
-                  onSubmitEditing={() => commitSearch(query)}
+                  onSubmitEditing={() => commitKeyword(query)}
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
                 />
@@ -116,9 +186,6 @@ export default function SearchResultsModal() {
                   </Pressable>
                 ) : null}
               </View>
-              <Pressable onPress={guard(goToFilter)} style={styles.filterButton} hitSlop={8}>
-                <Icon name="setting-3" variant="bold" size={verticalScale(20)} color={colors.gray700} />
-              </Pressable>
             </View>
 
             {filterSummary.length > 0 ? (
@@ -132,18 +199,18 @@ export default function SearchResultsModal() {
               </View>
             ) : null}
 
-            {hasActiveSearch && (loading || refreshing || total !== null) ? (
+            {showResultsArea && (isSearching || total !== null) ? (
               <Text style={styles.resultsCountText}>
-                {loading || refreshing ? 'Searching…' : `${total} total result${total === 1 ? '' : 's'}`}
+                {isSearching ? 'Searching…' : `${total} total result${total === 1 ? '' : 's'}`}
               </Text>
             ) : null}
           </View>
         </>
       }
     >
-      {hasActiveSearch ? (
+      {showResultsArea ? (
         <FlatList
-          data={loading || refreshing ? [] : items}
+          data={isFetching ? [] : items}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
@@ -163,7 +230,7 @@ export default function SearchResultsModal() {
           onEndReached={hasMore ? loadMore : undefined}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            loading || refreshing ? (
+            showSkeleton ? (
               <ListingCardSkeleton count={SKELETON_COUNT} />
             ) : error ? (
               <Text style={styles.message}>{error}</Text>
@@ -174,7 +241,30 @@ export default function SearchResultsModal() {
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footerLoading} /> : null}
         />
       ) : (
-        <EmptyState icon={Icons.MagnifyingGlassIcon} message="Start typing to search for items." />
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Searches</Text>
+            <Pressable onPress={guard(handleClearRecent)} disabled={recentSearches.length === 0} hitSlop={8}>
+              <Text style={[styles.clearLink, recentSearches.length === 0 && styles.clearLinkDisabled]}>CLEAR</Text>
+            </Pressable>
+          </View>
+
+          {recentSearches.length === 0 ? (
+            <EmptyState icon={Icons.MagnifyingGlassIcon} message="Your recent searches will show up here." />
+          ) : (
+            recentSearches.map((term) => (
+              <Pressable key={term} onPress={guard(() => goToRecentSearch(term))} style={styles.searchRowItem}>
+                <View style={styles.searchRowLeft}>
+                  <Icons.MagnifyingGlassIcon size={verticalScale(18)} color={colors.gray400} />
+                  <Text style={styles.searchRowText} numberOfLines={1}>
+                    {term}
+                  </Text>
+                </View>
+                <Icons.ArrowUpRightIcon size={verticalScale(18)} color={colors.primary} />
+              </Pressable>
+            ))
+          )}
+        </>
       )}
     </ScreenContainer>
   );
@@ -248,14 +338,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterButton: {
-    width: verticalScale(52),
-    height: verticalScale(52),
+  // Sized to match BackButton on ScreenHeader's other side, not the 52px search-row button it replaced.
+  headerFilterButton: {
+    width: verticalScale(40),
+    height: verticalScale(40),
     borderRadius: radius.full,
     borderCurve: 'continuous',
     backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerFilterButtonDisabled: {
+    backgroundColor: colors.gray50,
   },
   listContent: {
     flexGrow: 1,
@@ -270,5 +364,46 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     paddingVertical: spacingY.xl,
     textAlign: 'center',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacingY.md,
+  },
+  sectionTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+  },
+  clearLink: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    letterSpacing: 0.5,
+  },
+  clearLinkDisabled: {
+    color: colors.gray300,
+  },
+  searchRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.md,
+    paddingVertical: spacingY.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  searchRowLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.md,
+  },
+  searchRowText: {
+    flex: 1,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray700,
   },
 });

@@ -9,6 +9,7 @@ import type {
   NearbyListingsParams,
   NewListingsParams,
   PaginatedResponse,
+  RegisterListingViewResponse,
   UpdateListingPayload,
 } from './types';
 
@@ -61,6 +62,12 @@ export async function getNewListings(params: NewListingsParams = {}) {
 
 export async function getListing(listingId: string) {
   const res = await apiClient.get<ApiEnvelope<Listing>>(`/listings/${listingId}`);
+  return res.data.data;
+}
+
+/** One counted view per (viewer, listing) per hour — the backend owns uniqueness; a repeat call within the window just returns counted:false. */
+export async function registerListingView(listingId: string) {
+  const res = await apiClient.post<ApiEnvelope<RegisterListingViewResponse>>(`/listings/${listingId}/view`);
   return res.data.data;
 }
 

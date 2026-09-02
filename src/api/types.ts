@@ -270,6 +270,11 @@ export interface ListingsCountResponse {
   count: number;
 }
 
+/** counted:false means this viewer already registered a view for this listing within the last hour. */
+export interface RegisterListingViewResponse {
+  counted: boolean;
+}
+
 export interface NearbyListingsParams {
   lat: number;
   lng: number;
