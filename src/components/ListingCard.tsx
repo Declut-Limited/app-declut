@@ -12,7 +12,7 @@ const NEW_WITHIN_DAYS = 7;
 const IMAGE_SIZE = verticalScale(96);
 
 /** "Listings Near You" / search-result card — the only real differences from RecentListingCard are image width and badge tint. */
-export function ListingCard({ listing, onPress, userLat, userLng, showFavorite, favorited, onToggleFavorite }: ListingCardProps) {
+export function ListingCard({ listing, onPress, userLat, userLng }: ListingCardProps) {
   const guard = useSingleTap();
   const isNew = dayjs().diff(dayjs(listing.createdAt), 'day') < NEW_WITHIN_DAYS;
   const [listingLng, listingLat] = listing.location.coordinates;
@@ -33,17 +33,6 @@ export function ListingCard({ listing, onPress, userLat, userLng, showFavorite, 
           <View style={styles.badge}>
             <Text style={styles.badgeLabel}>New</Text>
           </View>
-        ) : null}
-        {showFavorite ? (
-          <Pressable
-            onPress={onToggleFavorite ? guard(onToggleFavorite) : undefined}
-            style={styles.favoriteButton}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={favorited ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Icon name="heart" variant="bold" size={verticalScale(20)} color={favorited ? colors.danger : colors.white} />
-          </Pressable>
         ) : null}
       </View>
 
@@ -105,16 +94,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     fontSize: verticalScale(10),
     color: colors.warning,
-  },
-  // No circular backing chip — a plain glyph floating on the photo.
-  favoriteButton: {
-    position: 'absolute',
-    top: spacingY.xs,
-    right: spacingX.xs,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
   },
   info: {
     flex: 1,

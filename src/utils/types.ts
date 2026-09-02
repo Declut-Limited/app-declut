@@ -167,9 +167,6 @@ export interface ListingCardProps {
   /** Current device coordinates, for a client-computed "(Xkm)" distance — omitted (no distance shown) if either is undefined. */
   userLat?: number;
   userLng?: number;
-  showFavorite?: boolean;
-  favorited?: boolean;
-  onToggleFavorite?: () => void;
 }
 
 /** "Recently Posted" card — larger image, lavender "New" badge. Only real differences from ListingCard are image width and badge tint. */
@@ -178,7 +175,4 @@ export interface RecentListingCardProps {
   onPress: () => void;
   userLat?: number;
   userLng?: number;
-  showFavorite?: boolean;
-  favorited?: boolean;
-  onToggleFavorite?: () => void;
 }

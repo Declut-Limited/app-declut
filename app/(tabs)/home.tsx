@@ -13,14 +13,12 @@ import type { Listing } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 
 const SECTION_LIMIT = 2;
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const guard = useSingleTap();
-  const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -153,15 +151,7 @@ export default function HomeScreen() {
         onSeeAll={goToNearbyListings}
         renderCard={(listing, index) => (
           <Animated.View key={listing._id} entering={FadeInDown.delay(index * 70)}>
-            <ListingCard
-              listing={listing}
-              userLat={userLat}
-              userLng={userLng}
-              onPress={() => goToListing(listing._id)}
-              showFavorite
-              favorited={favoriteIds.has(listing._id)}
-              onToggleFavorite={() => toggleFavorite(listing._id)}
-            />
+            <ListingCard listing={listing} userLat={userLat} userLng={userLng} onPress={() => goToListing(listing._id)} />
           </Animated.View>
         )}
       />
@@ -176,15 +166,7 @@ export default function HomeScreen() {
         onSeeAll={goToNewListings}
         renderCard={(listing, index) => (
           <Animated.View key={listing._id} entering={FadeInDown.delay(index * 70)}>
-            <RecentListingCard
-              listing={listing}
-              userLat={userLat}
-              userLng={userLng}
-              onPress={() => goToListing(listing._id)}
-              showFavorite
-              favorited={favoriteIds.has(listing._id)}
-              onToggleFavorite={() => toggleFavorite(listing._id)}
-            />
+            <RecentListingCard listing={listing} userLat={userLat} userLng={userLng} onPress={() => goToListing(listing._id)} />
           </Animated.View>
         )}
       />

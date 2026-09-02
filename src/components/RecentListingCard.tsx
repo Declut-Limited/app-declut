@@ -13,7 +13,7 @@ const IMAGE_WIDTH = verticalScale(120);
 const IMAGE_HEIGHT = verticalScale(96);
 
 /** "Recently Posted" card — the only real differences from ListingCard are image width and badge tint. */
-export function RecentListingCard({ listing, onPress, userLat, userLng, showFavorite, favorited, onToggleFavorite }: RecentListingCardProps) {
+export function RecentListingCard({ listing, onPress, userLat, userLng }: RecentListingCardProps) {
   const guard = useSingleTap();
   const isNew = dayjs().diff(dayjs(listing.createdAt), 'day') < NEW_WITHIN_DAYS;
   const [listingLng, listingLat] = listing.location.coordinates;
@@ -34,17 +34,6 @@ export function RecentListingCard({ listing, onPress, userLat, userLng, showFavo
           <View style={styles.badge}>
             <Text style={styles.badgeLabel}>New</Text>
           </View>
-        ) : null}
-        {showFavorite ? (
-          <Pressable
-            onPress={onToggleFavorite ? guard(onToggleFavorite) : undefined}
-            style={styles.favoriteButton}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={favorited ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Icon name="heart" variant="bold" size={verticalScale(20)} color={favorited ? colors.danger : colors.white} />
-          </Pressable>
         ) : null}
       </View>
 
@@ -106,15 +95,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     fontSize: verticalScale(10),
     color: colors.primary,
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: spacingY.xs,
-    right: spacingX.xs,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
   },
   info: {
     flex: 1,

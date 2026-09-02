@@ -64,7 +64,13 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   return (
     <NetworkContext.Provider value={{ isConnected }}>
       {children}
-      <StatusBar backgroundColor={showReconnected ? colors.success : colors.danger} />
+      {/* Android only tints via backgroundColor; on iOS the status bar is inherently transparent —
+          the opaque banner's own top padding is what shows through there. Only overrides the
+          screen's own StatusBar while the banner is actually visible; otherwise this unmounts and
+          normal per-screen styling (ScreenContainer) takes back over. */}
+      {!isConnected || showReconnected ? (
+        <StatusBar style="light" backgroundColor={showReconnected ? colors.success : colors.danger} animated />
+      ) : null}
 
       <Animated.View
         style={[

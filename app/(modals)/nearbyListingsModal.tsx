@@ -9,7 +9,6 @@ import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
-import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { useSingleTap } from '@/hooks/useSingleTap';
 
 const SKELETON_COUNT = 6;
@@ -23,7 +22,6 @@ export default function NearbyListingsModal() {
   // list's own skeleton never shows for that window, since usePaginatedListings stays disabled
   // until coords is set, and it would otherwise flash the "No nearby listings yet." empty state.
   const [resolvingLocation, setResolvingLocation] = useState(true);
-  const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
   async function requestLocation() {
     setResolvingLocation(true);
@@ -86,15 +84,7 @@ export default function NearbyListingsModal() {
           showsHorizontalScrollIndicator={false}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 70)}>
-              <ListingCard
-                listing={item}
-                userLat={coords?.lat}
-                userLng={coords?.lng}
-                onPress={() => onPressListing(item)}
-                showFavorite
-                favorited={favoriteIds.has(item.id)}
-                onToggleFavorite={() => toggleFavorite(item.id)}
-              />
+              <ListingCard listing={item} userLat={coords?.lat} userLng={coords?.lng} onPress={() => onPressListing(item)} />
             </Animated.View>
           )}
           refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}

@@ -10,7 +10,6 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
-import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 import { addRecentSearch } from '@/lib/recentSearches';
 import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
@@ -23,7 +22,6 @@ export default function SearchResultsModal() {
   const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
   const { keyword, setKeyword, filters, hasActiveFilters, resetFilters } = useSearchFilter();
-  const { favoriteIds, toggleFavorite } = useFavoriteToggle();
 
   const [query, setQuery] = useState(keyword);
   const [focused, setFocused] = useState(false);
@@ -157,9 +155,6 @@ export default function SearchResultsModal() {
                 userLat={filters.useMyLocation ? filters.lat : undefined}
                 userLng={filters.useMyLocation ? filters.lng : undefined}
                 onPress={() => onPressListing(item)}
-                showFavorite
-                favorited={favoriteIds.has(item.id)}
-                onToggleFavorite={() => toggleFavorite(item.id)}
               />
             </Animated.View>
           )}

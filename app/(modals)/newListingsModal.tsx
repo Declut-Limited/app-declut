@@ -9,7 +9,6 @@ import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
-import { useFavoriteToggle } from '@/hooks/useFavoriteToggle';
 
 const SKELETON_COUNT = 6;
 
@@ -18,7 +17,6 @@ export default function NewListingsModal() {
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
     ({ page, limit }) => listingsApi.getNewListings({ page, limit })
   );
-  const { favoriteIds, toggleFavorite } = useFavoriteToggle();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // Purely for the card's "(Xkm)" distance display — this list itself isn't location-filtered.
@@ -45,15 +43,7 @@ export default function NewListingsModal() {
         showsHorizontalScrollIndicator={false}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 70)}>
-            <RecentListingCard
-              listing={item}
-              userLat={coords?.lat}
-              userLng={coords?.lng}
-              onPress={() => onPressListing(item)}
-              showFavorite
-              favorited={favoriteIds.has(item.id)}
-              onToggleFavorite={() => toggleFavorite(item.id)}
-            />
+            <RecentListingCard listing={item} userLat={coords?.lat} userLng={coords?.lng} onPress={() => onPressListing(item)} />
           </Animated.View>
         )}
         refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
