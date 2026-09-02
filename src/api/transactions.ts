@@ -1,8 +1,12 @@
 import { apiClient } from './client';
-import type { ApiEnvelope, CheckoutPayload, ConfirmCodePayload, PaginatedResponse, Transaction } from './types';
+import type { ApiEnvelope, CheckoutPayload, CheckoutResponse, ConfirmCodePayload, PaginatedResponse, Transaction } from './types';
 
+// Creates a pending_payment Transaction and returns where to send the buyer to pay — no money
+// has moved and no Escrow exists yet at this point. Paystack's webhook (server-to-server) is what
+// actually confirms the charge and flips the transaction to escrow_active; poll getTransaction()
+// for that rather than trusting the checkout page's redirect alone.
 export async function checkout(payload: CheckoutPayload) {
-  const res = await apiClient.post<ApiEnvelope<Transaction>>('/transactions', payload);
+  const res = await apiClient.post<ApiEnvelope<CheckoutResponse>>('/transactions', payload);
   return res.data.data;
 }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   LayoutAnimation,
   Platform,
@@ -16,6 +17,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import * as WebBrowser from 'expo-web-browser';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BottomSheetCard, EmptyState } from '@/components';
 import Icon from '@/components/Icon';
@@ -23,12 +25,34 @@ import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { listingsApi } from '@/api';
+import { listingsApi, transactionsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
-import { showWarningToast } from '@/lib/toast';
+import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
+
+const PAYSTACK_CALLBACK_URL = 'declut://payment-callback';
+const PAYMENT_POLL_INTERVAL_MS = 2000;
+const PAYMENT_POLL_MAX_ATTEMPTS = 10;
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Polls until the transaction reaches escrow_active (payment confirmed) or attempts run out. */
+async function getTransactionResult(transactionId: string) {
+  for (let attempt = 0; attempt < PAYMENT_POLL_MAX_ATTEMPTS; attempt++) {
+    await wait(PAYMENT_POLL_INTERVAL_MS);
+    try {
+      const transaction = await transactionsApi.getTransaction(transactionId);
+      if (transaction.status === 'escrow_active') return transaction;
+    } catch {
+      // Transient failure — keep polling until attempts run out.
+    }
+  }
+  return null;
+}
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -108,8 +132,8 @@ export default function ListingDetailsModal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  // 'terms' (Before You Pay) -> 'escrow' (Pay into Escrow) -> Paystack (not built yet).
-  const [paymentStep, setPaymentStep] = useState<'none' | 'terms' | 'escrow'>('none');
+  const [paymentStep, setPaymentStep] = useState<'none' | 'terms' | "summary" | 'success'>('none');
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -145,9 +169,26 @@ export default function ListingDetailsModal() {
     setPaymentStep('terms');
   }
 
-  function handleMakePayment() {
-    setPaymentStep('none');
-    showWarningToast('Coming soon', "Checkout isn't built yet.");
+  async function handleMakePayment() {
+    if (!listing || paying) return;
+    setPaying(true);
+    try {
+      const { transactionId, paystackAuthorizationUrl } = await transactionsApi.checkout({
+        listingId: listing._id,
+        callbackUrl: PAYSTACK_CALLBACK_URL,
+      });
+
+      const result = await WebBrowser.openAuthSessionAsync(paystackAuthorizationUrl, PAYSTACK_CALLBACK_URL);
+      if (result.type !== 'success') {
+        showWarningToast('Payment not completed', 'You can try again anytime.');
+        return;
+      }
+
+    } catch (e) {
+      showErrorToast('Could not start checkout', extractErrorMessage(e));
+    } finally {
+      setPaying(false);
+    }
   }
 
   if (loading) {
@@ -289,7 +330,7 @@ export default function ListingDetailsModal() {
 
       <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
         <View style={styles.footerPill}>
-          <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price, 2)}</Text>
+          <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price)}</Text>
           <Pressable onPress={guard(handleBuyNow)} style={styles.buyButton}>
             <Text style={styles.buyButtonLabel}>Buy Now</Text>
           </Pressable>
@@ -299,13 +340,21 @@ export default function ListingDetailsModal() {
       {paymentStep !== 'none' ? (
         <View style={StyleSheet.absoluteFill}>
           {paymentStep === 'terms' ? (
-            <BeforeYouPaySheet onClose={() => setPaymentStep('none')} onContinue={() => setPaymentStep('escrow')} />
-          ) : (
-            <PayIntoEscrowSheet
+            <BeforeYouPaySheet onClose={() => setPaymentStep('none')} onContinue={() => setPaymentStep("summary")} />
+          ) : paymentStep === "summary" ? (
+            <PaySummarySheet
               listing={listing}
+              paying={paying}
               onClose={() => setPaymentStep('none')}
               onCancelPurchase={() => setPaymentStep('none')}
               onMakePayment={handleMakePayment}
+            />
+          ) : (
+            <PaymentSuccessSheet
+              amount={listing.price}
+              onClose={() => {
+                setPaymentStep('none');
+              }}
             />
           )}
         </View>
@@ -398,10 +447,11 @@ function BeforeYouPaySheet({ onClose, onContinue }: BeforeYouPaySheetProps) {
 
 // Matches admin settings' buyerServiceFeePercentage (1.5%) — display-only for now; that field
 // isn't wired into checkout/payout logic server-side yet, per the Postman collection's own note.
-const ESCROW_FEE_PERCENT = 1.5;
+const PAY_FEE_PERCENT = 1.5;
 
-interface PayIntoEscrowSheetProps {
+interface PaySummarySheetProps {
   listing: Listing;
+  paying: boolean;
   onClose: () => void;
   onCancelPurchase: () => void;
   onMakePayment: () => void;
@@ -409,13 +459,13 @@ interface PayIntoEscrowSheetProps {
 
 // Step 2 of checkout — order summary + the actual "pay" trigger. Buttons positioned the same
 // way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
-function PayIntoEscrowSheet({ listing, onClose, onCancelPurchase, onMakePayment }: PayIntoEscrowSheetProps) {
+function PaySummarySheet({ listing, paying, onClose, onCancelPurchase, onMakePayment }: PaySummarySheetProps) {
   const guard = useSingleTap();
-  const fee = listing.price * (ESCROW_FEE_PERCENT / 100);
+  const fee = listing.price * (PAY_FEE_PERCENT / 100);
   const total = listing.price + fee;
 
   return (
-    <BottomSheetCard onBackdropPress={guard(onClose)}>
+    <BottomSheetCard onBackdropPress={paying ? undefined : guard(onClose)}>
       <View style={styles.securePill}>
         <Icon name="shield-tick" variant="bold" size={verticalScale(16)} color={colors.success700} />
         <Text style={styles.securePillText}>100% secure</Text>
@@ -436,7 +486,7 @@ function PayIntoEscrowSheet({ listing, onClose, onCancelPurchase, onMakePayment 
           <Text style={styles.summaryValue}>{formatCurrency(listing.price, 2)}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Escrow Protection Fee ({ESCROW_FEE_PERCENT}%)</Text>
+          <Text style={styles.summaryLabel}>Escrow Protection Fee ({PAY_FEE_PERCENT}%)</Text>
           <Text style={styles.summaryValue}>{formatCurrency(fee, 2)}</Text>
         </View>
         <View style={styles.summaryDivider} />
@@ -447,14 +497,43 @@ function PayIntoEscrowSheet({ listing, onClose, onCancelPurchase, onMakePayment 
       </View>
 
       <View style={styles.paySheetButtonGroup}>
-        <Pressable onPress={guard(onMakePayment)} style={styles.paySheetContinueButton}>
-          <Text style={styles.paySheetContinueLabel}>Make Payment</Text>
+        <Pressable
+          onPress={paying ? undefined : guard(onMakePayment)}
+          disabled={paying}
+          style={[styles.paySheetContinueButton, paying && styles.paySheetContinueButtonLoading]}
+        >
+          {paying ? <ActivityIndicator color={colors.white} /> : <Text style={styles.paySheetContinueLabel}>Make Payment</Text>}
         </Pressable>
 
-        <Pressable onPress={guard(onCancelPurchase)} hitSlop={8} style={styles.paySheetCancel}>
+        <Pressable onPress={paying ? undefined : guard(onCancelPurchase)} disabled={paying} hitSlop={8} style={styles.paySheetCancel}>
           <Text style={styles.paySheetCancelLabel}>Cancel Purchase</Text>
         </Pressable>
       </View>
+    </BottomSheetCard>
+  );
+}
+
+interface PaymentSuccessSheetProps {
+  amount: number;
+  onClose: () => void;
+}
+
+// Landed on once polling confirms escrow_active — buyer's confirmationCode isn't shown here per
+// the design (just the "unlocking" teaser); it's surfaced via toast on Close since there's no
+// dedicated order/transaction screen yet to carry it forward to.
+function PaymentSuccessSheet({ amount, onClose }: PaymentSuccessSheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)}>
+      <View style={styles.successIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(72)} color={colors.success} />
+      </View>
+      <Text style={styles.successTitle}>Transfer Received - {formatCurrency(amount, 2)} in Escrow</Text>
+      <Text style={styles.successSubtitle}>Unlocking the seller's details…</Text>
+      <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
+        <Text style={styles.successCloseLabel}>Close</Text>
+      </Pressable>
     </BottomSheetCard>
   );
 }
@@ -632,7 +711,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize['2xl'],
+    fontSize: fontSize.xl,
     color: colors.ink,
     marginBottom: spacingY.sm,
   },
@@ -783,7 +862,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray50,
   },
   bottomBarPrice: {
-    fontFamily: fontFamily.bold,
+    fontFamily: fontFamily.semibold,
     fontSize: fontSize.xl,
     color: colors.ink,
   },
@@ -939,5 +1018,44 @@ const styles = StyleSheet.create({
   paySheetButtonGroup: {
     paddingTop: spacingY.sm,
     paddingBottom: spacingY.md,
+  },
+  paySheetContinueButtonLoading: {
+    opacity: 0.7,
+  },
+  successIconWrap: {
+    alignSelf: 'center',
+    marginTop: spacingY.xl,
+    marginBottom: spacingY.xl,
+  },
+  successTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    lineHeight: fontSize.xl * 1.3,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  successSubtitle: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY['2xl'],
+  },
+  successCloseButton: {
+    alignSelf: 'center',
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX['3xl'],
+    marginBottom: spacingY.md,
+  },
+  successCloseLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
   },
 });

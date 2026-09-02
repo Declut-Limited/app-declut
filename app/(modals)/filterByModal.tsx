@@ -19,8 +19,8 @@ import type { SearchFilters } from '@/contexts/SearchFilterContext';
 
 const CATEGORY_PAGE_LIMIT = 20;
 // No listings-count-by-filter endpoint exists yet — Price Range just needs sane outer bounds for the slider.
-const PRICE_BOUND_MIN = 0;
-const PRICE_BOUND_MAX = 1_000_000;
+const PRICE_BOUND_MIN = 100;
+const PRICE_BOUND_MAX = 100_000_000;
 
 const TRACK_HEIGHT = verticalScale(4);
 const TRACK_WRAP_HEIGHT = verticalScale(40);

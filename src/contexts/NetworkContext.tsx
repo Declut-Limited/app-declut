@@ -4,6 +4,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { reloadAppAsync } from 'expo';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
+import { StatusBar } from 'expo-status-bar';
 
 interface NetworkContextValue {
   isConnected: boolean;
@@ -63,6 +64,7 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   return (
     <NetworkContext.Provider value={{ isConnected }}>
       {children}
+      <StatusBar backgroundColor={showReconnected ? colors.success : colors.danger} />
 
       <Animated.View
         style={[

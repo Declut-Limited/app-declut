@@ -336,6 +336,14 @@ export interface Transaction {
 export interface CheckoutPayload {
   listingId: string;
   offerId?: string;
+  /** App's own deep-link scheme (registered as `declut://` in app.json) — Paystack redirects here when checkout finishes. */
+  callbackUrl?: string;
+}
+
+/** No Transaction/Escrow exists yet at this point — just a pending_payment stub + where to send the buyer to pay. */
+export interface CheckoutResponse {
+  transactionId: string;
+  paystackAuthorizationUrl: string;
 }
 
 export interface ConfirmCodePayload {
