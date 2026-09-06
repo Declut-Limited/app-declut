@@ -20,10 +20,9 @@ import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
 import { validateLength, validateOptionalMaxLength, validatePrice, validateRequired } from '@/lib/validators';
-import { getDeviceLocation } from '@/lib/location';
 import { categoriesApi, listingsApi, mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
-import type { Category, CreateListingPayload, ListingCondition, UploadSignature } from '@/api/types';
+import type { Category, CreateListingLocation, CreateListingPayload, ListingCondition, UploadSignature } from '@/api/types';
 
 const TOTAL_STEPS = 3;
 const PREVIEW_STEP = TOTAL_STEPS + 1;
@@ -49,6 +48,7 @@ export default function AddItemModal() {
   const [state, setState] = useState('');
   const [area, setArea] = useState('');
   const [address, setAddress] = useState('');
+  const [addressLocation, setAddressLocation] = useState<CreateListingLocation | null>(null);
   const [condition, setCondition] = useState('');
   const [activeSheet, setActiveSheet] = useState<'category' | 'condition' | 'state' | 'area' | 'mediaSource' | null>(null);
   // Drives MediaSourceSheet's mode and which pick* handler its options call.
@@ -354,7 +354,9 @@ export default function AddItemModal() {
       itemBrand: validateOptionalMaxLength(itemBrand, 'Brand', 60),
       state: validateRequired(state, 'State'),
       area: validateRequired(area, 'Area'),
-      address: validateLength(address, 'Address', 3, 200),
+      // The listing's coordinates come from the selected place, not device GPS — a free-typed
+      // address with no matching suggestion tapped has no coordinates to publish with.
+      address: validateLength(address, 'Address', 3, 100) ?? (addressLocation ? undefined : 'Please select an address from the suggestions.'),
       condition: validateRequired(condition, 'Item condition'),
       hasDefects: hasDefects === null ? 'Select whether the item has any defects.' : undefined,
       defectsDescription: hasDefects ? validateRequired(defectsDescription, 'Defect description') : undefined,
@@ -400,15 +402,9 @@ export default function AddItemModal() {
   }
 
   async function handlePublish() {
-    if (!mediaComplete || publishing) return;
+    if (!mediaComplete || publishing || !addressLocation) return;
     setPublishing(true);
     try {
-      const device = await getDeviceLocation();
-      if (!device) {
-        showErrorToast('Location needed', 'Enable location access so buyers can find this listing.');
-        return;
-      }
-
       const uploadedPhotos = photos.filter((p): p is MediaSlot & { uploaded: NonNullable<MediaSlot['uploaded']> } => !!p?.uploaded);
 
       const payload: CreateListingPayload = {
@@ -420,7 +416,7 @@ export default function AddItemModal() {
         state,
         area,
         address: address.trim(),
-        location: { lat: device.lat, lng: device.lng },
+        location: addressLocation,
         condition: condition as ListingCondition,
         hasDefect: !!hasDefects,
         defectDescription: hasDefects ? defectsDescription.trim() : undefined,
@@ -553,6 +549,7 @@ export default function AddItemModal() {
               setAddress(value);
               clearBasicInfoError('address');
             }}
+            onAddressLocationChange={setAddressLocation}
             condition={condition}
             onOpenConditionSheet={() => setActiveSheet('condition')}
             hasDefects={hasDefects}

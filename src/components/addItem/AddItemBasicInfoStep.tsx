@@ -7,6 +7,7 @@ import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
+import type { CreateListingLocation } from '@/api/types';
 
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
@@ -38,6 +39,8 @@ export interface AddItemBasicInfoStepProps {
   onOpenAreaSheet: () => void;
   address: string;
   onAddressChange: (value: string) => void;
+  /** Set when the address text was picked from a Google Places suggestion; cleared on free-typed edits. */
+  onAddressLocationChange: (location: CreateListingLocation | null) => void;
   condition: string;
   onOpenConditionSheet: () => void;
   hasDefects: boolean | null;
@@ -63,6 +66,7 @@ export function AddItemBasicInfoStep({
   onOpenAreaSheet,
   address,
   onAddressChange,
+  onAddressLocationChange,
   condition,
   onOpenConditionSheet,
   hasDefects,
@@ -138,6 +142,7 @@ export function AddItemBasicInfoStep({
           placeholder="e.g. 3B Community Road"
           value={address}
           onChangeText={onAddressChange}
+          onLocationChange={onAddressLocationChange}
           error={errors.address}
         />
       </View>
@@ -230,6 +235,7 @@ interface LabeledAddressInputProps {
   placeholder: string;
   value: string;
   onChangeText: (value: string) => void;
+  onLocationChange: (location: CreateListingLocation | null) => void;
   error?: string;
 }
 
@@ -239,7 +245,12 @@ interface LabeledAddressInputProps {
 // the box downward. The pin icon rides inside GooglePlacesAutocomplete's own input row (via
 // renderRightButton) instead of as an outer row sibling — an outer sibling would re-center
 // vertically across the whole box every time the box grows to fit the dropdown.
-function LabeledAddressInput({ label, placeholder, value, onChangeText, error }: LabeledAddressInputProps) {
+//
+// Selecting a suggestion is the only way `onLocationChange` gets a value — the listing's
+// coordinates need to describe the exact same place as the address text, so a free-typed edit
+// (which no longer matches any resolved place) clears it back to null rather than leaving a
+// stale lat/lng attached to different text.
+function LabeledAddressInput({ label, placeholder, value, onChangeText, onLocationChange, error }: LabeledAddressInputProps) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -249,16 +260,23 @@ function LabeledAddressInput({ label, placeholder, value, onChangeText, error }:
         <GooglePlacesAutocomplete
           placeholder={placeholder}
           query={{ key: GOOGLE_PLACES_API_KEY, language: 'en', components: 'country:ng' }}
-          fetchDetails={false}
+          fetchDetails
           enablePoweredByContainer
           keyboardShouldPersistTaps="handled"
+          disableScroll
           debounce={300}
           minLength={3}
-          onPress={(data) => onChangeText(data.description)}
+          onPress={(data, detail) => {
+            onChangeText(detail?.formatted_address ?? data.description);
+            onLocationChange(detail?.geometry?.location ? { lat: detail.geometry.location.lat, lng: detail.geometry.location.lng } : null);
+          }}
           onFail={(err) => console.warn('[GooglePlacesAutocomplete]', err)}
           textInputProps={{
             value,
-            onChangeText,
+            onChangeText: (text: string) => {
+              onChangeText(text);
+              onLocationChange(null);
+            },
             placeholder,
             placeholderTextColor: colors.gray400,
             onFocus: () => setFocused(true),
