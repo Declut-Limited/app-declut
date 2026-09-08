@@ -134,11 +134,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flex: 1,
-    paddingHorizontal: spacingX.sm,
     paddingTop: spacingY.xl,
   },
+  // Horizontal inset lives here (per-slide), not on the ScrollView itself — padding on a
+  // horizontal pagingEnabled ScrollView shrinks its viewport below each slide's declared width,
+  // so paging snaps out of alignment and the next slide peeks in on the right edge.
   slide: {
     flex: 1,
+    paddingHorizontal: spacingX.sm,
   },
   card: {
     flex: 1,
@@ -158,7 +161,7 @@ const styles = StyleSheet.create({
   },
   image: {
     flex: 1,
-    width: '95%',
+    width: '100%',
   },
   content: {
     gap: spacingY.md,
