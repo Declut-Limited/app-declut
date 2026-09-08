@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dimensions, ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
+import { ImageSourcePropType, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
   interpolate,
@@ -13,8 +13,6 @@ import { Button, PaginationDots, Pill } from '@/components';
 import type { PillVariant } from '@/utils/types';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SLIDES: { tag: string; variant: PillVariant; headline: string; image: ImageSourcePropType }[] = [
   {
@@ -39,6 +37,7 @@ const SLIDES: { tag: string; variant: PillVariant; headline: string; image: Imag
 
 export default function OnboardingScreen() {
   const { completeOnboarding } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollX = useSharedValue(0);
 
@@ -49,7 +48,7 @@ export default function OnboardingScreen() {
   });
 
   function handleMomentumEnd(offsetX: number) {
-    setActiveIndex(Math.round(offsetX / SCREEN_WIDTH));
+    setActiveIndex(Math.round(offsetX / screenWidth));
   }
 
   async function goToAuth(path: '/(auth)/sign-in' | '/(auth)/sign-up') {
@@ -76,6 +75,7 @@ export default function OnboardingScreen() {
             scrollX={scrollX}
             activeIndex={activeIndex}
             total={SLIDES.length}
+            screenWidth={screenWidth}
           />
         ))}
       </Animated.ScrollView>
@@ -95,15 +95,17 @@ function Slide({
   scrollX,
   activeIndex,
   total,
+  screenWidth,
 }: {
   slide: (typeof SLIDES)[number];
   index: number;
   scrollX: SharedValue<number>;
   activeIndex: number;
   total: number;
+  screenWidth: number;
 }) {
   const cardStyle = useAnimatedStyle(() => {
-    const distance = scrollX.value / SCREEN_WIDTH - index;
+    const distance = scrollX.value / screenWidth - index;
     return {
       opacity: interpolate(distance, [-1, 0, 1], [0.4, 1, 0.4]),
       transform: [{ scale: interpolate(distance, [-1, 0, 1], [0.92, 1, 0.92]) }],
@@ -111,7 +113,7 @@ function Slide({
   });
 
   return (
-    <View style={{ flex: 1, width: SCREEN_WIDTH }}>
+    <View style={[styles.slide, { width: screenWidth }]}>
       <Animated.View style={[styles.card, cardStyle]}>
         <View style={styles.cardTopBar}>
           <PaginationDots count={total} activeIndex={activeIndex} />
@@ -120,7 +122,9 @@ function Slide({
       </Animated.View>
       <View style={styles.content}>
         <Pill label={slide.tag} variant={slide.variant} />
-        <Text style={styles.headline}>{slide.headline}</Text>
+        <Text style={styles.headline} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.7}>
+          {slide.headline}
+        </Text>
       </View>
     </View>
   );
@@ -133,9 +137,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingX.sm,
     paddingTop: spacingY.xl,
   },
+  slide: {
+    flex: 1,
+  },
+  // flex (not a fixed aspectRatio) so the card fills whatever vertical space is actually left
+  // after `content` on THIS device — a width-derived aspect ratio ignores screen height entirely,
+  // so it either overflows short devices or leaves a huge gap on tall ones.
   card: {
+    flex: 1,
     width: '100%',
-    aspectRatio: 800 / 880,
     backgroundColor: colors.white,
     borderRadius: radius.xl,
     borderCurve: 'continuous',

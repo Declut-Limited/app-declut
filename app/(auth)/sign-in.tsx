@@ -17,7 +17,7 @@ import { verticalScale } from '@/utils/styling';
 import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
-import { getGoogleIdToken } from '@/lib/googleAuth';
+import { getGoogleIdToken, GoogleSignInCancelledError } from '@/lib/googleAuth';
 import { getPushToken } from '@/lib/pushToken';
 import { validateRequired } from '@/lib/validators';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
@@ -73,7 +73,9 @@ export default function SignInScreen() {
       const user = await establishSession(tokens);
       if (isVerified(user)) router.replace('/');
     } catch (e) {
-      if (e instanceof Error && e.message.includes('not available in Expo Go')) {
+      if (e instanceof GoogleSignInCancelledError) {
+        // User backed out of the account picker — not a real failure, no error UI needed.
+      } else if (e instanceof Error && e.message.includes('not available in Expo Go')) {
         showWarningToast('Not available yet', 'Google sign-in needs a custom dev client build.');
       } else {
         const message = extractErrorMessage(e, 'Google sign-in failed. Please try again.');

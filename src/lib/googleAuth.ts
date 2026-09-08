@@ -9,13 +9,25 @@ const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 let configured = false;
 
+function unavailableError(): Error {
+  return new Error(
+    'Google sign-in needs a custom dev client — it is not available in Expo Go. Build one with "npx expo run:android" or an EAS dev-client build.'
+  );
+}
+
+// The native module can fail to resolve either when its JS file is first required, or lazily on
+// the first actual method call (configure/hasPlayServices/signIn) — depends on the installed
+// version/platform. TurboModuleRegistry throws the same way either time, so both paths get
+// converted to the same friendly, already-handled error instead of an uncaught native crash.
+function isNativeModuleMissing(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('TurboModuleRegistry');
+}
+
 function loadModule(): GoogleSigninModule {
   try {
     return require('@react-native-google-signin/google-signin');
   } catch {
-    throw new Error(
-      'Google sign-in needs a custom dev client — it is not available in Expo Go. Build one with "npx expo run:android" or an EAS dev-client build.'
-    );
+    throw unavailableError();
   }
 }
 
@@ -28,18 +40,33 @@ function ensureConfigured(): GoogleSigninModule {
     // Not set yet, so Google sign-in can't run until this env var is provided.
     throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set — Google sign-in is not configured yet.');
   }
-  mod.GoogleSignin.configure({ webClientId });
+  try {
+    mod.GoogleSignin.configure({ webClientId });
+  } catch (e) {
+    throw isNativeModuleMissing(e) ? unavailableError() : e;
+  }
   configured = true;
   return mod;
 }
 
+/** Thrown when the user dismisses the Google account picker — not a real failure, callers should treat it as a silent no-op. */
+export class GoogleSignInCancelledError extends Error {}
+
 /** Runs the on-device Google sign-in flow and returns the ID token to POST to /auth/google. */
 export async function getGoogleIdToken(): Promise<string> {
-  const { GoogleSignin, isSuccessResponse } = ensureConfigured();
-  await GoogleSignin.hasPlayServices();
-  const response = await GoogleSignin.signIn();
+  const { GoogleSignin, isSuccessResponse, isCancelledResponse } = ensureConfigured();
+  let response;
+  try {
+    await GoogleSignin.hasPlayServices();
+    response = await GoogleSignin.signIn();
+  } catch (e) {
+    throw isNativeModuleMissing(e) ? unavailableError() : e;
+  }
+  if (isCancelledResponse(response)) {
+    throw new GoogleSignInCancelledError('Google sign-in was cancelled.');
+  }
   if (!isSuccessResponse(response) || !response.data.idToken) {
-    throw new Error('Google sign-in was cancelled or returned no ID token.');
+    throw new Error('Google sign-in returned no ID token.');
   }
   return response.data.idToken;
 }

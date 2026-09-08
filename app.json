@@ -19,7 +19,13 @@
         "foregroundImage": "./assets/icon-512.png"
       },
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/icon-192.png"
@@ -52,6 +58,12 @@
       "expo-notifications",
       "expo-video",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7bc05cb6-cf0c-4fd0-950a-b50520986c0f"
+      }
+    }
   }
 }

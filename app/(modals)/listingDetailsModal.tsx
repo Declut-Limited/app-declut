@@ -505,9 +505,15 @@ function BeforeYouPaySheet({ onClose, onContinue }: BeforeYouPaySheetProps) {
   );
 }
 
-// Matches admin settings' buyerServiceFeePercentage (1.5%) — display-only for now; that field
-// isn't wired into checkout/payout logic server-side yet, per the Postman collection's own note.
+// Matches Paystack's own fee structure: 1.5% of the transaction, capped at ₦2,000 for larger
+// amounts — display-only for now; that field isn't wired into checkout/payout logic server-side
+// yet, per the Postman collection's own note.
 const PAY_FEE_PERCENT = 1.5;
+const PAY_FEE_CAP = 2000;
+
+function calculatePaystackFee(amount: number): number {
+  return Math.min(amount * (PAY_FEE_PERCENT / 100), PAY_FEE_CAP);
+}
 
 interface PaySummarySheetProps {
   listing: Listing;
@@ -521,7 +527,7 @@ interface PaySummarySheetProps {
 // way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
 function PaySummarySheet({ listing, paying, onClose, onCancelPurchase, onMakePayment }: PaySummarySheetProps) {
   const guard = useSingleTap();
-  const fee = listing.price * (PAY_FEE_PERCENT / 100);
+  const fee = calculatePaystackFee(listing.price);
   const total = listing.price + fee;
 
   return (
@@ -546,7 +552,7 @@ function PaySummarySheet({ listing, paying, onClose, onCancelPurchase, onMakePay
           <Text style={styles.summaryValue}>{formatCurrency(listing.price, 2)}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Escrow Protection Fee ({PAY_FEE_PERCENT}%)</Text>
+          <Text style={styles.summaryLabel}>Processing Fee</Text>
           <Text style={styles.summaryValue}>{formatCurrency(fee, 2)}</Text>
         </View>
         <View style={styles.summaryDivider} />
