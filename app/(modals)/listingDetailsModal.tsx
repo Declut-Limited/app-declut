@@ -224,6 +224,7 @@ export default function ListingDetailsModal() {
       }
 
     } catch (e) {
+      console.error('[handleMakePayment] checkout failed', e);
       showErrorToast('Could not start checkout', extractErrorMessage(e));
     } finally {
       setPaying(false);

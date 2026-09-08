@@ -140,9 +140,6 @@ const styles = StyleSheet.create({
   slide: {
     flex: 1,
   },
-  // flex (not a fixed aspectRatio) so the card fills whatever vertical space is actually left
-  // after `content` on THIS device — a width-derived aspect ratio ignores screen height entirely,
-  // so it either overflows short devices or leaves a huge gap on tall ones.
   card: {
     flex: 1,
     width: '100%',
@@ -161,7 +158,7 @@ const styles = StyleSheet.create({
   },
   image: {
     flex: 1,
-    width: '100%',
+    width: '95%',
   },
   content: {
     gap: spacingY.md,
@@ -170,8 +167,8 @@ const styles = StyleSheet.create({
   },
   headline: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize['4xl'],
-    lineHeight: fontSize['4xl'] * 1.25,
+    fontSize: fontSize['3xl'],
+    lineHeight: fontSize['3xl'] * 1.25,
     color: colors.ink,
   },
   footer: {

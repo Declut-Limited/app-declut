@@ -373,7 +373,6 @@ export interface Transaction {
 
 export interface CheckoutPayload {
   listingId: string;
-  offerId?: string;
   /** App's own deep-link scheme (registered as `declut://` in app.json) — Paystack redirects here when checkout finishes. */
   callbackUrl?: string;
 }
