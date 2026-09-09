@@ -33,7 +33,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "@react-native-google-signin/google-signin",
+      "@react-native-google-signin/google-signin/app.plugin.js",
       [
         "expo-camera",
         {
@@ -62,8 +62,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7bc05cb6-cf0c-4fd0-950a-b50520986c0f"
+        "projectId": "86fa85bf-545d-4e2d-964f-80aacf91c051"
       }
-    }
+    },
+    "owner": "declut-company-limited"
   }
 }

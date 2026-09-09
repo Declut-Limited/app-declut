@@ -18,7 +18,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import * as WebBrowser from 'expo-web-browser';
+import { WebView } from 'react-native-webview';
+import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
+import { ErrorBoundary } from 'react-error-boundary';
 import Animated, {
   Easing,
   interpolate,
@@ -155,6 +157,10 @@ export default function ListingDetailsModal() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paymentStep, setPaymentStep] = useState<'none' | 'terms' | "summary" | 'success'>('none');
   const [paying, setPaying] = useState(false);
+  // In-app checkout — the Paystack page renders inside a WebView instead of handing off to the
+  // system browser, so it reads as part of the app rather than a separate app switch.
+  const [checkout, setCheckout] = useState<{ transactionId: string; url: string } | null>(null);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -216,18 +222,35 @@ export default function ListingDetailsModal() {
         listingId: listing._id,
         callbackUrl: PAYSTACK_CALLBACK_URL,
       });
-
-      const result = await WebBrowser.openAuthSessionAsync(paystackAuthorizationUrl, PAYSTACK_CALLBACK_URL);
-      if (result.type !== 'success') {
-        showWarningToast('Payment not completed', 'You can try again anytime.');
-        return;
-      }
-
+      setCheckout({ transactionId, url: paystackAuthorizationUrl });
     } catch (e) {
       console.error('[handleMakePayment] checkout failed', e);
       showErrorToast('Could not start checkout', extractErrorMessage(e));
     } finally {
       setPaying(false);
+    }
+  }
+
+  // Called once the WebView either hits the Paystack redirect back to our callback URL, or the
+  // user closes it manually. `success` only means "Paystack redirected back" — the transaction
+  // isn't actually confirmed until the poll below sees escrow_active.
+  async function handleCheckoutClosed(success: boolean) {
+    const transactionId = checkout?.transactionId ?? null;
+    setCheckout(null);
+    if (!success || !transactionId) {
+      if (!success) showWarningToast('Payment not completed', 'You can try again anytime.');
+      return;
+    }
+    setConfirmingPayment(true);
+    try {
+      const transaction = await getTransactionResult(transactionId);
+      if (transaction) {
+        setPaymentStep('success');
+      } else {
+        showWarningToast('Still confirming', 'We could not confirm your payment yet — check back shortly.');
+      }
+    } finally {
+      setConfirmingPayment(false);
     }
   }
 
@@ -420,6 +443,21 @@ export default function ListingDetailsModal() {
           )}
         </View>
       ) : null}
+
+      {checkout ? (
+        <PaystackCheckoutWebView
+          url={checkout.url}
+          onClose={() => handleCheckoutClosed(false)}
+          onRedirect={() => handleCheckoutClosed(true)}
+        />
+      ) : null}
+
+      {confirmingPayment ? (
+        <View style={styles.confirmingOverlay}>
+          <ActivityIndicator color={colors.white} size="large" />
+          <Text style={styles.confirmingText}>Confirming your payment…</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -460,6 +498,83 @@ function InfoAccordion({ title, items }: { title: string; items: AccordionEntry[
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+interface PaystackCheckoutWebViewProps {
+  url: string;
+  onClose: () => void;
+  /** Fired once the page navigates to PAYSTACK_CALLBACK_URL — checkout finished, for better or worse. */
+  onRedirect: () => void;
+}
+
+// Renders the Paystack checkout page in-app instead of handing off to the system browser, so it
+// reads as part of Declut rather than a separate app switch. PAYSTACK_CALLBACK_URL uses our own
+// `declut://` scheme, which the WebView can't actually navigate to — onShouldStartLoadWithRequest
+// intercepts that specific request and reports it back instead of letting the WebView try (and fail).
+function PaystackCheckoutWebView({ url, onClose, onRedirect }: PaystackCheckoutWebViewProps) {
+  const guard = useSingleTap();
+  const insets = useSafeAreaInsets();
+  const [pageLoading, setPageLoading] = useState(true);
+
+  function handleShouldStartLoad(request: ShouldStartLoadRequest) {
+    if (request.url.startsWith(PAYSTACK_CALLBACK_URL)) {
+      onRedirect();
+      return false;
+    }
+    return true;
+  }
+
+  return (
+    <View style={styles.checkoutOverlay}>
+      <View style={[styles.checkoutHeader, { paddingTop: insets.top + spacingY.sm }]}>
+        <Pressable onPress={guard(onClose)} hitSlop={8} style={styles.checkoutCloseButton}>
+          <Icon name="close-circle" variant="bold" size={verticalScale(24)} color={colors.gray500} />
+        </Pressable>
+        <Text style={styles.checkoutHeaderTitle}>Secure Checkout</Text>
+        <View style={styles.checkoutHeaderSpacer} />
+      </View>
+
+      <ErrorBoundary
+        fallbackRender={() => <CheckoutWebViewFallback onClose={onClose} />}
+        onError={(err) => console.error('[PaystackCheckoutWebView] WebView failed to mount', err)}
+      >
+        <WebView
+          source={{ uri: url }}
+          style={styles.checkoutWebView}
+          startInLoadingState
+          onLoadEnd={() => setPageLoading(false)}
+          onShouldStartLoadWithRequest={handleShouldStartLoad}
+        />
+      </ErrorBoundary>
+
+      {pageLoading ? (
+        <View style={styles.checkoutLoadingOverlay}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// react-native-webview is a native module — it can't render in a build that was never rebuilt
+// with it included (e.g. Expo Go, or a dev client compiled before this dependency was added).
+// That failure surfaces as a render-time throw from the native view manager, which a plain
+// try/catch around handleMakePayment can't catch — only an error boundary around the WebView itself can.
+function CheckoutWebViewFallback({ onClose }: { onClose: () => void }) {
+  const guard = useSingleTap();
+
+  return (
+    <View style={styles.checkoutErrorWrap}>
+      <Icon name="danger" variant="bold" size={verticalScale(48)} color={colors.danger} />
+      <Text style={styles.checkoutErrorTitle}>Checkout isn't available on this build</Text>
+      <Text style={styles.checkoutErrorBody}>
+        In-app checkout needs a newer build of the app. Please update the app and try again.
+      </Text>
+      <Pressable onPress={guard(onClose)} style={styles.checkoutErrorButton}>
+        <Text style={styles.checkoutErrorButtonLabel}>Close</Text>
+      </Pressable>
     </View>
   );
 }
@@ -671,6 +786,89 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.white,
+  },
+  checkoutOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.white,
+    zIndex: 20,
+  },
+  checkoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacingX.lg,
+    paddingBottom: spacingY.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  checkoutCloseButton: {
+    width: verticalScale(32),
+  },
+  checkoutHeaderTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+  },
+  checkoutHeaderSpacer: {
+    width: verticalScale(32),
+  },
+  checkoutWebView: {
+    flex: 1,
+  },
+  checkoutLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    top: verticalScale(56),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  checkoutErrorWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+    gap: spacingY.sm,
+  },
+  checkoutErrorTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+    textAlign: 'center',
+    marginTop: spacingY.sm,
+  },
+  checkoutErrorBody: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.md,
+  },
+  checkoutErrorButton: {
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX['3xl'],
+  },
+  checkoutErrorButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
+  },
+  confirmingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacingY.md,
+    backgroundColor: 'rgba(17, 24, 39, 0.85)',
+  },
+  confirmingText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
   },
   centerFlex: {
     flex: 1,
