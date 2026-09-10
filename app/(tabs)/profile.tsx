@@ -488,13 +488,15 @@ const styles = StyleSheet.create({
     marginBottom: spacingY.sm,
   },
   section: {
+    paddingHorizontal: spacingX.sm,
+    paddingVertical: spacingY.xs,
     marginBottom: spacingY.xl,
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacingX.md,
-    paddingVertical: spacingY.md,
+    paddingVertical: spacingY.lg,
   },
   menuRowDivider: {
     borderBottomWidth: 1,
