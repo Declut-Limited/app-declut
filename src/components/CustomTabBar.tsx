@@ -102,7 +102,7 @@ function TabButton({ route, index, state, navigation }: TabButtonProps) {
 
   const iconElement = isProfile ? (
     <View style={styles.avatarRing}>
-      <Image source={getProfileImage((user as { avatar?: unknown })?.avatar)} style={styles.avatar} />
+      <Image source={getProfileImage(user?.profileImageUrl)} style={styles.avatar} />
     </View>
   ) : (
     <Icon name={iconNameByRoute[route.name] ?? 'home-2'} variant={isFocused ? 'bold' : 'linear'} size={TAB_ICON_SIZE} color={color} />

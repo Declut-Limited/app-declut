@@ -10,10 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.declut.app"
+      "bundleIdentifier": "com.declut.app",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.declut.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/icon-512.png"
@@ -33,6 +35,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       "@react-native-google-signin/google-signin/app.plugin.js",
       [
         "expo-camera",
