@@ -5,8 +5,8 @@ import { colors, fontFamily, fontSize } from '@/constants/theme';
 import type { LegalConsentTextProps } from '@/utils/types';
 
 export function LegalConsentText({
-  onPressTerms = () => router.push('/(legal)/terms-of-use'),
-  onPressPrivacy = () => router.push('/(legal)/privacy-policy'),
+  onPressTerms = () => router.push('/(modals)/termsOfUse'),
+  onPressPrivacy = () => router.push('/(modals)/privacyPolicy'),
 }: LegalConsentTextProps) {
   return (
     <Text style={styles.text}>
