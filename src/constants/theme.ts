@@ -22,6 +22,7 @@ export const colors = {
   success700: '#027A48',
   warning: '#F97316',
   warning25: '#FFFCF5',
+  warning600: '#DC6803',
   warningLight: '#FFEDD5',
   danger: '#DC2626',
   dangerLight: '#FEE2E2',

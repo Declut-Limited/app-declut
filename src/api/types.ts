@@ -18,14 +18,24 @@ export interface ApiErrorBody {
 }
 
 export type KycStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
+export type AuthProvider = 'google' | 'email_phone';
+export type AccountStatus = 'active' | 'suspended' | 'pending';
 
+/** Confirmed 2026-09-10 against the deployed GET /users/me — richer than the old shape (stats, slug, kyc sub-checks). */
 export interface User {
   id: string;
   email: string;
   name: string;
   phone?: string;
+  authProvider?: AuthProvider;
   emailVerified?: boolean;
   kycStatus: KycStatus;
+  kyc?: { verifiedNIN: boolean; livenessChecked: boolean };
+  accountStatus?: AccountStatus;
+  /** Short human-facing id, e.g. "USR-0017". */
+  slug?: string;
+  avgRating?: number;
+  reviewCount?: number;
   trustScore?: number;
   bankCode?: string;
   bankName?: string;
@@ -33,6 +43,14 @@ export interface User {
   accountName?: string;
   /** True once a BankAccount row exists for this user (see POST /bank-accounts) — drives whether the post-publish payout prompt shows. */
   hasPayoutDetails?: boolean;
+  /** UI-ready, but not actually returned by any documented endpoint yet — undefined on every real response today. */
+  location?: string;
+  profileImageUrl?: string;
+  listingCount?: number;
+  soldCount?: number;
+  purchaseCount?: number;
+  totalAmountInEscrow?: number;
+  createdAt?: string;
 }
 
 export interface AuthTokens {
@@ -132,12 +150,12 @@ export interface KycHistoryEntry {
   createdAt: string;
 }
 
+/** Confirmed 2026-09-10 — bank/payout details live on their own BankAccount document now (see POST /bank-accounts), not here. */
 export interface UpdateProfilePayload {
   name?: string;
-  bankCode?: string;
-  bankName?: string;
-  accountNumber?: string;
-  accountName?: string;
+  phoneNumber?: string;
+  /** Cloudinary secure URL from GET /media/upload-signature, uploaded client-side first. */
+  profileImage?: string;
 }
 
 /** GET /banks — Paystack passthrough, active Nigerian banks only. Nothing persisted. */
@@ -233,6 +251,10 @@ export interface Listing {
   distanceKm?: number;
   /** Only present if the backend embeds the caller's favorite state in search results. */
   favorited?: boolean;
+  /** UI-ready, but not actually returned by any documented endpoint yet — undefined on every real response today. */
+  viewCount?: number;
+  /** UI-ready, but not actually returned by any documented endpoint yet — undefined on every real response today. */
+  watchCount?: number;
 }
 
 /** Plain {lat,lng} on the way in — distinct from ListingLocation, the GeoJSON shape the response comes back as. */

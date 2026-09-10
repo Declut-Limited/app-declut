@@ -191,8 +191,8 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Referral & Rewards / Account Details / Payment Information / Feedback have no
-            destination screen yet — rows render per design but don't navigate (see chat summary). */}
+        {/* Referral & Rewards / Feedback have no destination screen yet — rows render per design
+            but don't navigate (see chat summary). */}
         <SectionLabel>My Activity</SectionLabel>
         <View style={styles.section}>
           <ProfileMenuRow
@@ -208,10 +208,12 @@ export default function ProfileScreen() {
           <ProfileMenuRow
             icon={<Icon name="profile-circle" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
             label="Account Details"
+            onPress={() => router.push('/(modals)/accountDetails')}
           />
           <ProfileMenuRow
             icon={<Icon name="bank" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
             label="Payment Information"
+            onPress={() => router.push('/(modals)/paymentInfo')}
             last
           />
         </View>

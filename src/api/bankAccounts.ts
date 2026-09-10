@@ -19,3 +19,9 @@ export async function getMyBankAccount(userId: string) {
   const res = await apiClient.get<ApiEnvelope<BankAccount>>(`/bank-accounts/user/${userId}`);
   return res.data.data;
 }
+
+// 409s if the caller has any escrow_active/awaiting_inspection transaction as seller — those must
+// be resolved first. Sets User.hasPayoutDetails back to false on success.
+export async function deleteBankAccount(id: string) {
+  await apiClient.delete(`/bank-accounts/${id}`);
+}

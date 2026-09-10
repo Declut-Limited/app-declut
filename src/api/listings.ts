@@ -65,6 +65,14 @@ export async function getListing(listingId: string) {
   return res.data.data;
 }
 
+/** The caller's own listings, any status except deleted, newest first. */
+export async function getMyListings(page = 1, limit = 20) {
+  const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings/mine', {
+    params: { page, limit },
+  });
+  return res.data.data;
+}
+
 /** One counted view per (viewer, listing) per hour — the backend owns uniqueness; a repeat call within the window just returns counted:false. */
 export async function registerListingView(listingId: string) {
   const res = await apiClient.post<ApiEnvelope<RegisterListingViewResponse>>(`/listings/${listingId}/view`);

@@ -44,8 +44,28 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers = config.headers ?? {};
     config.headers['Authorization'] = `Bearer ${currentTokens.accessToken}`;
   }
+  if (__DEV__) console.log(`[API] -> ${config.method?.toUpperCase()} ${config.url}`);
   return config;
 });
+
+// Dev-only network visibility — separate from the refresh-retry interceptor below so it never
+// affects control flow, just answers "did this request actually leave the device / come back".
+apiClient.interceptors.response.use(
+  (response) => {
+    if (__DEV__) console.log(`[API] <- ${response.status} ${response.config.url}`);
+    return response;
+  },
+  (error: AxiosError) => {
+    if (__DEV__) {
+      if (error.response) {
+        console.error(`[API] <- ${error.response.status} ${error.config?.url}`, error.response.data);
+      } else {
+        console.error(`[API] no response for ${error.config?.url} — network error / timeout / unreachable host`, error.message);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Concurrent 401s during an in-flight refresh all await the same promise
 // instead of each firing their own /auth/refresh call.
