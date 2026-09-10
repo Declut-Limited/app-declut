@@ -46,3 +46,4 @@ yarn-error.*
 
 declut-app-firebase-adminsdk.json
 google-services.json
+GoogleService-info.plist

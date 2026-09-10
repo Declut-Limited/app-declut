@@ -70,6 +70,11 @@ const styles = StyleSheet.create({
   imageWrap: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
+    // Shows through while the remote image is still fetching — Image itself is transparent
+    // until it has data, so without this the card looks blank rather than "loading".
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
   },
   image: {
     width: '100%',

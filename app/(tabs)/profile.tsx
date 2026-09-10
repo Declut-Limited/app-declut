@@ -191,12 +191,16 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* My Listings / Saved Items / Account Details / Payment Information / Feedback have no
+        {/* Referral & Rewards / Account Details / Payment Information / Feedback have no
             destination screen yet — rows render per design but don't navigate (see chat summary). */}
         <SectionLabel>My Activity</SectionLabel>
         <View style={styles.section}>
-          <ProfileMenuRow icon={<Icon name="tag" variant="linear" size={verticalScale(20)} color={colors.gray500} />} label="My Listings" />
-          <ProfileMenuRow icon={<Icon name="heart" variant="linear" size={verticalScale(20)} color={colors.gray500} />} label="Saved Items" last />
+          <ProfileMenuRow
+            icon={<Icon name="tag" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
+            label="My Listings"
+            onPress={() => router.push('/(modals)/myListings')}
+          />
+          <ProfileMenuRow icon={<Icon name="shopping-bag" variant="linear" size={verticalScale(20)} color={colors.gray500} />} label="Referral & Rewards" last />
         </View>
 
         <SectionLabel>Account</SectionLabel>

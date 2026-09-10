@@ -136,7 +136,8 @@ const ORDER_PROCESS: AccordionEntry[] = [
 ];
 
 export default function ListingDetailsModal() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, isMine = 'false' } = useLocalSearchParams<{ id: string; isMine?: string }>();
+  const isOwnListing = isMine === 'true';
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -413,14 +414,16 @@ export default function ListingDetailsModal() {
         </View>
       </View>
 
-      <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
-        <View style={styles.footerPill}>
-          <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price)}</Text>
-          <Pressable onPress={guard(handleBuyNow)} style={styles.buyButton}>
-            <Text style={styles.buyButtonLabel}>Buy Now</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      {!isOwnListing ? (
+        <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
+          <View style={styles.footerPill}>
+            <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price)}</Text>
+            <Pressable onPress={guard(handleBuyNow)} style={styles.buyButton}>
+              <Text style={styles.buyButtonLabel}>Buy Now</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      ) : null}
 
       {paymentStep !== 'none' ? (
         <View style={StyleSheet.absoluteFill}>
