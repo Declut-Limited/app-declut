@@ -21,6 +21,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { WebView } from 'react-native-webview';
 import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { ErrorBoundary } from 'react-error-boundary';
+import axios from 'axios';
 import Animated, {
   Easing,
   interpolate,
@@ -220,11 +221,11 @@ export default function ListingDetailsModal() {
     try {
       const { transactionId, paystackAuthorizationUrl } = await transactionsApi.checkout({
         listingId: listing._id,
-        callbackUrl: PAYSTACK_CALLBACK_URL,
+        callbackUrl: "declut://payment-callback"
       });
       setCheckout({ transactionId, url: paystackAuthorizationUrl });
     } catch (e) {
-      console.error('[handleMakePayment] checkout failed', e);
+      console.error('[handleMakePayment] checkout failed', axios.isAxiosError(e) ? e.response?.data : e);
       showErrorToast('Could not start checkout', extractErrorMessage(e));
     } finally {
       setPaying(false);
