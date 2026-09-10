@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
@@ -7,27 +7,26 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { bankAccountsApi } from '@/api';
+import { bankAccountsApi, banksApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
-import type { BankAccount } from '@/api/types';
+import type { Bank, BankAccount } from '@/api/types';
 import { showErrorToast } from '@/lib/toast';
-
-function bankInitials(shortName: string): string {
-  const words = shortName.trim().split(/\s+/);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return shortName.slice(0, 2).toUpperCase();
-}
 
 export default function PaymentInfoModal() {
   const { user, refreshUser } = useAuth();
   const guard = useSingleTap();
 
   const [account, setAccount] = useState<BankAccount | null>(null);
+  // logoUrl lives on the /banks list, not on BankAccount itself — fetched alongside the account
+  // and matched by bankCode.
+  const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeSuccess, setRemoveSuccess] = useState(false);
+
+  const bankLogoUrl = account ? banks.find((b) => b.code === account.bankCode)?.logoUrl : undefined;
 
   useEffect(() => {
     if (!user?.id || !user.hasPayoutDetails) {
@@ -36,10 +35,12 @@ export default function PaymentInfoModal() {
     }
     let cancelled = false;
     setLoading(true);
-    bankAccountsApi
-      .getMyBankAccount(user.id)
-      .then((data) => {
-        if (!cancelled) setAccount(data);
+    Promise.all([bankAccountsApi.getMyBankAccount(user.id), banksApi.getBanks().catch(() => [])])
+      .then(([accountData, banksData]) => {
+        if (!cancelled) {
+          setAccount(accountData);
+          setBanks(banksData);
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(extractErrorMessage(e, 'Could not load your payout account.'));
@@ -93,7 +94,7 @@ export default function PaymentInfoModal() {
         <View style={styles.accountCard}>
           <View style={styles.accountCardHeader}>
             <View style={styles.bankBadge}>
-              <Text style={styles.bankBadgeText}>{bankInitials(account.shortName)}</Text>
+              {bankLogoUrl ? <Image source={{ uri: bankLogoUrl }} style={styles.bankBadgeImage} /> : null}
             </View>
             <Pressable onPress={guard(() => setRemoveConfirmOpen(true))} hitSlop={8}>
               <Text style={styles.changeText}>Remove Account</Text>
@@ -259,19 +260,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // backgroundColor shows through while the remote logo is still fetching — Image itself is
+  // transparent until it has data, so without this the badge looks blank rather than "loading".
   bankBadge: {
     width: verticalScale(44),
     height: verticalScale(44),
     borderRadius: radius.full,
     borderCurve: 'continuous',
-    backgroundColor: colors.warning,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.gray100,
+    overflow: 'hidden',
   },
-  bankBadgeText: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.sm,
-    color: colors.white,
+  bankBadgeImage: {
+    width: '100%',
+    height: '100%',
   },
   changeText: {
     fontFamily: fontFamily.semibold,

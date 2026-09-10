@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
@@ -16,10 +16,16 @@ import { showErrorToast } from '@/lib/toast';
 const NUBAN_LENGTH = 10;
 const RESOLVE_DEBOUNCE_MS = 500;
 
-// FULL-SCREEN MODAL — shown right after a listing's first publish, only when the signed-in user
-// has no bank account on file yet (User.hasPayoutDetails). Was a BottomSheetCard; now its own
-// route so there's room to breathe and an explicit Skip instead of relying on a backdrop tap.
+// FULL-SCREEN MODAL — two entry points. (1) Shown right after a listing's first publish, only
+// when the signed-in user has no bank account on file yet (User.hasPayoutDetails) — was a
+// BottomSheetCard; now its own route so there's room to breathe and an explicit Skip instead of
+// relying on a backdrop tap. (2) "Change Account" from Payment Info, passing an existing
+// bankAccountId — there's no DELETE /bank-accounts endpoint, so "changing" your payout account
+// means PATCHing the existing one via this same form instead of creating a second one (which
+// would 409 anyway, since it's one account per user).
 export default function PayoutDetailsModal() {
+  const { bankAccountId } = useLocalSearchParams<{ bankAccountId?: string }>();
+  const isEditing = !!bankAccountId;
   const guard = useSingleTap();
   const { refreshUser } = useAuth();
 
@@ -37,7 +43,7 @@ export default function PayoutDetailsModal() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const bankName = banks.find((b) => b.code === bankCode)?.name;
+  const selectedBank = banks.find((b) => b.code === bankCode);
 
   useEffect(() => {
     banksApi
@@ -86,7 +92,11 @@ export default function PayoutDetailsModal() {
     if (!canSave) return;
     setSaving(true);
     try {
-      await bankAccountsApi.createBankAccount({ bankCode, accountNumber });
+      if (bankAccountId) {
+        await bankAccountsApi.updateBankAccount(bankAccountId, { bankCode, accountNumber });
+      } else {
+        await bankAccountsApi.createBankAccount({ bankCode, accountNumber });
+      }
       refreshUser(); // picks up the now-true hasPayoutDetails for next time
       setSaveSuccess(true);
     } catch (e) {
@@ -102,12 +112,14 @@ export default function PayoutDetailsModal() {
         background={colors.white}
         header={
           <ScreenHeader
-            title="Payout Details"
-            showBack={false}
+            title={isEditing ? 'Change Payout Account' : 'Payout Details'}
+            showBack={isEditing}
             rightElement={
-              <Pressable onPress={guard(handleSkip)} hitSlop={8}>
-                <Text style={styles.skipText}>Skip</Text>
-              </Pressable>
+              isEditing ? null : (
+                <Pressable onPress={guard(handleSkip)} hitSlop={8}>
+                  <Text style={styles.skipText}>Skip</Text>
+                </Pressable>
+              )
             }
           />
         }
@@ -134,9 +146,14 @@ export default function PayoutDetailsModal() {
         </Text>
 
         <Pressable onPress={guard(() => setBankPickerOpen(true))} style={styles.fieldBox}>
+          {selectedBank ? (
+            <View style={styles.bankLogoWrap}>
+              <Image source={{ uri: selectedBank.logoUrl }} style={styles.bankLogo} />
+            </View>
+          ) : null}
           <View style={styles.fieldTextColumn}>
             <Text style={styles.fieldLabel}>Bank name</Text>
-            <Text style={[styles.fieldValue, !bankName && styles.fieldValuePlaceholder]}>{bankName || 'Select your bank'}</Text>
+            <Text style={[styles.fieldValue, !selectedBank && styles.fieldValuePlaceholder]}>{selectedBank?.name || 'Select your bank'}</Text>
           </View>
           <Icon name="arrow-right-2" variant="linear" size={verticalScale(16)} color={colors.gray400} />
         </Pressable>
@@ -179,7 +196,7 @@ export default function PayoutDetailsModal() {
         <View style={StyleSheet.absoluteFill}>
           <OptionPickerSheet
             title="Select your bank"
-            options={banks.map((b) => ({ label: b.name, value: b.code }))}
+            options={banks.map((b) => ({ label: b.name, value: b.code, imageUrl: b.logoUrl }))}
             value={bankCode}
             onSelect={(value) => {
               setBankCode(value);
@@ -188,14 +205,13 @@ export default function PayoutDetailsModal() {
             onClose={() => setBankPickerOpen(false)}
             loading={banksLoading}
             error={banksError}
-            searchable
           />
         </View>
       ) : null}
 
       {saveSuccess ? (
         <View style={StyleSheet.absoluteFill}>
-          <PayoutSuccessSheet onClose={guard(() => router.dismissTo('/(tabs)/home'))} />
+          <PayoutSuccessSheet onClose={guard(() => router.dismissTo(isEditing ? '/(modals)/paymentInfo' : '/(tabs)/home'))} />
         </View>
       ) : null}
     </View>
@@ -283,6 +299,18 @@ const styles = StyleSheet.create({
   },
   fieldTextColumn: {
     flex: 1,
+  },
+  bankLogoWrap: {
+    width: verticalScale(32),
+    height: verticalScale(32),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    overflow: 'hidden',
+  },
+  bankLogo: {
+    width: '100%',
+    height: '100%',
   },
   fieldLabel: {
     fontFamily: fontFamily.medium,

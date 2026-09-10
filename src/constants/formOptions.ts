@@ -3,23 +3,12 @@ import { City, State } from 'country-state-city';
 export interface DropdownOption {
   label: string;
   value: string;
+  /** Leading image shown before the label in OptionPickerSheet — e.g. a bank's logoUrl. Omitted by every other consumer. */
+  imageUrl?: string;
 }
 
 // The app only ever operates in Nigeria — no country picker is shown, so this stays internal.
 const NIGERIA_COUNTRY_CODE = 'NG';
-
-// Placeholder list — no /categories endpoint is documented yet; swap for a real backend-driven list once one exists.
-export const CATEGORY_OPTIONS: DropdownOption[] = [
-  { label: 'Electronics', value: 'electronics' },
-  { label: 'Furniture', value: 'furniture' },
-  { label: 'Home Appliances', value: 'home-appliances' },
-  { label: 'Fashion', value: 'fashion' },
-  { label: 'Kitchenware', value: 'kitchenware' },
-  { label: 'Books & Stationery', value: 'books-stationery' },
-  { label: 'Toys & Games', value: 'toys-games' },
-  { label: 'Sports & Outdoors', value: 'sports-outdoors' },
-  { label: 'Other', value: 'other' },
-];
 
 // Values match the backend's Listing.condition enum ('new' | 'neatly_used') exactly — POST/PATCH
 // /listings sends `condition` verbatim, so this can't be a display label like the other option lists.

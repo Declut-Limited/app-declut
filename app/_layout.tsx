@@ -70,6 +70,8 @@ export default function RootLayout() {
                           <Stack.Screen name="(modals)/payoutDetailsModal" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/listingDetailsModal" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/myListings" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/accountDetails" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/paymentInfo" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/nearbyListingsModal" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/newListingsModal" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/filterByModal" options={{ presentation: 'modal' }} />
