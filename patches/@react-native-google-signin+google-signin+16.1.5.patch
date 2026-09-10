@@ -1,5 +1,5 @@
 diff --git a/node_modules/@react-native-google-signin/google-signin/lib/module/buttons/GoogleSigninButton.js b/node_modules/@react-native-google-signin/google-signin/lib/module/buttons/GoogleSigninButton.js
-index 435b471..b3a0399 100644
+index 435b471..ed849e7 100644
 --- a/node_modules/@react-native-google-signin/google-signin/lib/module/buttons/GoogleSigninButton.js
 +++ b/node_modules/@react-native-google-signin/google-signin/lib/module/buttons/GoogleSigninButton.js
 @@ -2,7 +2,7 @@
@@ -7,7 +7,7 @@ index 435b471..b3a0399 100644
  import React, { useCallback } from 'react';
  import { StyleSheet, useColorScheme } from 'react-native';
 -import RNGoogleSigninButton from '../spec/SignInButtonNativeComponent';
-+import RNGoogleSigninButton from '../spec/SignInButtonNativeComponent.js';
++import RNGoogleSigninButton from '../spec/SignInButtonNativeComponent.ts';
  import { NativeModule } from "../spec/NativeGoogleSignin.js";
  import { Color } from "./statics.js";
  import { jsx as _jsx } from "react/jsx-runtime";
