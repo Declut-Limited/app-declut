@@ -19,7 +19,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { WebView } from 'react-native-webview';
-import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
+import type { ShouldStartLoadRequest, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { ErrorBoundary } from 'react-error-boundary';
 import axios from 'axios';
 import Animated, {
@@ -221,7 +221,7 @@ export default function ListingDetailsModal() {
     try {
       const { transactionId, paystackAuthorizationUrl } = await transactionsApi.checkout({
         listingId: listing._id,
-        callbackUrl: "declut://payment-callback"
+        callbackUrl: PAYSTACK_CALLBACK_URL,
       });
       setCheckout({ transactionId, url: paystackAuthorizationUrl });
     } catch (e) {
@@ -518,13 +518,31 @@ function PaystackCheckoutWebView({ url, onClose, onRedirect }: PaystackCheckoutW
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
   const [pageLoading, setPageLoading] = useState(true);
+  // onShouldStartLoadWithRequest doesn't fire reliably on Android for JS-driven redirects
+  // (window.location.href = ...) — onNavigationStateChange is a redundant second check for the
+  // same URL prefix so the callback is still caught there. Guards against firing onRedirect twice
+  // if both hooks see the same navigation.
+  const redirectFiredRef = useRef(false);
+
+  function maybeFireRedirect(navUrl: string) {
+    console.log('[PaystackCheckoutWebView] nav', navUrl);
+    if (redirectFiredRef.current) return;
+    if (navUrl.startsWith(PAYSTACK_CALLBACK_URL)) {
+      redirectFiredRef.current = true;
+      onRedirect();
+    }
+  }
 
   function handleShouldStartLoad(request: ShouldStartLoadRequest) {
     if (request.url.startsWith(PAYSTACK_CALLBACK_URL)) {
-      onRedirect();
+      maybeFireRedirect(request.url);
       return false;
     }
     return true;
+  }
+
+  function handleNavigationStateChange(navState: WebViewNavigation) {
+    maybeFireRedirect(navState.url);
   }
 
   return (
@@ -547,6 +565,7 @@ function PaystackCheckoutWebView({ url, onClose, onRedirect }: PaystackCheckoutW
           startInLoadingState
           onLoadEnd={() => setPageLoading(false)}
           onShouldStartLoadWithRequest={handleShouldStartLoad}
+          onNavigationStateChange={handleNavigationStateChange}
         />
       </ErrorBoundary>
 
