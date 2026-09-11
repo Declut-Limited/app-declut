@@ -241,6 +241,13 @@ export default function ListingDetailsModal() {
     setCheckout(null);
     if (!success || !transactionId) {
       if (!success) showWarningToast('Payment not completed', 'You can try again anytime.');
+      if (transactionId) {
+        // Frees this buyer to retry checkout on this listing — otherwise the abandoned
+        // pending_payment transaction blocks a second attempt (see TransactionsService.create()'s
+        // existingPending guard). Best-effort: the backend's hourly sweep is the fallback if this
+        // fails (network drop, app killed before this resolves).
+        transactionsApi.cancelTransaction(transactionId).catch(() => {});
+      }
       return;
     }
     setConfirmingPayment(true);

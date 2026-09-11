@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-// import 'react-native-gesture-handler';
-// import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SplashScreen, Stack } from 'expo-router';
 import { IconContext } from 'phosphor-react-native';
@@ -56,6 +56,7 @@ export default function RootLayout() {
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : (
+        <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider style={{ flex: 1 }}>
             <IconContext.Provider value={{ size: verticalScale(22), color: colors.gray700, weight: 'regular' }}>
               <AuthProvider>
@@ -88,6 +89,7 @@ export default function RootLayout() {
               </AuthProvider>
             </IconContext.Provider>
           </SafeAreaProvider>
+        </GestureHandlerRootView>
       )}
     </ErrorBoundary>
   );
