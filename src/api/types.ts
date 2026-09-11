@@ -158,10 +158,14 @@ export interface UpdateProfilePayload {
   profileImage?: string;
 }
 
-/** GET /banks — Paystack passthrough, active Nigerian banks only. Nothing persisted. */
+/** GET /banks — active Nigerian banks only. Nothing persisted. */
 export interface Bank {
-  name: string;
   code: string;
+  name: string;
+  shortName: string;
+  fullName: string;
+  slug: string;
+  logoUrl: string;
 }
 
 /** GET /banks/resolve — also a Paystack passthrough, used to show the resolved name before submitting. */
@@ -436,4 +440,32 @@ export interface RegisterDeviceTokensPayload {
 
 export interface RegisterDeviceTokensResponse {
   registered: number;
+}
+
+/** GET /notification-settings/user/:userId — auto-creates with defaults on first call. */
+export interface NotificationSettings {
+  id: string;
+  userId: string;
+  channels: { push: boolean; email: boolean };
+  transactionUpdates: boolean;
+  inspectionReminders: boolean;
+  disputeUpdates: boolean;
+  /** Not accepted by PATCH — sending it 400s. Always on. */
+  paymentAndEscrowUpdates: boolean;
+  /** Not accepted by PATCH — sending it 400s. Always on. */
+  listingActivity: boolean;
+  /** Not accepted by PATCH — sending it 400s. Always on. */
+  productUpdates: boolean;
+  /** Not accepted by PATCH — sending it 400s, despite the design showing a toggle for it. */
+  referralAndRewards: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** PATCH /notification-settings/user/:userId — partial update; only these fields are accepted. */
+export interface UpdateNotificationSettingsPayload {
+  channels?: { push?: boolean; email?: boolean };
+  transactionUpdates?: boolean;
+  inspectionReminders?: boolean;
+  disputeUpdates?: boolean;
 }

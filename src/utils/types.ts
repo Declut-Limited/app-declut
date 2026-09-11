@@ -126,15 +126,26 @@ export interface ContactRowProps {
   onPress?: () => void;
 }
 
+export type LegalBlock = { type: 'paragraph'; text: string } | { type: 'bullets'; items: string[] };
+
+export interface LegalSubsection {
+  heading?: string;
+  blocks: LegalBlock[];
+}
+
 export interface LegalSection {
   heading?: string;
-  paragraphs: string[];
+  blocks?: LegalBlock[];
+  /** Sub-headed groups within a section — e.g. Privacy Policy's "Information You Provide" under "1. Information We Collect". */
+  subsections?: LegalSubsection[];
 }
 
 export interface LegalDocumentBodyProps {
   title: string;
   lastUpdated: string;
-  intro: string;
+  /** Shown as a separate line above "Last updated" when a document states both dates. */
+  effectiveDate?: string;
+  intro: string | string[];
   sections: LegalSection[];
 }
 

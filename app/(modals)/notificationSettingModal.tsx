@@ -142,15 +142,9 @@ export default function NotificationSettingModal() {
 
             <Text style={styles.sectionLabel}>OFFERS & UPDATES</Text>
             <SettingRow title="Product Updates" description="Be the first to know about new Declut features and improvements." required />
-            {/* Design shows this as a toggle, but PATCH rejects referralAndRewards (400) — rendered
-                read-only at its fetched value rather than a toggle that silently fails to persist. */}
-            <SettingRow
-              title="Referral & Rewards"
-              description="Get updates about your referrals, progress and rewards."
-              value={settings.referralAndRewards}
-              disabled
-              last
-            />
+            {/* Design shows this as a toggle, but PATCH rejects referralAndRewards (400) — Required
+                pill like the other backend-locked fields, not a toggle that can't actually persist. */}
+            <SettingRow title="Referral & Rewards" description="Get updates about your referrals, progress and rewards." required last />
           </>
         )}
       </ScreenContainer>
@@ -215,7 +209,7 @@ const styles = StyleSheet.create({
     marginTop: spacingY.xl,
   },
   channelsCard: {
-    backgroundColor: colors.gray50,
+    backgroundColor: colors.cardBackground,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
     paddingHorizontal: spacingX.lg,
