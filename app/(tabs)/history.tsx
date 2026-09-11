@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
@@ -7,26 +7,23 @@ import { EmptyState, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency, formatDate } from '@/utils/helpers';
-import { listingsApi, transactionsApi } from '@/api';
-import type { Listing, PurchaseStatusFilter, Transaction, TransactionStatus } from '@/api/types';
+import { transactionsApi } from '@/api';
+import type { PurchaseStatusFilter, Transaction, TransactionStatus } from '@/api/types';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useSingleTap } from '@/hooks/useSingleTap';
 
 const SKELETON_COUNT = 2;
-const IMAGE_SIZE = verticalScale(96);
-// Buyers inspect within 48h of payment (see CLAUDE.md) — Transaction has no dedicated deadline
-// field, so this is computed from whenever the transaction last changed status (updatedAt,
-// falling back to createdAt), not a literal backend value.
-const INSPECTION_WINDOW_HOURS = 48;
+const IMAGE_WIDTH_SIZE = verticalScale(105);
+const IMAGE_HEIGHT_SIZE = verticalScale(75);
 
 const STATUS_META: Record<TransactionStatus, { label: string; bg: string; text: string }> = {
   pending_payment: { label: 'Pending Payment', bg: colors.gray100, text: colors.gray600 },
-  escrow_active: { label: 'Ongoing', bg: colors.warningLight, text: colors.warning },
-  awaiting_inspection: { label: 'Ongoing', bg: colors.warningLight, text: colors.warning },
-  completed: { label: 'Completed', bg: colors.successLight, text: colors.success },
-  cancelled: { label: 'Cancelled', bg: colors.gray100, text: colors.gray500 },
-  disputed: { label: 'Disputed', bg: colors.dangerLight, text: colors.danger },
-  refunded: { label: 'Refunded', bg: colors.primaryLight, text: colors.primary },
+  escrow_active: { label: 'Ongoing', bg: colors.warning50, text: colors.warning700 },
+  awaiting_inspection: { label: 'Ongoing', bg: colors.warning50, text: colors.warning700 },
+  completed: { label: 'Completed', bg: colors.primary50, text: colors.primaryLight600 },
+  cancelled: { label: 'Cancelled', bg: colors.rose50, text: colors.rose700 },
+  disputed: { label: 'Disputed', bg: colors.error50, text: colors.error700 },
+  refunded: { label: 'Refunded', bg: colors.rose50, text: colors.rose700 },
 };
 
 // 'active' maps server-side to awaiting_inspection only — not every in-progress status. No "All"
@@ -50,13 +47,9 @@ function formatInspectionCountdown(deadline: dayjs.Dayjs): string {
   return `${hours}h ${totalMinutes % 60}m`;
 }
 
-// Buyer-side purchase history — GET /transactions/purchases. The endpoint only returns the bare
-// Transaction shape (no listing title/photo/seller), so each visible row's listing is fetched
-// separately (GET /listings/:id, which does embed seller.name) and cached by listingId as pages load.
 export default function HistoryScreen() {
   const guard = useSingleTap();
   const [filter, setFilter] = useState<PurchaseStatusFilter>('active');
-  const [listingsById, setListingsById] = useState<Record<string, Listing>>({});
 
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings<Transaction>(
     ({ page, limit }) => transactionsApi.listMyPurchases(page, limit, filter),
@@ -64,34 +57,8 @@ export default function HistoryScreen() {
     filter
   );
 
-  useEffect(() => {
-    const missing = items.filter((t) => !listingsById[t.listingId]);
-    if (missing.length === 0) return;
-    let cancelled = false;
-    Promise.all(
-      missing.map((t) =>
-        listingsApi
-          .getListing(t.listingId)
-          .then((listing): [string, Listing] => [t.listingId, listing])
-          .catch(() => null)
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setListingsById((prev) => {
-        const next = { ...prev };
-        for (const result of results) {
-          if (result) next[result[0]] = result[1];
-        }
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [items]);
-
   function onPressTransaction(transaction: Transaction) {
-    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: transaction.listingId } });
+    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: transaction.listing?._id } });
   }
 
   return (
@@ -109,10 +76,8 @@ export default function HistoryScreen() {
 
       <FlatList
         data={loading || refreshing ? [] : items}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PurchaseCard transaction={item} listing={listingsById[item.listingId]} onPress={guard(() => onPressTransaction(item))} />
-        )}
+        keyExtractor={(item) => item._id}
+        renderItem={({ item }) => <PurchaseCard transaction={item} onPress={guard(() => onPressTransaction(item))} />}
         onEndReachedThreshold={0.4}
         onEndReached={hasMore ? loadMore : undefined}
         onRefresh={refresh}
@@ -124,7 +89,7 @@ export default function HistoryScreen() {
           ) : error ? (
             <Text style={styles.message}>{error}</Text>
           ) : (
-            <EmptyState icon={Icons.ReceiptIcon} message="No purchases history." />
+            <EmptyState icon={Icons.ReceiptIcon} message={`No ${filter} purchases history`} />
           )
         }
         ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footerLoading} /> : null}
@@ -135,29 +100,27 @@ export default function HistoryScreen() {
 
 interface PurchaseCardProps {
   transaction: Transaction;
-  listing?: Listing;
   onPress: () => void;
 }
 
-function PurchaseCard({ transaction, listing, onPress }: PurchaseCardProps) {
+function PurchaseCard({ transaction, onPress }: PurchaseCardProps) {
   const meta = STATUS_META[transaction.status];
-  const isActive = transaction.status === 'awaiting_inspection';
-
-  if (!listing) return <PurchaseCardSkeleton count={1} />;
-
-  const deadline = dayjs(transaction.updatedAt ?? transaction.createdAt).add(INSPECTION_WINDOW_HOURS, 'hour');
+  const isActive = transaction.status === 'escrow_active';
+  const listing = transaction.listing;
+  const deadline = transaction.inspectionDeadlineAt ? dayjs(transaction.inspectionDeadlineAt) : null;
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <View style={styles.cardTop}>
+        {/* /transactions/purchases only sends { _id, title } for the listing — no image field to render here. */}
         <View style={styles.imageWrap}>
-          {listing.mainImageUrl || listing.images[0] ? (
-            <Image source={{ uri: listing.mainImageUrl || listing.images[0]?.secureUrl }} style={styles.image} resizeMode="cover" />
+          {listing?.mainImageUrl ? (
+            <Image source={{ uri: listing?.mainImageUrl }} style={styles.image} resizeMode="cover" />
           ) : null}
         </View>
         <View style={styles.info}>
           <Text style={styles.itemTitle} numberOfLines={1}>
-            {listing.title}
+            {listing?.title ?? 'Listing unavailable'}
           </Text>
           <Text style={styles.amount}>{formatCurrency(transaction.amount)}</Text>
         </View>
@@ -165,14 +128,14 @@ function PurchaseCard({ transaction, listing, onPress }: PurchaseCardProps) {
           <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
             <Text style={[styles.statusLabel, { color: meta.text }]}>{meta.label}</Text>
           </View>
-          {listing.seller?.name ? <Text style={styles.sellerName}>{listing.seller.name}</Text> : null}
+          {transaction.seller?.name ? <Text style={styles.sellerName}>{transaction.seller.name}</Text> : null}
         </View>
       </View>
 
       <View style={styles.divider} />
 
       <View style={styles.cardFooter}>
-        {isActive ? (
+        {isActive && deadline ? (
           <>
             <View style={styles.footerLeft}>
               <Icons.ClockIcon size={verticalScale(16)} color={colors.gray400} />
@@ -239,7 +202,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacingY.lg,
   },
   filterPill: {
-    height: verticalScale(32),
+    height: verticalScale(40),
     borderRadius: radius.full,
     borderCurve: 'continuous',
     borderWidth: 1,
@@ -286,8 +249,8 @@ const styles = StyleSheet.create({
     gap: spacingX.md,
   },
   imageWrap: {
-    width: IMAGE_SIZE,
-    height: IMAGE_SIZE,
+    width: IMAGE_WIDTH_SIZE,
+    height: IMAGE_HEIGHT_SIZE,
     backgroundColor: colors.gray100,
     borderRadius: radius.md,
     borderCurve: 'continuous',
@@ -303,14 +266,14 @@ const styles = StyleSheet.create({
     gap: verticalScale(6),
   },
   itemTitle: {
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.md,
-    color: colors.gray700,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.lg,
+    color: "#475467",
   },
   amount: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize.lg,
-    color: colors.ink,
+    color: "#1D2939",
   },
   metaColumn: {
     alignItems: 'flex-end',
@@ -354,7 +317,7 @@ const styles = StyleSheet.create({
   },
   footerTextBold: {
     fontFamily: fontFamily.bold,
-    color: colors.ink,
+    color: "#1E3A8A",
   },
   continueRow: {
     flexDirection: 'row',

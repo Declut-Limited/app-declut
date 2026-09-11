@@ -382,16 +382,35 @@ export type TransactionStatus =
   | 'disputed'
   | 'refunded';
 
-export interface Transaction {
+/** Confirmed shape from a real GET /transactions/purchases response — buyer/seller are
+ *  populated objects, not flat ids, and there is no separate buyerId/sellerId/listingId field. */
+export interface TransactionParty {
   id: string;
-  listingId: string;
-  offerId?: string;
-  buyerId: string;
-  sellerId: string;
-  status: TransactionStatus;
+  name: string;
+  email: string;
+  status: string;
+  rolePlayed: 'buyer' | 'seller';
+  slug: string;
+}
+
+export interface Transaction {
+  _id: string;
+  /** Populated inline, but only ever { _id, title } — no image, no seller. null if the referenced listing was deleted. */
+  listing: { _id: string; title: string, mainImageUrl?: string } | null;
+  buyer: TransactionParty;
+  seller: TransactionParty;
   amount: number;
+  commissionPercentage?: number;
+  paystackFee?: number;
+  status: TransactionStatus;
+  reference?: string;
+  inspectionStatus?: string;
+  failedCodeAttempts?: number;
   /** Only ever present for the buyer, and only while escrow_active/awaiting_inspection. */
   confirmationCode?: string;
+  /** Real backend deadline for buyer inspection, present once payment succeeds. */
+  inspectionDeadlineAt?: string;
+  escrow?: string;
   createdAt?: string;
   updatedAt?: string;
 }

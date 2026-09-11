@@ -8,11 +8,12 @@ export const colors = {
   primary400: '#3B82F6',
   primaryHover: '#1D4ED8',
   primaryDark: '#1E3A8A',
-
+  primaryLight600: '#026AA2',
+  
   background: '#F4F7FA',
   backgroundLight: '#F9FAFB',
 
-  textPrimary: '',
+  textPrimary: '#1D2939',
   textSecondary: '#475467',
 
   ink: '#111827',
@@ -20,15 +21,23 @@ export const colors = {
   successLight: '#DCFCE7',
   success50: '#ECFDF3',
   success700: '#027A48',
+
   warning: '#F97316',
   warning25: '#FFFCF5',
-  warning600: '#DC6803',
+  warning50: '#FFFAEB',
   warningLight: '#FFEDD5',
+  warning600: '#DC6803',
+  warning700: '#B54708',
+
   danger: '#DC2626',
   dangerLight: '#FEE2E2',
   goldClick: '#A28300',
   rose: '#F9B4AF',
+  rose50: '#FFF1F3',
+  rose700: '#C01048',
+  error50: '#FEF3F2',
   error: '#F04438',
+  error700: '#B42318',
 
   white: '#FFFFFF',
   black: '#000000',
