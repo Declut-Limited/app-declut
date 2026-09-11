@@ -19,6 +19,7 @@ const CARD_IMAGE_HEIGHT = verticalScale(96);
 
 const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text: string }> = {
   active: { label: 'Active', bg: colors.successLight, text: colors.success },
+  pending_sale: { label: 'Pending Sale', bg: colors.warningLight, text: colors.warning700 },
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
   archived: { label: 'Archived', bg: colors.gray100, text: colors.gray500 },
 };

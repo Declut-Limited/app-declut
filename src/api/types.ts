@@ -225,6 +225,17 @@ export interface CloudinaryMediaRef {
 
 export type ListingCondition = 'new' | 'neatly_used';
 
+export interface ListingSeller {
+  id: string;
+  name: string;
+  trustScore?: number;
+  phoneNumber?: string;
+  totalSales?: number;
+  profileImageUrl?: string;
+  /** Not confirmed on this sub-object yet — the seller card hides "Member since" gracefully when absent. */
+  createdAt?: string;
+}
+
 export interface Listing {
   id: string;
   _id: string;
@@ -246,10 +257,11 @@ export interface Listing {
   state?: string;
   city?: string;
   address?: string;
-  status: 'active' | 'archived' | 'sold';
+  /** 'pending_sale' isn't in the documented status enum (Postman lists active/archived/deleted/flagged/sold only) — added for the buyer-side "held in escrow" detail view; confirm the real field/value with backend. */
+  status: 'active' | 'pending_sale' | 'archived' | 'sold';
   sellerId: string;
-  /** Populated on GET /listings/:id (id or LST-#### slug) — not present on list/search results. */
-  seller?: Pick<User, 'id' | 'name' | 'trustScore'>;
+  /** Populated on GET /listings/:id (id or LST-#### slug) — not present on list/search results. Confirmed 2026-09-11: phoneNumber/totalSales/profileImageUrl (distinct field names from User's phone/soldCount/profileImageUrl) were added to this sub-object specifically for the buyer-side seller contact card. createdAt isn't confirmed on this sub-object — kept optional, degrades gracefully if absent. */
+  seller?: ListingSeller;
   createdAt: string;
   /** Only present when a search included lat/lng (radius search). */
   distanceKm?: number;

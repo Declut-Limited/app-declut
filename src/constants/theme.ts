@@ -35,6 +35,7 @@ export const colors = {
   rose: '#F9B4AF',
   rose50: '#FFF1F3',
   rose700: '#C01048',
+  error25: '#FFFBFA',
   error50: '#FEF3F2',
   error: '#F04438',
   error700: '#B42318',

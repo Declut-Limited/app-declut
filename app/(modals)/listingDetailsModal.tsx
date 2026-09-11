@@ -240,6 +240,19 @@ export default function ListingDetailsModal() {
     setPaymentStep('terms');
   }
 
+  // TODO: this screen never fetches the transaction behind a pending_sale listing (only the
+  // listing itself), and there's no confirmed endpoint yet for either action — "confirm code" in
+  // the Postman collection is seller-only (the buyer's confirmationCode gets read out to the
+  // seller, who inputs it elsewhere), and dispute-filing hasn't been wired up here. Placeholder
+  // toasts until both are confirmed with backend.
+  function handleConfirmItemFine() {
+    showWarningToast('Not available yet', "Confirming the item isn't wired up yet.");
+  }
+
+  function handleReportProblem() {
+    showWarningToast('Not available yet', "Reporting a problem isn't wired up yet.");
+  }
+
   async function handleMakePayment() {
     if (!listing || paying) return;
     setPaying(true);
@@ -429,17 +442,17 @@ export default function ListingDetailsModal() {
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Icon name="location" variant="bold" size={verticalScale(16)} color={colors.danger} />
+              <Icon name="location" variant="bold" size={verticalScale(18)} color={colors.danger} />
               <Text style={styles.metaText} numberOfLines={1}>
                 {listing.locationLabel}
               </Text>
             </View>
             <View style={styles.metaItem}>
-              <Icon name="star" variant="bold" size={verticalScale(16)} color={colors.primary} />
+              <Icon name="star-1" variant="bold" size={verticalScale(18)} color={colors.primary} />
               <Text style={styles.metaText}>{(listing.seller?.trustScore ?? 0).toFixed(1)}</Text>
             </View>
             <View style={styles.metaItem}>
-              <Icons.EyeIcon size={verticalScale(16)} color={colors.gray400} />
+              <Icon name="eye" variant="bold" size={verticalScale(18)} color={colors.gray400} />
               <Text style={styles.metaText}>{listing.views ?? 0} views</Text>
             </View>
           </View>
@@ -498,14 +511,25 @@ export default function ListingDetailsModal() {
         </View>
       </View>
 
-      {!isOwnListing ? (
+      {!isOwnListing && (listing.status === 'active' || listing.status === 'pending_sale') ? (
         <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
-          <View style={styles.footerPill}>
-            <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price)}</Text>
-            <Pressable onPress={guard(handleBuyNow)} style={styles.buyButton}>
-              <Text style={styles.buyButtonLabel}>Buy Now</Text>
-            </Pressable>
-          </View>
+          {listing.status === 'active' ? (
+            <View style={styles.footerPill}>
+              <Text style={styles.bottomBarPrice}>{formatCurrency(listing.price)}</Text>
+              <Pressable onPress={guard(handleBuyNow)} style={styles.buyButton}>
+                <Text style={styles.buyButtonLabel}>Buy Now</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Pressable onPress={guard(handleConfirmItemFine)} style={styles.confirmFineButton}>
+                <Text style={styles.confirmFineButtonLabel}>Item is Fine - Pay the Seller</Text>
+              </Pressable>
+              <Pressable onPress={guard(handleReportProblem)} style={styles.reportProblemButton}>
+                <Text style={styles.reportProblemButtonLabel}>Report A Problem With This Item</Text>
+              </Pressable>
+            </>
+          )}
         </SafeAreaView>
       ) : null}
 
@@ -607,8 +631,8 @@ function SellerContactCard({ seller, address, coordinates }: SellerContactCardPr
     : null;
 
   function handleCall() {
-    if (!seller?.phone) return;
-    Linking.openURL(`tel:${seller.phone}`).catch(() => {});
+    if (!seller?.phoneNumber) return;
+    Linking.openURL(`tel:${seller.phoneNumber}`).catch(() => {});
   }
 
   function handleOpenMaps() {
@@ -625,12 +649,12 @@ function SellerContactCard({ seller, address, coordinates }: SellerContactCardPr
             {seller?.name ?? 'Seller'}
           </Text>
           <Text style={styles.sellerSubtext}>
-            {seller?.soldCount ?? 0} Sales{seller?.createdAt ? `  •  Member since ${dayjs(seller.createdAt).format('YYYY')}` : ''}
+            {seller?.totalSales ?? 0} Sales{seller?.createdAt ? `  •  Member since ${dayjs(seller.createdAt).format('YYYY')}` : ''}
           </Text>
         </View>
-        {seller?.phone ? (
+        {seller?.phoneNumber ? (
           <Pressable onPress={guard(handleCall)} style={styles.sellerCallButton} hitSlop={8}>
-            <Icon name="call" variant="bold" size={verticalScale(20)} color={colors.primary} />
+            <Icon name="call" variant="linear" size={verticalScale(20)} color={colors.primary} />
           </Pressable>
         ) : null}
       </View>
@@ -1260,7 +1284,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBackground,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    padding: spacingX.lg,
+    padding: spacingX.md,
     marginBottom: spacingY.xl,
   },
   sellerHeaderRow: {
@@ -1323,7 +1347,7 @@ const styles = StyleSheet.create({
   },
   sellerMapsButton: {
     marginTop: spacingY.md,
-    minHeight: verticalScale(48),
+    minHeight: verticalScale(40),
     borderRadius: radius.md,
     borderCurve: 'continuous',
     backgroundColor: colors.primary50,
@@ -1332,7 +1356,7 @@ const styles = StyleSheet.create({
   },
   sellerMapsButtonLabel: {
     fontFamily: fontFamily.semibold,
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: colors.primary,
   },
   escrowCard: {
@@ -1350,19 +1374,19 @@ const styles = StyleSheet.create({
   },
   escrowTitle: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
     color: colors.warning700,
   },
   escrowBody: {
     fontFamily: fontFamily.regular,
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * 1.5,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.sm * 1.8,
     color: colors.warning600,
     marginBottom: spacingY.md,
   },
   escrowExtendLink: {
     fontFamily: fontFamily.semibold,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.warning700,
     textDecorationLine: 'underline',
   },
@@ -1470,6 +1494,14 @@ const styles = StyleSheet.create({
     paddingTop: spacingY.md,
     paddingBottom: spacingY.md,
     backgroundColor: colors.white,
+    gap: spacingY.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray100,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 6,
   },
   footerPill: {
     flexDirection: 'row',
@@ -1500,6 +1532,34 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.lg,
     color: colors.white,
+  },
+  confirmFineButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  confirmFineButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
+  },
+  reportProblemButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.error25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  reportProblemButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.error,
   },
   paySheetTitle: {
     fontFamily: fontFamily.bold,
