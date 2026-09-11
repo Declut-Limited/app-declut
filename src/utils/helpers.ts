@@ -116,8 +116,8 @@ export const paystackTransferFee = function(amount: number) {
 }
 
 export const getProfileImage = function(file: any) {
-	if (file && typeof file === "string") return file;
-	if (file && typeof file === "object") return file?.uri;
+	if (file && typeof file === "string") return { uri: file };
+	if (file && typeof file === "object") return { uri: file?.uri };
 
 	return require("../../assets/defaultAvatar.png");
 }

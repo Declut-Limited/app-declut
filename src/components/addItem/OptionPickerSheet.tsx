@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Icons from 'phosphor-react-native';
 import { BottomSheetCard } from '@/components';
 import type { DropdownOption } from '@/constants/formOptions';
@@ -89,17 +89,26 @@ export function OptionPickerSheet({
           {visibleOptions.length === 0 ? (
             <Text style={styles.emptyText}>No matches found.</Text>
           ) : (
-            visibleOptions.map((option) => {
+            visibleOptions.map((option, index) => {
               const selected = option.value === value;
               return (
                 <Pressable
-                  key={option.value}
+                  // Some remote lists (e.g. banks) have duplicate `value`s — index keeps this
+                  // unique regardless, and is safe since this list's order never reshuffles in place.
+                  key={`${option.value}-${index}`}
                   onPress={guard(() => onSelect(option.value))}
                   style={[styles.option, selected && styles.optionSelected]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                 >
-                  <Text style={styles.optionLabel}>{option.label}</Text>
+                  <View style={styles.optionMain}>
+                    {option.imageUrl ? (
+                      <View style={styles.optionImageWrap}>
+                        <Image source={{ uri: option.imageUrl }} style={styles.optionImage} />
+                      </View>
+                    ) : null}
+                    <Text style={styles.optionLabel}>{option.label}</Text>
+                  </View>
                   {selected ? (
                     <View style={styles.checkCircle}>
                       <Icons.CheckIcon size={verticalScale(11)} color={colors.white} weight="bold" />
@@ -206,6 +215,26 @@ const styles = StyleSheet.create({
   },
   optionSelected: {
     backgroundColor: colors.primaryLight,
+  },
+  optionMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.sm,
+    flex: 1,
+  },
+  // Shows through while the remote logo is still fetching — Image itself is transparent until
+  // it has data, so without this the row looks blank rather than "loading".
+  optionImageWrap: {
+    width: verticalScale(28),
+    height: verticalScale(28),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    overflow: 'hidden',
+  },
+  optionImage: {
+    width: '100%',
+    height: '100%',
   },
   optionLabel: {
     fontFamily: fontFamily.medium,

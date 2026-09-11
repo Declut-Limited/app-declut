@@ -9,6 +9,7 @@ export * as offersApi from './offers';
 export * as transactionsApi from './transactions';
 export * as reviewsApi from './reviews';
 export * as notificationsApi from './notifications';
+export * as notificationSettingsApi from './notificationSettings';
 export * as banksApi from './banks';
 export * as bankAccountsApi from './bankAccounts';
 export * from './types';

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ApiEnvelope, CheckoutPayload, CheckoutResponse, ConfirmCodePayload, PaginatedResponse, Transaction } from './types';
+import type { ApiEnvelope, CheckoutPayload, CheckoutResponse, ConfirmCodePayload, PaginatedResponse, PurchaseStatusFilter, Transaction } from './types';
 
 // Creates a pending_payment Transaction and returns where to send the buyer to pay — no money
 // has moved and no Escrow exists yet at this point. Paystack's webhook (server-to-server) is what
@@ -13,6 +13,15 @@ export async function checkout(payload: CheckoutPayload) {
 export async function listMyTransactions(page = 1, limit = 20) {
   const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Transaction>>>('/transactions', {
     params: { page, limit },
+  });
+  return res.data.data;
+}
+
+// Buyer-side only. status omitted = every purchase, any status; 'active' maps server-side to
+// awaiting_inspection only, not every in-progress status.
+export async function listMyPurchases(page = 1, limit = 20, status?: PurchaseStatusFilter) {
+  const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Transaction>>>('/transactions/purchases', {
+    params: status ? { page, limit, status } : { page, limit },
   });
   return res.data.data;
 }

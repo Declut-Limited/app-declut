@@ -383,7 +383,8 @@ export type TransactionStatus =
   | 'awaiting_inspection'
   | 'completed'
   | 'cancelled'
-  | 'disputed';
+  | 'disputed'
+  | 'refunded';
 
 export interface Transaction {
   id: string;
@@ -395,7 +396,12 @@ export interface Transaction {
   amount: number;
   /** Only ever present for the buyer, and only while escrow_active/awaiting_inspection. */
   confirmationCode?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+/** GET /transactions/purchases query — 'active' maps server-side to awaiting_inspection only; omit entirely for every status. */
+export type PurchaseStatusFilter = 'active' | 'completed' | 'refunded' | 'disputed';
 
 export interface CheckoutPayload {
   listingId: string;

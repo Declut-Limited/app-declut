@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacingY.lg,
   },
   side: {
-    width: SIDE_WIDTH,
+    minWidth: SIDE_WIDTH,
   },
   rightSide: {
     alignItems: 'flex-end',

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import * as Notifications from 'expo-notifications';
 import { PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -88,7 +89,7 @@ export default function NotificationSettingModal() {
     <View style={styles.flex}>
       <ScreenContainer background={colors.white} header={<ScreenHeader title="Notifications" />}>
         {loading ? (
-          <ActivityIndicator color={colors.primary} style={styles.loading} />
+          <NotificationSettingsSkeleton />
         ) : error || !settings ? (
           <Text style={styles.errorText}>{error ?? 'Could not load notification settings.'}</Text>
         ) : (
@@ -201,12 +202,63 @@ function SettingRow({ title, description, value, onValueChange, required, disabl
   );
 }
 
+function Bone({ width, height, radius: cornerRadius = 4, style }: { width: number | `${number}%`; height: number; radius?: number; style?: object }) {
+  return <View style={[{ width, height, borderRadius: cornerRadius, borderCurve: 'continuous', backgroundColor: colors.gray100 }, style]} />;
+}
+
+function SettingRowSkeleton({ last }: { last?: boolean }) {
+  return (
+    <View style={[styles.row, !last && styles.rowDivider]}>
+      <View style={styles.rowText}>
+        <Bone width="55%" height={verticalScale(15)} />
+        <Bone width="85%" height={verticalScale(13)} />
+      </View>
+      <Bone width={verticalScale(44)} height={verticalScale(26)} radius={radius.full} />
+    </View>
+  );
+}
+
+function SectionLabelSkeleton({ width }: { width: number }) {
+  return <Bone width={verticalScale(width)} height={verticalScale(11)} style={styles.sectionLabelSkeleton} />;
+}
+
+/** Mirrors the loaded layout's shape (channels card + section row counts) so nothing jumps once the fetch resolves. */
+function NotificationSettingsSkeleton() {
+  const opacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, [opacity]);
+
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View style={pulseStyle}>
+      <View style={styles.channelsCard}>
+        <Bone width={verticalScale(150)} height={verticalScale(11)} style={styles.groupLabelSkeleton} />
+        <SettingRowSkeleton />
+        <SettingRowSkeleton last />
+      </View>
+
+      <SectionLabelSkeleton width={90} />
+      <SettingRowSkeleton />
+      <SettingRowSkeleton />
+      <SettingRowSkeleton />
+      <SettingRowSkeleton last />
+
+      <SectionLabelSkeleton width={110} />
+      <SettingRowSkeleton last />
+
+      <SectionLabelSkeleton width={140} />
+      <SettingRowSkeleton />
+      <SettingRowSkeleton last />
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-  },
-  loading: {
-    marginTop: spacingY.xl,
   },
   errorText: {
     fontFamily: fontFamily.medium,
@@ -215,16 +267,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacingY.xl,
   },
-  // No marginBottom — the next sectionLabel's own marginTop already provides that gap, same as
-  // every other section transition on this screen; adding both would double it up here only.
-  // No paddingBottom either — the last row inside already contributes its own bottom padding via
-  // `row`'s paddingVertical, so paddingTop is intentionally smaller than a full row's padding to
-  // roughly balance the label's own height sitting above the first row.
   channelsCard: {
     backgroundColor: colors.cardBackground,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    paddingHorizontal: spacingX.md,
+    // paddingHorizontal: spacingX.md,
     paddingTop: spacingY.md,
   },
   groupLabel: {
@@ -232,6 +279,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.gray400,
     letterSpacing: 0.5,
+    marginBottom: spacingY.sm,
+  },
+  groupLabelSkeleton: {
+    marginBottom: spacingY.sm,
+  },
+  sectionLabelSkeleton: {
+    marginTop: spacingY.xl,
     marginBottom: spacingY.sm,
   },
   sectionLabel: {

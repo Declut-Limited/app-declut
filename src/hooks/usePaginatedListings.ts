@@ -1,15 +1,16 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { extractErrorMessage } from '@/api/client';
-import type { Listing, PaginatedResponse } from '@/api/types';
+import type { PaginatedResponse } from '@/api/types';
 
 const PAGE_LIMIT = 20;
 
-type FetchPage = (params: { page: number; limit: number }) => Promise<PaginatedResponse<Listing>>;
+type FetchPage<T> = (params: { page: number; limit: number }) => Promise<PaginatedResponse<T>>;
 type LoadMode = 'initial' | 'refresh' | 'more';
 
-
-export function usePaginatedListings(fetchPage: FetchPage, enabled = true, resetKey?: string | number) {
-  const [items, setItems] = useState<Listing[]>([]);
+// Generic despite the name (kept for backward compat with existing Listing call sites) — also
+// used for Transactions (History/purchases). Same pagination/race-condition logic either way.
+export function usePaginatedListings<T>(fetchPage: FetchPage<T>, enabled = true, resetKey?: string | number) {
+  const [items, setItems] = useState<T[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(enabled);
