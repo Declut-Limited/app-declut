@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   LayoutAnimation,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ import { WebView } from 'react-native-webview';
 import type { ShouldStartLoadRequest, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { ErrorBoundary } from 'react-error-boundary';
 import axios from 'axios';
+import dayjs from 'dayjs';
 import Animated, {
   Easing,
   interpolate,
@@ -40,13 +42,23 @@ import { useSingleTap } from '@/hooks/useSingleTap';
 import { listingsApi, transactionsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
-import { formatCurrency, formatDate } from '@/utils/helpers';
+import { formatCurrency, formatDate, getProfileImage } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
 
 const PAYSTACK_CALLBACK_URL = 'declut://payment-callback';
 const PAYMENT_POLL_INTERVAL_MS = 2000;
 const PAYMENT_POLL_MAX_ATTEMPTS = 10;
+const INSPECTION_WINDOW_HOURS = 48;
+
+// Reuses the Places API key — same Google Cloud project. If the static map comes back blank/403,
+// "Maps Static API" needs enabling for this key in Google Cloud Console.
+const GOOGLE_STATIC_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
+
+// Static copy, not backend-driven — matches the Figma export verbatim. "Extend by 24 hours" has
+// no backing endpoint yet (nothing in the Postman collection covers a per-transaction inspection
+// extension), so the link below just surfaces a toast rather than pretending to call something real.
+const ESCROW_NOTE_BODY = `Pick up and inspect within ${INSPECTION_WINDOW_HOURS} hours. No pickup by then and the order auto-cancels with a 10% fee (half compensates the seller). After handover, funds release automatically at the end of the window unless you report a problem.`;
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -422,15 +434,23 @@ export default function ListingDetailsModal() {
                 {listing.locationLabel}
               </Text>
             </View>
-            {listing.seller?.trustScore !== undefined ? (
-              <View style={styles.metaItem}>
-                <Icon name="star" variant="bold" size={verticalScale(16)} color={colors.primary} />
-                <Text style={styles.metaText}>{listing.seller.trustScore.toFixed(1)}</Text>
-              </View>
-            ) : null}
+            <View style={styles.metaItem}>
+              <Icon name="star" variant="bold" size={verticalScale(16)} color={colors.primary} />
+              <Text style={styles.metaText}>{(listing.seller?.trustScore ?? 0).toFixed(1)}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Icons.EyeIcon size={verticalScale(16)} color={colors.gray400} />
+              <Text style={styles.metaText}>{listing.views ?? 0} views</Text>
+            </View>
           </View>
 
           <View style={styles.divider} />
+
+          {listing.status !== 'active' ? (
+            <SellerContactCard seller={listing.seller} address={listing.address ?? listing.locationLabel} coordinates={listing.location.coordinates} />
+          ) : null}
+
+          {listing.status === 'pending_sale' ? <EscrowHoldNote amount={listing.price} /> : null}
 
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.sectionBody}>{listing.description}</Text>
@@ -565,6 +585,93 @@ function InfoAccordion({ title, items }: { title: string; items: AccordionEntry[
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+interface SellerContactCardProps {
+  seller?: Listing['seller'];
+  address?: string;
+  /** GeoJSON [lng, lat] — flipped for Google's lat,lng-ordered APIs below. */
+  coordinates: [number, number];
+}
+
+// Shown once a listing is no longer just browsable (status !== 'active') — pickup contact + location,
+// matching the "unlocking the seller's details" step buyers land on after payment.
+function SellerContactCard({ seller, address, coordinates }: SellerContactCardProps) {
+  const guard = useSingleTap();
+  const [lng, lat] = coordinates;
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  const staticMapUrl = hasCoords
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=650x300&scale=2&markers=color:red%7C${lat},${lng}&key=${GOOGLE_STATIC_MAPS_KEY}`
+    : null;
+
+  function handleCall() {
+    if (!seller?.phone) return;
+    Linking.openURL(`tel:${seller.phone}`).catch(() => {});
+  }
+
+  function handleOpenMaps() {
+    if (!hasCoords) return;
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`).catch(() => {});
+  }
+
+  return (
+    <View style={styles.sellerCard}>
+      <View style={styles.sellerHeaderRow}>
+        <Image source={getProfileImage(seller?.profileImageUrl)} style={styles.sellerAvatar} />
+        <View style={styles.sellerHeaderText}>
+          <Text style={styles.sellerName} numberOfLines={1}>
+            {seller?.name ?? 'Seller'}
+          </Text>
+          <Text style={styles.sellerSubtext}>
+            {seller?.soldCount ?? 0} Sales{seller?.createdAt ? `  •  Member since ${dayjs(seller.createdAt).format('YYYY')}` : ''}
+          </Text>
+        </View>
+        {seller?.phone ? (
+          <Pressable onPress={guard(handleCall)} style={styles.sellerCallButton} hitSlop={8}>
+            <Icon name="call" variant="bold" size={verticalScale(20)} color={colors.primary} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {staticMapUrl ? (
+        <>
+          <View style={styles.sellerDivider} />
+          <View style={styles.sellerMapWrap}>
+            <Image source={{ uri: staticMapUrl }} style={styles.sellerMapImage} resizeMode="cover" />
+          </View>
+          {address ? (
+            <Text style={styles.sellerAddress} numberOfLines={2}>
+              {address}
+            </Text>
+          ) : null}
+          <Pressable onPress={guard(handleOpenMaps)} style={styles.sellerMapsButton}>
+            <Text style={styles.sellerMapsButtonLabel}>Open in Google Maps</Text>
+          </Pressable>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+// Only shown while a transaction on this listing is actually holding funds (status === 'pending_sale').
+function EscrowHoldNote({ amount }: { amount: number }) {
+  const guard = useSingleTap();
+
+  return (
+    <View style={styles.escrowCard}>
+      <View style={styles.escrowTitleRow}>
+        <Icon name="shield-tick" variant="bold" size={verticalScale(18)} color={colors.warning700} />
+        <Text style={styles.escrowTitle}>{formatCurrency(amount, 2)} Held In Escrow</Text>
+      </View>
+      <Text style={styles.escrowBody}>{ESCROW_NOTE_BODY}</Text>
+      <Pressable
+        onPress={guard(() => showWarningToast('Not available yet', "Extending the inspection window isn't available in the app yet."))}
+        hitSlop={8}
+      >
+        <Text style={styles.escrowExtendLink}>Running Late? Extend by 24 hours (once)</Text>
+      </Pressable>
     </View>
   );
 }
@@ -1148,6 +1255,116 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.gray100,
     marginBottom: spacingY.xl,
+  },
+  sellerCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.lg,
+    marginBottom: spacingY.xl,
+  },
+  sellerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.md,
+  },
+  sellerAvatar: {
+    width: verticalScale(56),
+    height: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+  },
+  sellerHeaderText: {
+    flex: 1,
+    gap: verticalScale(4),
+  },
+  sellerName: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+  },
+  sellerSubtext: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+  },
+  sellerCallButton: {
+    width: verticalScale(44),
+    height: verticalScale(44),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerDivider: {
+    height: 1,
+    backgroundColor: colors.gray100,
+    marginVertical: spacingY.lg,
+  },
+  sellerMapWrap: {
+    width: '100%',
+    height: verticalScale(160),
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    backgroundColor: colors.gray100,
+  },
+  sellerMapImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sellerAddress: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray600,
+    marginTop: spacingY.md,
+  },
+  sellerMapsButton: {
+    marginTop: spacingY.md,
+    minHeight: verticalScale(48),
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerMapsButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.primary,
+  },
+  escrowCard: {
+    backgroundColor: colors.warning25,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.lg,
+    marginBottom: spacingY.xl,
+  },
+  escrowTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.xs,
+    marginBottom: spacingY.sm,
+  },
+  escrowTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.warning700,
+  },
+  escrowBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.sm,
+    lineHeight: fontSize.sm * 1.5,
+    color: colors.warning600,
+    marginBottom: spacingY.md,
+  },
+  escrowExtendLink: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.warning700,
+    textDecorationLine: 'underline',
   },
   sectionTitle: {
     fontFamily: fontFamily.bold,
