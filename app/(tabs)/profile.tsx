@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Pressable, RefreshControl, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Image, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import * as Notifications from 'expo-notifications';
 import dayjs from 'dayjs';
 import { ConfirmModal, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
@@ -13,7 +12,6 @@ import { useSingleTap } from '@/hooks/useSingleTap';
 import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { mediaApi, usersApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
-import { getPushToken, savePushToken } from '@/lib/pushToken';
 import { showErrorToast } from '@/lib/toast';
 
 export default function ProfileScreen() {
@@ -24,14 +22,9 @@ export default function ProfileScreen() {
   // Optimistic local preview shown the instant a photo is picked, before the upload/PATCH round-trip resolves.
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  // Hard-denied gallery/notifications permission — same "send to Settings" primer used in AddItemModal.
+  // Hard-denied gallery permission — same "send to Settings" primer used in AddItemModal.
   const [permissionPrompt, setPermissionPrompt] = useState<{ target: string; message: string } | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    Notifications.getPermissionsAsync().then(({ status }) => setNotificationsEnabled(status === 'granted'));
-  }, []);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -79,36 +72,6 @@ export default function ProfileScreen() {
       uploadAvatar(result.assets[0].uri);
     } catch {
       showErrorToast('Something went wrong', 'That photo could not be added — try again.');
-    }
-  }
-
-  // OS notification permission can only ever be requested, never revoked, from inside the app —
-  // both directions of this toggle end up at Settings unless we're asking for the very first time.
-  async function handleToggleNotifications(next: boolean) {
-    if (!next) {
-      setPermissionPrompt({
-        target: 'notifications',
-        message: 'Notifications are managed in your device Settings. Turn them off there to stop receiving alerts from Declut.',
-      });
-      return;
-    }
-    const { status, canAskAgain } = await Notifications.getPermissionsAsync();
-    if (status === 'granted') {
-      setNotificationsEnabled(true);
-      return;
-    }
-    if (!canAskAgain) {
-      setPermissionPrompt({
-        target: 'notifications',
-        message: 'Notifications are turned off. Enable them in Settings to get updates on your listings, offers, and transactions.',
-      });
-      return;
-    }
-    const result = await Notifications.requestPermissionsAsync();
-    setNotificationsEnabled(result.status === 'granted');
-    if (result.status === 'granted') {
-      const token = await getPushToken();
-      if (token) savePushToken(token).catch(() => {});
     }
   }
 
@@ -223,15 +186,8 @@ export default function ProfileScreen() {
           <ProfileMenuRow
             icon={<Icon name="notification" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
             label="Notifications"
+            onPress={() => router.push('/(modals)/notificationSettingModal')}
             last
-            right={
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={handleToggleNotifications}
-                trackColor={{ true: colors.primary, false: colors.gray200 }}
-                thumbColor={colors.white}
-              />
-            }
           />
         </View>
 
@@ -240,7 +196,7 @@ export default function ProfileScreen() {
           <ProfileMenuRow
             icon={<Icon name="message-question" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
             label="Help & Support"
-            onPress={() => router.push('/(legal)/faq')}
+            onPress={() => router.push('/(modals)/helpAndSupport')}
           />
           <ProfileMenuRow
             icon={<Icon name="message-text-1" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
@@ -254,12 +210,12 @@ export default function ProfileScreen() {
           <ProfileMenuRow
             icon={<Icon name="shield-tick" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
             label="Privacy Policy"
-            onPress={() => router.push('/(legal)/privacy-policy')}
+            onPress={() => router.push('/(modals)/privacyPolicy')}
           />
           <ProfileMenuRow
             icon={<Icon name="info-circle" variant="linear" size={verticalScale(20)} color={colors.gray500} />}
             label="Terms of Service"
-            onPress={() => router.push('/(legal)/terms-of-use')}
+            onPress={() => router.push('/(modals)/termsOfUse')}
             last
           />
         </View>
