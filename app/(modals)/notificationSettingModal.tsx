@@ -188,7 +188,14 @@ function SettingRow({ title, description, value, onValueChange, required, disabl
           <Text style={styles.requiredPillText}>Required</Text>
         </View>
       ) : (
-        <Switch value={value} onValueChange={onValueChange} disabled={disabled} trackColor={{ true: SWITCH_ON_COLOR, false: colors.gray200 }} thumbColor={colors.white} />
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          trackColor={{ true: SWITCH_ON_COLOR, false: colors.gray200 }}
+          thumbColor={colors.white}
+          style={[{ transform: [{ scale: 1.2 }] }]}
+        />
       )}
     </View>
   );
@@ -208,13 +215,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacingY.xl,
   },
+  // No marginBottom — the next sectionLabel's own marginTop already provides that gap, same as
+  // every other section transition on this screen; adding both would double it up here only.
+  // No paddingBottom either — the last row inside already contributes its own bottom padding via
+  // `row`'s paddingVertical, so paddingTop is intentionally smaller than a full row's padding to
+  // roughly balance the label's own height sitting above the first row.
   channelsCard: {
     backgroundColor: colors.cardBackground,
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    paddingHorizontal: spacingX.lg,
-    paddingTop: spacingY.lg,
-    marginBottom: spacingY.xl,
+    paddingHorizontal: spacingX.md,
+    paddingTop: spacingY.md,
   },
   groupLabel: {
     fontFamily: fontFamily.semibold,
@@ -243,7 +254,7 @@ const styles = StyleSheet.create({
   },
   rowText: {
     flex: 1,
-    gap: verticalScale(2),
+    gap: verticalScale(6),
   },
   rowTitle: {
     fontFamily: fontFamily.semibold,
