@@ -54,15 +54,21 @@ function wait(ms: number) {
 
 /** Polls until the transaction reaches escrow_active (payment confirmed) or attempts run out. */
 async function getTransactionResult(transactionId: string) {
+  if (__DEV__) console.log(`[Checkout] polling transaction=${transactionId} (up to ${PAYMENT_POLL_MAX_ATTEMPTS} attempts, ${PAYMENT_POLL_INTERVAL_MS}ms apart)`);
   for (let attempt = 0; attempt < PAYMENT_POLL_MAX_ATTEMPTS; attempt++) {
     await wait(PAYMENT_POLL_INTERVAL_MS);
     try {
       const transaction = await transactionsApi.getTransaction(transactionId);
-      if (transaction.status === 'escrow_active') return transaction;
-    } catch {
-      // Transient failure — keep polling until attempts run out.
+      if (__DEV__) console.log(`[Checkout] poll attempt ${attempt + 1}/${PAYMENT_POLL_MAX_ATTEMPTS} — status=${transaction.status}`);
+      if (transaction.status === 'escrow_active') {
+        if (__DEV__) console.log(`[Checkout] transaction=${transactionId} confirmed escrow_active`);
+        return transaction;
+      }
+    } catch (e) {
+      if (__DEV__) console.warn(`[Checkout] poll attempt ${attempt + 1}/${PAYMENT_POLL_MAX_ATTEMPTS} failed (transient, retrying)`, e);
     }
   }
+  if (__DEV__) console.warn(`[Checkout] transaction=${transactionId} did not reach escrow_active within ${PAYMENT_POLL_MAX_ATTEMPTS} attempts`);
   return null;
 }
 
@@ -136,7 +142,13 @@ const ORDER_PROCESS: AccordionEntry[] = [
 ];
 
 export default function ListingDetailsModal() {
-  const { id, isMine = 'false' } = useLocalSearchParams<{ id: string; isMine?: string }>();
+  const { id, isMine = 'false', resumeTransactionId } = useLocalSearchParams<{
+    id: string;
+    isMine?: string;
+    /** Set by app/payment-callback.tsx when the Paystack redirect is caught cold (app was
+     *  backgrounded/killed mid-checkout) instead of by the live WebView still being mounted. */
+    resumeTransactionId?: string;
+  }>();
   const isOwnListing = isMine === 'true';
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
@@ -219,49 +231,94 @@ export default function ListingDetailsModal() {
   async function handleMakePayment() {
     if (!listing || paying) return;
     setPaying(true);
+    if (__DEV__) console.log(`[Checkout] handleMakePayment: POST /transactions — listing=${listing._id} callbackUrl=${PAYSTACK_CALLBACK_URL}`);
     try {
       const { transactionId, paystackAuthorizationUrl } = await transactionsApi.checkout({
         listingId: listing._id,
         callbackUrl: PAYSTACK_CALLBACK_URL,
       });
+      if (__DEV__) console.log(`[Checkout] checkout() succeeded — transactionId=${transactionId} url=${paystackAuthorizationUrl}`);
       setCheckout({ transactionId, url: paystackAuthorizationUrl });
     } catch (e) {
-      console.error('[handleMakePayment] checkout failed', axios.isAxiosError(e) ? e.response?.data : e);
+      console.error('[Checkout] handleMakePayment failed', axios.isAxiosError(e) ? { status: e.response?.status, data: e.response?.data } : e);
       showErrorToast('Could not start checkout', extractErrorMessage(e));
     } finally {
       setPaying(false);
     }
   }
 
-  // Called once the WebView either hits the Paystack redirect back to our callback URL, or the
-  // user closes it manually. `success` only means "Paystack redirected back" — the transaction
-  // isn't actually confirmed until the poll below sees escrow_active.
-  async function handleCheckoutClosed(success: boolean) {
-    const transactionId = checkout?.transactionId ?? null;
-    setCheckout(null);
-    if (!success || !transactionId) {
-      if (!success) showWarningToast('Payment not completed', 'You can try again anytime.');
-      if (transactionId) {
-        // Frees this buyer to retry checkout on this listing — otherwise the abandoned
-        // pending_payment transaction blocks a second attempt (see TransactionsService.create()'s
-        // existingPending guard). Best-effort: the backend's hourly sweep is the fallback if this
-        // fails (network drop, app killed before this resolves).
-        transactionsApi.cancelTransaction(transactionId).catch(() => {});
-      }
-      return;
-    }
+  // Polls until escrow_active or attempts run out, showing the confirming overlay throughout.
+  // Returns the transaction if confirmed, null otherwise — callers decide what that means (show
+  // success vs. treat as unconfirmed) since the two call sites below want different fallback
+  // behavior. Used both from the live WebView close path and the cold-launch deep-link resume.
+  async function pollForPaymentConfirmation(transactionId: string) {
+    if (__DEV__) console.log(`[Checkout] pollForPaymentConfirmation: transaction=${transactionId}`);
     setConfirmingPayment(true);
     try {
       const transaction = await getTransactionResult(transactionId);
+      if (__DEV__) console.log(`[Checkout] pollForPaymentConfirmation: ${transaction ? 'CONFIRMED' : 'not confirmed'} — transaction=${transactionId}`);
+      return transaction;
+    } finally {
+      setConfirmingPayment(false);
+    }
+  }
+
+  // Called whenever the checkout WebView is done, for ANY reason — a detected redirect to
+  // PAYSTACK_CALLBACK_URL, or the user tapping the close button. These are deliberately no longer
+  // treated differently: Paystack's own checkout page can show its own "payment successful"
+  // screen and sit there before it auto-redirects, and a user who sees that often taps our close
+  // button immediately rather than waiting — which used to get misread as "abandoned" and
+  // cancelled a payment that had actually already gone through (or was about to be confirmed by
+  // the webhook a few seconds later). Always ask the backend what actually happened instead of
+  // guessing from how the WebView closed.
+  async function handleCheckoutClosed() {
+    const transactionId = checkout?.transactionId ?? null;
+    setCheckout(null);
+    if (!transactionId) return;
+
+    const transaction = await pollForPaymentConfirmation(transactionId);
+    if (transaction) {
+      setPaymentStep('success');
+      return;
+    }
+
+    // Genuinely never confirmed within the poll window — safe to treat as abandoned now.
+    // Frees this buyer to retry checkout on this listing — otherwise the stuck pending_payment
+    // transaction blocks a second attempt (see TransactionsService.create()'s existingPending
+    // guard). Best-effort: the backend's hourly sweep is the fallback if this fails (network
+    // drop, app killed before this resolves) — and the backend's cancel() endpoint itself refuses
+    // to cancel anything already past pending_payment, so a webhook that lands a moment after this
+    // call can't be clobbered by it.
+    showWarningToast('Payment not completed', 'You can try again anytime.');
+    transactionsApi.cancelTransaction(transactionId)
+      .then(() => { if (__DEV__) console.log(`[Checkout] cancelled unconfirmed transaction=${transactionId}`); })
+      .catch((e) => { if (__DEV__) console.warn(`[Checkout] cancelTransaction failed for transaction=${transactionId} (backend sweep is the fallback)`, e); });
+  }
+
+  // Resumes the confirm/poll/success flow when entered via the cold-launch deep-link path
+  // (app/payment-callback.tsx redirects here with this param once it's resolved Paystack's
+  // reference to a transaction) — the live-WebView path above already covers the case where this
+  // screen never left memory. Waits for `listing` so PaymentSuccessSheet has amount to show, and
+  // only runs once even if this screen re-renders.
+  const resumedCheckoutRef = useRef(false);
+  useEffect(() => {
+    if (!resumeTransactionId) return;
+    if (__DEV__) console.log(`[Checkout] resume effect fired — listingLoaded=${!!listing} resumeTransactionId=${resumeTransactionId} alreadyResumed=${resumedCheckoutRef.current}`);
+    if (!listing || resumedCheckoutRef.current) return;
+    resumedCheckoutRef.current = true;
+    if (__DEV__) console.log(`[Checkout] resuming from cold-launch deep link — transaction=${resumeTransactionId}`);
+    // No `checkout` state to clean up here (this screen was entered fresh via the deep link, not
+    // a live WebView session) — so unlike handleCheckoutClosed, an unconfirmed result here just
+    // stays pending rather than being cancelled; the buyer can check back or the app's own
+    // resume/poll flow will pick it up again.
+    pollForPaymentConfirmation(resumeTransactionId).then((transaction) => {
       if (transaction) {
         setPaymentStep('success');
       } else {
         showWarningToast('Still confirming', 'We could not confirm your payment yet — check back shortly.');
       }
-    } finally {
-      setConfirmingPayment(false);
-    }
-  }
+    });
+  }, [listing, resumeTransactionId]);
 
   if (loading) {
     return (
@@ -458,8 +515,7 @@ export default function ListingDetailsModal() {
       {checkout ? (
         <PaystackCheckoutWebView
           url={checkout.url}
-          onClose={() => handleCheckoutClosed(false)}
-          onRedirect={() => handleCheckoutClosed(true)}
+          onDone={handleCheckoutClosed}
         />
       ) : null}
 
@@ -515,50 +571,63 @@ function InfoAccordion({ title, items }: { title: string; items: AccordionEntry[
 
 interface PaystackCheckoutWebViewProps {
   url: string;
-  onClose: () => void;
-  /** Fired once the page navigates to PAYSTACK_CALLBACK_URL — checkout finished, for better or worse. */
-  onRedirect: () => void;
+  /** Fired when checkout is done, for any reason — a detected redirect to PAYSTACK_CALLBACK_URL,
+   *  or the user closing the WebView manually. Deliberately not distinguished anymore: whether
+   *  the payment actually succeeded is resolved by polling the transaction afterward, not by how
+   *  the WebView closed. */
+  onDone: () => void;
 }
 
 // Renders the Paystack checkout page in-app instead of handing off to the system browser, so it
 // reads as part of Declut rather than a separate app switch. PAYSTACK_CALLBACK_URL uses our own
 // `declut://` scheme, which the WebView can't actually navigate to — onShouldStartLoadWithRequest
 // intercepts that specific request and reports it back instead of letting the WebView try (and fail).
-function PaystackCheckoutWebView({ url, onClose, onRedirect }: PaystackCheckoutWebViewProps) {
+function PaystackCheckoutWebView({ url, onDone }: PaystackCheckoutWebViewProps) {
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
   const [pageLoading, setPageLoading] = useState(true);
   // onShouldStartLoadWithRequest doesn't fire reliably on Android for JS-driven redirects
   // (window.location.href = ...) — onNavigationStateChange is a redundant second check for the
-  // same URL prefix so the callback is still caught there. Guards against firing onRedirect twice
-  // if both hooks see the same navigation.
+  // same URL prefix so the callback is still caught there. Guards against firing onDone twice if
+  // both hooks see the same navigation.
   const redirectFiredRef = useRef(false);
 
-  function maybeFireRedirect(navUrl: string) {
-    console.log('[PaystackCheckoutWebView] nav', navUrl);
+  useEffect(() => {
+    if (__DEV__) console.log(`[PaystackCheckoutWebView] mounted — loading url=${url}`);
+    return () => {
+      if (__DEV__) console.log(`[PaystackCheckoutWebView] unmounted — redirectFired=${redirectFiredRef.current}`);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function maybeFireRedirect(navUrl: string, source: 'shouldStartLoad' | 'navigationStateChange') {
+    console.log(`[PaystackCheckoutWebView] nav (${source})`, navUrl);
     if (redirectFiredRef.current) return;
     if (navUrl.startsWith(PAYSTACK_CALLBACK_URL)) {
+      console.log(`[PaystackCheckoutWebView] callback URL matched via ${source} — closing`);
       redirectFiredRef.current = true;
-      onRedirect();
+      onDone();
     }
   }
 
   function handleShouldStartLoad(request: ShouldStartLoadRequest) {
+    if (__DEV__) console.log('[PaystackCheckoutWebView] onShouldStartLoadWithRequest', request.url);
     if (request.url.startsWith(PAYSTACK_CALLBACK_URL)) {
-      maybeFireRedirect(request.url);
+      maybeFireRedirect(request.url, 'shouldStartLoad');
       return false;
     }
     return true;
   }
 
   function handleNavigationStateChange(navState: WebViewNavigation) {
-    maybeFireRedirect(navState.url);
+    if (__DEV__) console.log(`[PaystackCheckoutWebView] onNavigationStateChange — url=${navState.url} loading=${navState.loading}`);
+    maybeFireRedirect(navState.url, 'navigationStateChange');
   }
 
   return (
     <View style={styles.checkoutOverlay}>
       <View style={[styles.checkoutHeader, { paddingTop: insets.top + spacingY.sm }]}>
-        <Pressable onPress={guard(onClose)} hitSlop={8} style={styles.checkoutCloseButton}>
+        <Pressable onPress={guard(() => { console.log('[PaystackCheckoutWebView] closed via X button'); onDone(); })} hitSlop={8} style={styles.checkoutCloseButton}>
           <Icon name="close-circle" variant="bold" size={verticalScale(24)} color={colors.gray500} />
         </Pressable>
         <Text style={styles.checkoutHeaderTitle}>Secure Checkout</Text>
@@ -566,14 +635,20 @@ function PaystackCheckoutWebView({ url, onClose, onRedirect }: PaystackCheckoutW
       </View>
 
       <ErrorBoundary
-        fallbackRender={() => <CheckoutWebViewFallback onClose={onClose} />}
-        onError={(err) => console.error('[PaystackCheckoutWebView] WebView failed to mount', err)}
+        fallbackRender={() => <CheckoutWebViewFallback onClose={onDone} />}
+        onError={(err) => console.error('[PaystackCheckoutWebView] WebView failed to mount — likely a native module that needs a dev-client rebuild', err)}
       >
         <WebView
           source={{ uri: url }}
           style={styles.checkoutWebView}
           startInLoadingState
-          onLoadEnd={() => setPageLoading(false)}
+          onLoadStart={(e) => { if (__DEV__) console.log('[PaystackCheckoutWebView] onLoadStart', e.nativeEvent.url); }}
+          onLoadEnd={(e) => {
+            if (__DEV__) console.log('[PaystackCheckoutWebView] onLoadEnd', e.nativeEvent.url);
+            setPageLoading(false);
+          }}
+          onError={(e) => console.error('[PaystackCheckoutWebView] onError', e.nativeEvent)}
+          onHttpError={(e) => console.error('[PaystackCheckoutWebView] onHttpError', e.nativeEvent.statusCode, e.nativeEvent.url)}
           onShouldStartLoadWithRequest={handleShouldStartLoad}
           onNavigationStateChange={handleNavigationStateChange}
         />
@@ -651,14 +726,15 @@ function BeforeYouPaySheet({ onClose, onContinue }: BeforeYouPaySheetProps) {
   );
 }
 
-// Matches Paystack's own fee structure: 1.5% of the transaction, capped at ₦2,000 for larger
-// amounts — display-only for now; that field isn't wired into checkout/payout logic server-side
-// yet, per the Postman collection's own note.
+// Matches Paystack's own fee structure: 1.5% of the transaction plus a flat ₦100, capped at
+// ₦2,000 for larger amounts — display-only for now; that field isn't wired into checkout/payout
+// logic server-side yet, per the Postman collection's own note.
 const PAY_FEE_PERCENT = 1.5;
+const PAY_FEE_FLAT = 100;
 const PAY_FEE_CAP = 2000;
 
 function calculatePaystackFee(amount: number): number {
-  return Math.min(amount * (PAY_FEE_PERCENT / 100), PAY_FEE_CAP);
+  return Math.min(amount * (PAY_FEE_PERCENT / 100) + PAY_FEE_FLAT, PAY_FEE_CAP);
 }
 
 interface PaySummarySheetProps {

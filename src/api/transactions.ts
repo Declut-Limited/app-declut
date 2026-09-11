@@ -31,6 +31,14 @@ export async function getTransaction(transactionId: string) {
   return res.data.data;
 }
 
+// Resolves a transaction from Paystack's own `reference` (the value it appends to callback_url
+// as ?reference=...) — used by the payment-callback deep-link route for the cold-launch case,
+// where there's no in-memory transactionId to fall back on.
+export async function getTransactionByReference(reference: string) {
+  const res = await apiClient.get<ApiEnvelope<Transaction>>(`/transactions/by-reference/${reference}`);
+  return res.data.data;
+}
+
 // Seller-side code INPUT only — confirmationCode is only ever returned to the
 // buyer, and only while escrow_active/awaiting_inspection (see CLAUDE.md).
 export async function confirmCode(transactionId: string, payload: ConfirmCodePayload) {

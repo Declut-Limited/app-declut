@@ -253,12 +253,8 @@ export interface Listing {
   createdAt: string;
   /** Only present when a search included lat/lng (radius search). */
   distanceKm?: number;
-  /** Only present if the backend embeds the caller's favorite state in search results. */
-  favorited?: boolean;
   /** UI-ready, but not actually returned by any documented endpoint yet — undefined on every real response today. */
-  viewCount?: number;
-  /** UI-ready, but not actually returned by any documented endpoint yet — undefined on every real response today. */
-  watchCount?: number;
+  views?: number;
 }
 
 /** Plain {lat,lng} on the way in — distinct from ListingLocation, the GeoJSON shape the response comes back as. */

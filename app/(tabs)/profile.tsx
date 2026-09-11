@@ -103,9 +103,9 @@ export default function ProfileScreen() {
         edges={['top']}
         background={colors.white}
         header={<ScreenHeader title="Profile" showBack={false} />}
-        // refreshControl={
-        //   <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
-        // }
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        }
       >
         <View style={styles.avatarBlock}>
           <View style={styles.avatarWrap}>

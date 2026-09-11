@@ -110,7 +110,7 @@ function MyListingCard({ listing, onPress }: MyListingCardProps) {
         <View style={styles.divider} />
         <View style={styles.statsRow}>
           <Icons.EyeIcon size={verticalScale(16)} color={colors.gray400} />
-          <Text style={styles.statsText}>{listing.viewCount ?? 0} views</Text>
+          <Text style={styles.statsText}>{listing.views ?? 0} views</Text>
         </View>
       </View>
     </Pressable>
