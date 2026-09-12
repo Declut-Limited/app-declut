@@ -253,8 +253,12 @@ export interface Listing {
   state?: string;
   city?: string;
   address?: string;
-  /** 'pending_sale' isn't in the documented status enum (Postman lists active/archived/deleted/flagged/sold only) — added for the buyer-side "held in escrow" detail view; confirm the real field/value with backend. */
-  status: 'active' | 'pending_sale' | 'archived' | 'sold';
+  /** 'pending_sale'/'reported' aren't in the older documented status enum (Postman's admin listings
+   *  filter only lists active/archived/deleted/flagged/sold) — both added per later, more specific
+   *  product/backend confirmation (pending_sale for the buyer-side escrow detail view, reported for
+   *  the seller-side My Listings status/actions). 'reported' may end up being the buyer-facing name
+   *  for what the admin side calls 'flagged' — confirm if the two ever need reconciling. */
+  status: 'active' | 'pending_sale' | 'archived' | 'sold' | 'reported';
   sellerId: string;
   /** Populated on GET /listings/:id (id or LST-#### slug) — not present on list/search results. Confirmed 2026-09-11: phoneNumber/totalSales/profileImageUrl (distinct field names from User's phone/soldCount/profileImageUrl) were added to this sub-object specifically for the buyer-side seller contact card. createdAt isn't confirmed on this sub-object — kept optional, degrades gracefully if absent. */
   seller?: ListingSeller;
@@ -426,6 +430,9 @@ export interface Transaction {
 /** GET /transactions/purchases query — 'active' maps server-side to awaiting_inspection only; omit entirely for every status. */
 export type PurchaseStatusFilter = 'active' | 'completed' | 'refunded' | 'disputed';
 
+/** GET /listings/mine query — omit entirely for every status ("All"). */
+export type MyListingsStatusFilter = 'active' | 'pending_sale' | 'sold' | 'reported' | 'archived';
+
 export interface CheckoutPayload {
   listingId: string;
   /** App's own deep-link scheme (registered as `declut://` in app.json) — Paystack redirects here when checkout finishes. */
@@ -460,6 +467,31 @@ export interface LeaveReviewPayload {
   rating: number;
   /** Optional, <=1000 chars. */
   comment?: string;
+}
+
+/** Confirmed 2026-09-14 — POST /reports (regular-user, JwtAuthGuard) replaces the old admin-only
+ *  /admin/reports entirely, same body shape. Used for the "Report A Problem" flow. */
+export interface CreateReportPayload {
+  /** Short summary. */
+  title: string;
+  /** The fuller reason text — for a predefined reason option, the same as its label; for
+   *  "Something else", the buyer's own free-text description. */
+  reason: string;
+  listingId: string;
+  reporterId: string;
+}
+
+/** Response shape not fully confirmed — only title/reason/listingId/reporterId are guaranteed
+ *  (they're just the payload echoed back); everything else is a reasonable guess. */
+export interface Report {
+  id?: string;
+  slug?: string;
+  title: string;
+  reason: string;
+  listingId: string;
+  reporterId: string;
+  status?: string;
+  createdAt?: string;
 }
 
 /** Batched as of 2026-07-23 — 1-10 entries per call, token min 10 chars, platform optional. */

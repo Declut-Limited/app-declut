@@ -12,5 +12,6 @@ export * as notificationsApi from './notifications';
 export * as notificationSettingsApi from './notificationSettings';
 export * as banksApi from './banks';
 export * as bankAccountsApi from './bankAccounts';
+export * as reportsApi from './reports';
 export * from './types';
 export { apiClient, extractErrorMessage } from './client';

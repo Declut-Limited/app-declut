@@ -7,10 +7,11 @@ import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { transactionsApi } from '@/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { reportsApi, transactionsApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency } from '@/utils/helpers';
-import { showErrorToast, showWarningToast } from '@/lib/toast';
+import { showErrorToast, showSuccessToast } from '@/lib/toast';
 
 const CANCEL_FEE_PERCENT = 10;
 
@@ -37,6 +38,7 @@ export default function SubmitReportModal() {
   const refundAmount = amount - cancelFee;
 
   const guard = useSingleTap();
+  const { user } = useAuth();
 
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
@@ -45,19 +47,31 @@ export default function SubmitReportModal() {
   const [cancellingPurchase, setCancellingPurchase] = useState(false);
   const [cancelSuccessOpen, setCancelSuccessOpen] = useState(false);
 
-  const canSubmit = !!reason && !submitting;
+  const canSubmit = !!reason && !submitting && (reason !== 'other' || !!description.trim());
 
   function handleClose() {
     router.back();
   }
 
-  // TODO: the only "Create report" endpoint in the Postman collection is under /admin/reports
-  // (adminAccessToken, requires a reporterId the caller supplies) — there's no buyer-facing,
-  // self-authenticated dispute-filing endpoint yet. Placeholder toast until one exists.
-  function handleSubmit() {
-    if (!canSubmit) return;
-    if (__DEV__) console.log('[SubmitReportModal] would submit report', { listingId, reason, description });
-    showWarningToast('Not available yet', "Reporting a problem isn't wired up yet.");
+  // POST /reports (regular-user, confirmed 2026-09-14) — title is a short summary, reason is the
+  // fuller text. For a predefined option there's no separate free-text, so both just use its
+  // label; "Something else" uses the buyer's own description as the reason.
+  async function handleSubmit() {
+    if (!canSubmit || !reason || !listingId || !user?.id) return;
+    const selected = REPORT_REASONS.find((r) => r.value === reason);
+    const title = reason === 'other' ? 'Something else' : selected?.label ?? 'Reported item';
+    const reasonText = reason === 'other' ? description.trim() : selected?.label ?? title;
+
+    setSubmitting(true);
+    try {
+      await reportsApi.createReport({ title, reason: reasonText, listingId, reporterId: user.id });
+      showSuccessToast('Report submitted', "We'll look into it and follow up if needed.");
+      router.back();
+    } catch (e) {
+      showErrorToast('Could not submit report', extractErrorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   // Distinct from transactionsApi.cancelTransaction, which is pre-payment only. This is the
@@ -267,7 +281,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingY.xl,
   },
   optionList: {
-    gap: spacingY.lg,
+    gap: spacingY.xs,
     marginBottom: spacingY.lg,
   },
   optionRow: {

@@ -1,14 +1,14 @@
-import React from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
-import { EmptyState, ScreenContainer, ScreenHeader } from '@/components';
+import { EmptyState, ListingActionsSheet, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
 import { listingsApi } from '@/api';
-import type { Listing } from '@/api/types';
+import type { Listing, MyListingsStatusFilter } from '@/api/types';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useSingleTap } from '@/hooks/useSingleTap';
 
@@ -19,23 +19,32 @@ const CARD_IMAGE_HEIGHT = verticalScale(96);
 
 const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text: string }> = {
   active: { label: 'Active', bg: colors.successLight, text: colors.success },
-  pending_sale: { label: 'Pending Sale', bg: colors.warningLight, text: colors.warning700 },
+  pending_sale: { label: 'Sales Pending', bg: colors.warningLight, text: colors.warning700 },
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
-  archived: { label: 'Archived', bg: colors.gray100, text: colors.gray500 },
+  archived: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
+  reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
 };
+
+const STATUS_TABS: { label: string; value: 'all' | MyListingsStatusFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Active', value: 'active' },
+  { label: 'Paused', value: 'archived' },
+  { label: 'Sales Pending', value: 'pending_sale' },
+  { label: 'Sold', value: 'sold' },
+  { label: 'Reported', value: 'reported' },
+];
 
 // FULL-SCREEN modal — Profile's "My Listings" row, GET /listings/mine.
 export default function MyListingsModal() {
   const guard = useSingleTap();
-  const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(({ page, limit }) =>
-    listingsApi.getMyListings(page, limit)
+  const [statusFilter, setStatusFilter] = useState<'all' | MyListingsStatusFilter>('all');
+  const [actionListing, setActionListing] = useState<Listing | null>(null);
+
+  const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
+    ({ page, limit }) => listingsApi.getMyListings(page, limit, statusFilter === 'all' ? undefined : statusFilter),
+    true,
+    statusFilter
   );
-
-  console.log("MY LISTINGS", items)
-
-  function onPressListing(listing: Listing) {
-    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: listing._id, isMine: 'true' } });
-  }
 
   function onPostNewListing() {
     router.push('/(modals)/addItemModal');
@@ -43,12 +52,23 @@ export default function MyListingsModal() {
 
   return (
     <ScreenContainer edges={['top', 'bottom']} background={colors.white} scroll={false} header={<ScreenHeader title="My Listings" />}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
+        {STATUS_TABS.map((tab) => {
+          const active = tab.value === statusFilter;
+          return (
+            <Pressable key={tab.value} onPress={guard(() => setStatusFilter(tab.value))} style={[styles.filterPill, active && styles.filterPillActive]}>
+              <Text style={[styles.filterPillLabel, active && styles.filterPillLabelActive]}>{tab.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       <FlatList
         data={loading || refreshing ? [] : items}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 70)}>
-            <MyListingCard listing={item} onPress={() => onPressListing(item)} />
+            <MyListingCard listing={item} onPress={() => setActionListing(item)} />
           </Animated.View>
         )}
         refreshControl={
@@ -76,6 +96,12 @@ export default function MyListingsModal() {
           </>
         }
       />
+
+      {actionListing ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ListingActionsSheet listing={actionListing} onClose={() => setActionListing(null)} onChanged={refresh} />
+        </View>
+      ) : null}
     </ScreenContainer>
   );
 }
@@ -85,7 +111,7 @@ interface MyListingCardProps {
   onPress: () => void;
 }
 
-/** "My Listings" row — status pill instead of location, plus a view count (0 until the backend returns viewCount; see comment on Listing). */
+/** "My Listings" row — status pill instead of location, plus a view count (0 until the backend returns viewCount; see comment on Listing). Tapping the card opens the actions sheet, not the listing detail screen directly — "View Listing" inside that sheet is the way there now. */
 function MyListingCard({ listing, onPress }: MyListingCardProps) {
   const guard = useSingleTap();
   const status = STATUS_STYLES[listing.status];
@@ -112,6 +138,8 @@ function MyListingCard({ listing, onPress }: MyListingCardProps) {
         <View style={styles.statsRow}>
           <Icons.EyeIcon size={verticalScale(16)} color={colors.gray400} />
           <Text style={styles.statsText}>{listing.views ?? 0} views</Text>
+          <View style={styles.statsSpacer} />
+          <Icons.DotsThreeIcon size={verticalScale(20)} color={colors.gray400} weight="bold" />
         </View>
       </View>
     </Pressable>
@@ -135,6 +163,37 @@ function MyListingCardSkeleton({ count }: { count: number }) {
 }
 
 const styles = StyleSheet.create({
+  filterScroll: {
+    flexGrow: 0,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.sm,
+    paddingBottom: spacingY.lg,
+  },
+  filterPill: {
+    height: verticalScale(40),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.md,
+  },
+  filterPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterPillLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.gray600,
+  },
+  filterPillLabelActive: {
+    color: colors.white,
+  },
   listContent: {
     flexGrow: 1,
     paddingBottom: spacingY.xl,
@@ -218,6 +277,9 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,
     color: colors.gray400,
+  },
+  statsSpacer: {
+    flex: 1,
   },
   postButton: {
     flexDirection: 'row',

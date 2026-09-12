@@ -6,6 +6,7 @@ import type {
   ListingSearchParams,
   ListingsCountParams,
   ListingsCountResponse,
+  MyListingsStatusFilter,
   NearbyListingsParams,
   NewListingsParams,
   PaginatedResponse,
@@ -65,10 +66,10 @@ export async function getListing(listingId: string) {
   return res.data.data;
 }
 
-/** The caller's own listings, any status except deleted, newest first. */
-export async function getMyListings(page = 1, limit = 20) {
+/** The caller's own listings, newest first. status omitted = every status except deleted. */
+export async function getMyListings(page = 1, limit = 20, status?: MyListingsStatusFilter) {
   const res = await apiClient.get<ApiEnvelope<PaginatedResponse<Listing>>>('/listings/mine', {
-    params: { page, limit },
+    params: status ? { page, limit, status } : { page, limit },
   });
   return res.data.data;
 }
