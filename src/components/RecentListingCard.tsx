@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import dayjs from 'dayjs';
 import Icon from './Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -8,7 +9,7 @@ import { useSingleTap } from '@/hooks/useSingleTap';
 import { formatCurrency, formatDistance } from '@/utils/helpers';
 import type { RecentListingCardProps } from '@/utils/types';
 
-const NEW_WITHIN_DAYS = 7;
+const NEW_WITHIN_DAYS = 14;
 const IMAGE_WIDTH = verticalScale(120);
 const IMAGE_HEIGHT = verticalScale(96);
 
@@ -26,7 +27,12 @@ export function RecentListingCard({ listing, onPress, userLat, userLng }: Recent
     <Pressable onPress={guard(onPress)} style={styles.card}>
       <View style={styles.imageWrap}>
         {listing.mainImageUrl || listing.images[0] ? (
-          <Image source={{ uri: listing.mainImageUrl || listing.images[0]?.secureUrl }} style={styles.image} resizeMode="cover" />
+          <Image
+            source={{ uri: listing.mainImageUrl || listing.images[0]?.secureUrl }}
+            style={styles.image}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]} />
         )}

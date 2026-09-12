@@ -530,3 +530,20 @@ export interface UpdateNotificationSettingsPayload {
   inspectionReminders?: boolean;
   disputeUpdates?: boolean;
 }
+
+export interface SystemSettingsInspectionWindow {
+  inspectionPeriod: number;
+  allowExtension: boolean;
+  maxExtensionPeriod: number;
+}
+
+/** GET /settings — public, unauthenticated, admin-configured platform settings. Confirmed 2026-09-12:
+ *  returns this object directly, not wrapped in the usual ApiEnvelope. */
+export interface SystemSettings {
+  companyName: string;
+  supportEmail: string;
+  defaultCurrency: string;
+  timezone: string;
+  commissionPercentage: number;
+  inspectionWindow: SystemSettingsInspectionWindow;
+}

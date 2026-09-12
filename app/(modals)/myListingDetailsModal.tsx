@@ -4,6 +4,7 @@ import {
   Image,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleProp,
   StyleSheet,
@@ -301,6 +302,23 @@ export default function MyListingDetailsModal() {
     listingsApi.getListing(listing._id).then(setListing).catch(() => {});
   }
 
+  // Full reload (skeleton, since `loading` is what the early-return above keys off of) — pulling
+  // to refresh (the RefreshControl on the scroll view below) triggers the same skeleton as the
+  // initial fetch, not a separate lightweight spinner.
+  async function handleRefresh() {
+    if (!listing) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listingsApi.getListing(listing._id);
+      setListing(data);
+    } catch (e) {
+      setError(extractErrorMessage(e, 'Could not load this listing.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // TODO: no listing edit screen exists yet (addItemModal is create-only) — placeholder toast.
   function handleEdit() {
     showWarningToast('Not available yet', "Editing a listing isn't available yet.");
@@ -405,6 +423,9 @@ export default function MyListingDetailsModal() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />
+        }
       >
         <View style={styles.hero}>
           {mediaItems.length > 0 ? (

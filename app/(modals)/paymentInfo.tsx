@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { router } from 'expo-router';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
@@ -11,6 +12,33 @@ import { bankAccountsApi, banksApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
 import type { Bank, BankAccount } from '@/api/types';
 import { showErrorToast } from '@/lib/toast';
+
+function Bone({ width, height, style }: { width: number | `${number}%`; height: number; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ width, height, borderRadius: 4, backgroundColor: colors.gray100 }, style]} />;
+}
+
+/** Mirrors accountCard's shape so nothing jumps once the fetch resolves — same pulse technique as ListingDetailsSkeleton. */
+function AccountCardSkeleton() {
+  const opacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, [opacity]);
+
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View style={[styles.accountCard, pulseStyle]}>
+      <View style={styles.accountCardHeader}>
+        <View style={styles.bankBadge} />
+        <Bone width={verticalScale(100)} height={verticalScale(14)} />
+      </View>
+      <View style={styles.accountCardDivider} />
+      <Bone width="50%" height={verticalScale(18)} style={styles.skeletonLineGap} />
+      <Bone width="70%" height={verticalScale(14)} />
+    </Animated.View>
+  );
+}
 
 export default function PaymentInfoModal() {
   const { user, refreshUser } = useAuth();
@@ -87,7 +115,7 @@ export default function PaymentInfoModal() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} style={styles.loading} />
+        <AccountCardSkeleton />
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : account ? (
@@ -238,8 +266,8 @@ const styles = StyleSheet.create({
     lineHeight: fontSize.sm * 1.4,
     color: colors.gray500,
   },
-  loading: {
-    marginTop: spacingY.xl,
+  skeletonLineGap: {
+    marginBottom: verticalScale(8),
   },
   errorText: {
     fontFamily: fontFamily.medium,

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
 import dayjs from 'dayjs';
-import { ConfirmModal, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
+import { BottomSheetCard, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
@@ -255,17 +256,46 @@ export default function ProfileScreen() {
       ) : null}
 
       {logoutConfirmOpen ? (
-        <View style={StyleSheet.absoluteFill}>
-          <ConfirmModal
-            title="Log out?"
-            message="You'll need to sign in again to access your account."
-            confirmLabel="Log out"
-            onConfirm={handleSignOut}
-            onCancel={() => setLogoutConfirmOpen(false)}
-          />
-        </View>
+        <LogoutConfirmSheet onCancel={() => setLogoutConfirmOpen(false)} onConfirm={handleSignOut} />
       ) : null}
     </View>
+  );
+}
+
+interface LogoutConfirmSheetProps {
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// Wrapped in a real RN Modal (not just an absolute-fill View like BottomSheetCard's other call
+// sites) because this screen lives inside the tabs navigator — an absolute View here would only
+// fill the space above CustomTabBar, not cover it. Modal portals to its own native root, so the
+// sheet overflows the tab bar too. That separate native root is also why it needs its own
+// GestureHandlerRootView: the app-level one in app/_layout.tsx doesn't reach inside a Modal on
+// Android, which would otherwise break BottomSheetCard's drag-to-dismiss handle.
+function LogoutConfirmSheet({ onCancel, onConfirm }: LogoutConfirmSheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={onCancel}>
+      <GestureHandlerRootView style={styles.flex}>
+        <BottomSheetCard onBackdropPress={guard(onCancel)} sheetBackgroundColor={colors.white}>
+          <View style={styles.logoutIconWrap}>
+            <Icon name="logout" variant="bold" size={verticalScale(32)} color={colors.danger} />
+          </View>
+          <Text style={styles.logoutTitle}>Log out?</Text>
+          <Text style={styles.logoutBody}>You'll need to sign in again to access your account.</Text>
+          <View style={styles.logoutButtonRow}>
+            <Pressable onPress={guard(onCancel)} style={styles.logoutCancelButton}>
+              <Text style={styles.logoutCancelLabel}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={guard(onConfirm)} style={styles.logoutConfirmButton}>
+              <Text style={styles.logoutConfirmLabel}>Log out</Text>
+            </Pressable>
+          </View>
+        </BottomSheetCard>
+      </GestureHandlerRootView>
+    </Modal>
   );
 }
 
@@ -473,5 +503,64 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: fontSize.md,
     color: colors.gray900,
+  },
+  logoutIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(72),
+    height: verticalScale(72),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.dangerLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.lg,
+  },
+  logoutTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  logoutBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.xl,
+  },
+  logoutButtonRow: {
+    flexDirection: 'row',
+    gap: spacingX.md,
+    paddingBottom: spacingY.md,
+  },
+  logoutCancelButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutCancelLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
+  },
+  logoutConfirmButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutConfirmLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
   },
 });

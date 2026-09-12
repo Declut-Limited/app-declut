@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -6,6 +6,7 @@ import {
   Linking,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleProp,
@@ -18,6 +19,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { WebView } from 'react-native-webview';
@@ -213,34 +215,47 @@ export default function ListingDetailsModal() {
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  useEffect(() => {
+  // Full reload (skeleton, since `loading` is what the early-return below keys off of) — called
+  // on first focus, again after any action that can change this listing's status (paying,
+  // confirming inspection/completion, and — via the focus effect below — reporting a problem or
+  // requesting a refund, both of which happen on submitReportModal and only ever report back by
+  // popping to here), and by pulling to refresh (the RefreshControl on the scroll view below).
+  const reloadListing = useCallback(async () => {
     if (!id) return;
-    let cancelled = false;
     setLoading(true);
-    listingsApi
-      .getListing(id)
-      .then((data) => {
-        console.log('[listingDetailsModal] fetched listing', data);
-        if (!cancelled) setListing(data);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(extractErrorMessage(e, 'Could not load this listing.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    setError(null);
+    try {
+      const data = await listingsApi.getListing(id);
+      setListing(data);
+    } catch (e) {
+      setError(extractErrorMessage(e, 'Could not load this listing.'));
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      reloadListing();
+    }, [reloadListing])
+  );
 
   // Registers a view 5s after the listing actually loads — the backend owns de-duping (one
   // counted view per viewer/listing per hour), so this just needs to fire once; no toast either
-  // way, a view registration is never something the buyer needs to see confirmed or fail.
+  // way, a view registration is never something the buyer needs to see confirmed or fail. When it
+  // actually counts, silently refetch (no skeleton — this is cosmetic, not a state change worth
+  // reloadListing's full-page treatment) so the views count on screen reflects the bump.
   useEffect(() => {
     if (!listing) return;
     const timer = setTimeout(() => {
-      listingsApi.registerListingView(listing._id).catch(() => {});
+      listingsApi
+        .registerListingView(listing._id)
+        .then((result) => {
+          if (result.counted) {
+            listingsApi.getListing(listing._id).then(setListing).catch(() => {});
+          }
+        })
+        .catch(() => {});
     }, 5000);
     return () => clearTimeout(timer);
   }, [listing]);
@@ -323,15 +338,16 @@ export default function ListingDetailsModal() {
     try {
       await transactionsApi.confirmTransaction(myTransaction._id);
       showSuccessToast('Item confirmed', 'Funds have been released to the seller.');
-      listingsApi.getListing(listing._id).then(setListing).catch(() => {});
-      setReviewRating(0);
-      setReviewComment('');
-      setReviewSheetOpen(true);
     } catch (e) {
       showErrorToast('Could not confirm', extractErrorMessage(e));
-    } finally {
       setConfirmingTransaction(false);
+      return;
     }
+    setConfirmingTransaction(false);
+    await reloadListing();
+    setReviewRating(0);
+    setReviewComment('');
+    setReviewSheetOpen(true);
   }
 
   function handleOpenReviewSheet() {
@@ -449,9 +465,7 @@ export default function ListingDetailsModal() {
   // publish, just triggered by this money-moving moment instead.
   async function handlePaymentSuccessClose() {
     setPaymentStep('none');
-    if (listing) {
-      listingsApi.getListing(listing._id).then(setListing).catch(() => {});
-    }
+    await reloadListing();
     try {
       const profile = await usersApi.getMyProfile();
       if (!profile.hasPayoutDetails) {
@@ -527,6 +541,9 @@ export default function ListingDetailsModal() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={reloadListing} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />
+        }
       >
         <View style={styles.hero}>
           {mediaItems.length > 0 ? (
