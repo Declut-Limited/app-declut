@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
 import { BottomSheetCard } from './BottomSheetCard';
+import Icon from './Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
@@ -15,8 +16,8 @@ import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 interface ListingActionsSheetProps {
   listing: Listing;
   onClose: () => void;
-  /** Refetches after an action actually changes something (pause/delete) — a list refresh on
-   *  myListings, a single-listing refetch on myListingDetailsModal. */
+  /** Refetches after an action actually changes something (pause/resume/delete) — a list refresh
+   *  on myListings, a single-listing refetch on myListingDetailsModal. */
   onChanged: () => void;
   /** myListingDetailsModal opens this sheet from the listing it's already showing — "View Listing"
    *  there would just navigate back to itself, so that screen omits it. myListings.tsx (tapping a
@@ -24,24 +25,27 @@ interface ListingActionsSheetProps {
   hideViewListing?: boolean;
 }
 
+type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delete' | 'success-pause' | 'success-resume';
+
 // Shared between myListings.tsx (tapping a card) and myListingDetailsModal.tsx (the floating
 // header's ••• button). Which rows show depends entirely on listing.status:
 // - View Listing: always, unless hideViewListing.
-// - Edit/Delete Listing: only active or flagged.
-// - Pause Listing: only active. Resume Listing: only archived (paused) — no confirmed
-//   "unarchive"/"reactivate" endpoint exists yet, so Resume is a placeholder for now.
+// - Edit/Delete Listing: only active or reported.
+// - Pause Listing: only active. Resume Listing: only paused.
 // - View Transaction / Contact Buyer: only pending_sale or sold.
 // - Share Listing: only active.
+// Only one sheet is ever mounted at a time — `view` swaps the options list out for a confirmation
+// or success sheet instead of stacking one on top of the other.
 export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListing }: ListingActionsSheetProps) {
   const guard = useSingleTap();
-  const [pendingAction, setPendingAction] = useState<'pause' | 'delete' | null>(null);
-  const busy = pendingAction !== null;
+  const [view, setView] = useState<SheetView>('actions');
+  const [pendingAction, setPendingAction] = useState<'pause' | 'resume' | 'delete' | null>(null);
 
   const canPause = listing.status === 'active';
-  const canResume = listing.status === 'archived';
+  const canResume = listing.status === 'paused';
   const canShare = listing.status === 'active';
   const canViewTransactionOrContact = listing.status === 'pending_sale' || listing.status === 'sold';
-  const canEditOrDelete = listing.status === 'active' || listing.status === 'flagged';
+  const canEditOrDelete = listing.status === 'active' || listing.status === 'reported';
 
   function handleViewListing() {
     onClose();
@@ -53,23 +57,30 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
     showWarningToast('Not available yet', "Editing a listing isn't available yet.");
   }
 
-  async function handlePause() {
+  async function confirmPause() {
     setPendingAction('pause');
     try {
-      await listingsApi.archiveListing(listing._id);
-      showSuccessToast('Listing paused', 'Buyers can no longer find this listing.');
-      onChanged();
-      onClose();
+      await listingsApi.pauseListing(listing._id);
+      setView('success-pause');
     } catch (e) {
       showErrorToast('Could not pause listing', extractErrorMessage(e));
+      setView('actions');
     } finally {
       setPendingAction(null);
     }
   }
 
-  // TODO: only an Archive listing endpoint is documented — no unarchive/reactivate counterpart yet.
-  function handleResume() {
-    showWarningToast('Not available yet', "Resuming a paused listing isn't wired up yet.");
+  async function confirmResume() {
+    setPendingAction('resume');
+    try {
+      await listingsApi.resumeListing(listing._id);
+      setView('success-resume');
+    } catch (e) {
+      showErrorToast('Could not resume listing', extractErrorMessage(e));
+      setView('actions');
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   // TODO: no seller-side transaction-detail screen exists yet — placeholder toast.
@@ -90,13 +101,6 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
     }
   }
 
-  function handleDelete() {
-    Alert.alert('Delete this listing?', "This can't be undone.", [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
-    ]);
-  }
-
   async function confirmDelete() {
     setPendingAction('delete');
     try {
@@ -106,39 +110,105 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
       onClose();
     } catch (e) {
       showErrorToast('Could not delete listing', extractErrorMessage(e));
+      setView('actions');
     } finally {
       setPendingAction(null);
     }
   }
 
+  function handleSuccessClose() {
+    onChanged();
+    onClose();
+  }
+
+  if (view === 'confirm-pause') {
+    return (
+      <ConfirmSheet
+        iconName="pause"
+        iconBg={colors.gray100}
+        iconColor={colors.gray700}
+        title="Pause this listing?"
+        body="Buyers won't be able to find or purchase this listing while it's paused. You can resume it anytime."
+        confirmLabel="Pause Listing"
+        confirmBg={colors.primary}
+        confirmColor={colors.white}
+        loading={pendingAction === 'pause'}
+        onCancel={() => setView('actions')}
+        onConfirm={confirmPause}
+      />
+    );
+  }
+
+  if (view === 'confirm-resume') {
+    return (
+      <ConfirmSheet
+        iconName="refresh"
+        iconBg={colors.primary25}
+        iconColor={colors.primary}
+        title="Resume this listing?"
+        body="Your listing will be visible to buyers again and available for purchase."
+        confirmLabel="Resume Listing"
+        confirmBg={colors.primary}
+        confirmColor={colors.white}
+        loading={pendingAction === 'resume'}
+        onCancel={() => setView('actions')}
+        onConfirm={confirmResume}
+      />
+    );
+  }
+
+  if (view === 'confirm-delete') {
+    return (
+      <ConfirmSheet
+        iconName="trash"
+        iconBg={colors.error50}
+        iconColor={colors.danger}
+        title="Delete this listing?"
+        body="This can't be undone."
+        confirmLabel="Delete Listing"
+        confirmBg={colors.error50}
+        confirmColor={colors.danger}
+        loading={pendingAction === 'delete'}
+        onCancel={() => setView('actions')}
+        onConfirm={confirmDelete}
+      />
+    );
+  }
+
+  if (view === 'success-pause') {
+    return <DoneSheet title="Listing Paused" body="Buyers can no longer find this listing until you resume it." onClose={handleSuccessClose} />;
+  }
+
+  if (view === 'success-resume') {
+    return <DoneSheet title="Listing Resumed" body="Your listing is active again and visible to buyers." onClose={handleSuccessClose} />;
+  }
+
   return (
-    <BottomSheetCard onBackdropPress={busy ? undefined : guard(onClose)} sheetBackgroundColor={colors.white}>
+    <BottomSheetCard onBackdropPress={guard(onClose)} sheetBackgroundColor={colors.white}>
       <View style={styles.actionsHeaderRow}>
         <Text style={styles.actionsTitle} numberOfLines={1}>
           {listing.title}
         </Text>
-        <Pressable onPress={busy ? undefined : guard(onClose)} style={styles.actionsCloseButton} hitSlop={8}>
+        <Pressable onPress={guard(onClose)} style={styles.actionsCloseButton} hitSlop={8}>
           <Icons.XIcon size={verticalScale(16)} color={colors.white} weight="bold" />
         </Pressable>
       </View>
 
       <View style={styles.actionsList}>
-        {hideViewListing ? null : <ActionRow label="View Listing" onPress={guard(handleViewListing)} disabled={busy} />}
+        {hideViewListing ? null : <ActionRow label="View Listing" onPress={guard(handleViewListing)} />}
 
-        {canEditOrDelete ? <ActionRow label="Edit Listing" onPress={guard(handleEdit)} disabled={busy} /> : null}
+        {canEditOrDelete ? <ActionRow label="Edit Listing" onPress={guard(handleEdit)} /> : null}
 
         {canPause ? (
-          <ActionRow label="Pause Listing" onPress={guard(handlePause)} disabled={busy} loading={pendingAction === 'pause'} />
+          <ActionRow label="Pause Listing" onPress={guard(() => setView('confirm-pause'))} />
         ) : canResume ? (
-          <ActionRow label="Resume Listing" onPress={guard(handleResume)} disabled={busy} />
+          <ActionRow label="Resume Listing" onPress={guard(() => setView('confirm-resume'))} />
         ) : null}
 
-        {canViewTransactionOrContact ? <ActionRow label="View Transaction" onPress={guard(handleViewTransaction)} disabled={busy} /> : null}
-        {canViewTransactionOrContact ? <ActionRow label="Contact Buyer" onPress={guard(handleContactBuyer)} disabled={busy} /> : null}
-        {canShare ? <ActionRow label="Share Listing" onPress={guard(handleShare)} disabled={busy} /> : null}
-        {canEditOrDelete ? (
-          <ActionRow label="Delete Listing" onPress={guard(handleDelete)} disabled={busy} loading={pendingAction === 'delete'} danger />
-        ) : null}
+        {canViewTransactionOrContact ? <ActionRow label="View Transaction" onPress={guard(handleViewTransaction)} /> : null}
+        {canViewTransactionOrContact ? <ActionRow label="Contact Buyer" onPress={guard(handleContactBuyer)} /> : null}
+        {canShare ? <ActionRow label="Share Listing" onPress={guard(handleShare)} /> : null}
+        {canEditOrDelete ? <ActionRow label="Delete Listing" onPress={guard(() => setView('confirm-delete'))} danger /> : null}
       </View>
     </BottomSheetCard>
   );
@@ -147,20 +217,77 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
 interface ActionRowProps {
   label: string;
   onPress: () => void;
-  disabled?: boolean;
-  loading?: boolean;
   danger?: boolean;
 }
 
-function ActionRow({ label, onPress, disabled, loading, danger }: ActionRowProps) {
+function ActionRow({ label, onPress, danger }: ActionRowProps) {
   return (
-    <Pressable onPress={disabled ? undefined : onPress} disabled={disabled} style={[styles.actionRow, danger && styles.actionRowDanger]}>
-      {loading ? (
-        <ActivityIndicator color={danger ? colors.danger : colors.gray700} />
-      ) : (
-        <Text style={[styles.actionRowLabel, danger && styles.actionRowLabelDanger]}>{label}</Text>
-      )}
+    <Pressable onPress={onPress} style={[styles.actionRow, danger && styles.actionRowDanger]}>
+      <Text style={[styles.actionRowLabel, danger && styles.actionRowLabelDanger]}>{label}</Text>
     </Pressable>
+  );
+}
+
+interface ConfirmSheetProps {
+  iconName: string;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  body: string;
+  confirmLabel: string;
+  confirmBg: string;
+  confirmColor: string;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// Same yes/no bottom sheet shape used for pausing, resuming, and deleting — kept local to this
+// file since it's only ever reached from the rows above, not reused anywhere else.
+function ConfirmSheet({ iconName, iconBg, iconColor, title, body, confirmLabel, confirmBg, confirmColor, loading, onCancel, onConfirm }: ConfirmSheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={loading ? undefined : guard(onCancel)} sheetBackgroundColor={colors.white}>
+      <View style={[styles.confirmIconWrap, { backgroundColor: iconBg }]}>
+        <Icon name={iconName} variant="bold" size={verticalScale(32)} color={iconColor} />
+      </View>
+      <Text style={styles.confirmTitle}>{title}</Text>
+      <Text style={styles.confirmBody}>{body}</Text>
+      <View style={styles.confirmButtonRow}>
+        <Pressable onPress={loading ? undefined : guard(onCancel)} disabled={loading} style={styles.confirmCancelButton}>
+          <Text style={styles.confirmCancelLabel}>Cancel</Text>
+        </Pressable>
+        <Pressable onPress={loading ? undefined : guard(onConfirm)} disabled={loading} style={[styles.confirmButton, { backgroundColor: confirmBg }]}>
+          {loading ? <ActivityIndicator color={confirmColor} /> : <Text style={[styles.confirmLabel, { color: confirmColor }]}>{confirmLabel}</Text>}
+        </Pressable>
+      </View>
+    </BottomSheetCard>
+  );
+}
+
+interface DoneSheetProps {
+  title: string;
+  body: string;
+  onClose: () => void;
+}
+
+// Success sheet shown after a pause/resume confirm completes — local to this file, same reasoning
+// as ConfirmSheet above.
+function DoneSheet({ title, body, onClose }: DoneSheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)} sheetBackgroundColor={colors.white}>
+      <View style={styles.doneIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(40)} color={colors.success} />
+      </View>
+      <Text style={styles.confirmTitle}>{title}</Text>
+      <Text style={styles.confirmBody}>{body}</Text>
+      <Pressable onPress={guard(onClose)} style={styles.doneCloseButton}>
+        <Text style={styles.doneCloseLabel}>Close</Text>
+      </Pressable>
+    </BottomSheetCard>
   );
 }
 
@@ -212,5 +339,87 @@ const styles = StyleSheet.create({
   },
   actionRowLabelDanger: {
     color: colors.danger,
+  },
+  confirmIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(72),
+    height: verticalScale(72),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.lg,
+  },
+  confirmTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  confirmBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.xl,
+  },
+  confirmButtonRow: {
+    flexDirection: 'row',
+    gap: spacingX.md,
+    paddingBottom: spacingY.md,
+  },
+  confirmCancelButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
+  },
+  confirmButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+  },
+  doneIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(80),
+    height: verticalScale(80),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.successLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.lg,
+  },
+  doneCloseButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+    marginBottom: spacingY.md,
+  },
+  doneCloseLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
   },
 });

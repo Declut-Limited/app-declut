@@ -90,11 +90,18 @@ export async function updateListing(listingId: string, payload: UpdateListingPay
   return res.data.data;
 }
 
-export async function archiveListing(listingId: string) {
-  const res = await apiClient.patch<ApiEnvelope<Listing>>(`/listings/${listingId}/archive`);
+export async function deleteListing(listingId: string) {
+  await apiClient.delete(`/listings/${listingId}`);
+}
+
+/** Owner-only. Becomes a private draft — hidden everywhere except GET /listings/mine?status=paused for the owner. 400 if not currently active. */
+export async function pauseListing(listingId: string) {
+  const res = await apiClient.patch<ApiEnvelope<Listing>>(`/listings/${listingId}/pause`);
   return res.data.data;
 }
 
-export async function deleteListing(listingId: string) {
-  await apiClient.delete(`/listings/${listingId}`);
+/** Owner-only. Sends a paused listing back to active. 400 if not currently paused. */
+export async function resumeListing(listingId: string) {
+  const res = await apiClient.patch<ApiEnvelope<Listing>>(`/listings/${listingId}/resume`);
+  return res.data.data;
 }

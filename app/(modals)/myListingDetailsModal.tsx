@@ -28,7 +28,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import dayjs from 'dayjs';
-import { EmptyState, ListingActionsSheet } from '@/components';
+import { BottomSheetCard, EmptyState, ListingActionsSheet } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
@@ -38,7 +38,7 @@ import type { Listing, Transaction, TransactionStatus } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
-import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
+import { showErrorToast, showWarningToast } from '@/lib/toast';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -59,8 +59,7 @@ type NoteTone = 'neutral' | 'info' | 'warning';
 // Static copy per status, matching the Figma export verbatim.
 const STATUS_NOTE: Record<Listing['status'], { title: string; body: string; tone: NoteTone }> = {
   active: { title: 'Your listing is live', body: 'Buyers can discover and purchase this item right now.', tone: 'info' },
-  archived: { title: 'Listing Paused', body: 'This listing is currently hidden from buyers.', tone: 'neutral' },
-  flagged: {
+  reported: {
     title: 'Action Required',
     body: "We've identified information in this report that needs your attention. Review the report for what to do next.",
     tone: 'warning',
@@ -71,6 +70,7 @@ const STATUS_NOTE: Record<Listing['status'], { title: string; body: string; tone
     tone: 'warning',
   },
   sold: { title: 'Sold successfully', body: 'This item was successfully sold through Declut.', tone: 'info' },
+  paused: { title: 'Listing Paused', body: 'This listing is currently hidden from buyers.', tone: 'neutral' },
 };
 // listing.status's exact enum isn't fully confirmed backend-side — fall back rather than crash
 // on a status string these maps don't have an entry for yet.
@@ -93,13 +93,13 @@ const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text
   active: { label: 'Active', bg: colors.successLight, text: colors.success },
   pending_sale: { label: 'Sales Pending', bg: colors.warningLight, text: colors.warning700 },
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
-  archived: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
-  flagged: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
+  reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
+  paused: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
 };
 const FALLBACK_STATUS_STYLE = STATUS_STYLES.active;
 
 const NOTE_TONE_STYLES: Record<NoteTone, { bg: string; iconBg: string; text: string }> = {
-  neutral: { bg: colors.gray100, iconBg: colors.gray700, text: colors.gray700 },
+  neutral: { bg: colors.backgroundLight, iconBg: colors.gray700, text: colors.gray700 },
   info: { bg: colors.primary25, iconBg: colors.primary, text: colors.primary },
   warning: { bg: colors.warning25, iconBg: colors.warning700, text: colors.warning700 },
 };
@@ -138,6 +138,81 @@ function DetailsCard({ rows }: { rows: DetailRow[] }) {
   );
 }
 
+const PAUSE_RESUME_CONFIRM_COPY = {
+  pause: {
+    iconName: 'pause',
+    iconBg: colors.gray100,
+    iconColor: colors.gray700,
+    title: 'Pause this listing?',
+    body: "Buyers won't be able to find or purchase this listing while it's paused. You can resume it anytime.",
+    confirmLabel: 'Pause Listing',
+  },
+  resume: {
+    iconName: 'refresh',
+    iconBg: colors.primary25,
+    iconColor: colors.primary,
+    title: 'Resume this listing?',
+    body: 'Your listing will be visible to buyers again and available for purchase.',
+    confirmLabel: 'Resume Listing',
+  },
+};
+
+interface PauseResumeConfirmSheetProps {
+  action: 'pause' | 'resume';
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// Confirm bottom sheet for the footer's Pause/Reactivate buttons — a separate, local copy of the
+// same shape ListingActionsSheet.tsx uses for its own Pause/Resume rows, since that file's version
+// is private to it and this screen's footer triggers pause/resume independently of that sheet.
+function PauseResumeConfirmSheet({ action, loading, onCancel, onConfirm }: PauseResumeConfirmSheetProps) {
+  const guard = useSingleTap();
+  const copy = PAUSE_RESUME_CONFIRM_COPY[action];
+
+  return (
+    <BottomSheetCard onBackdropPress={loading ? undefined : guard(onCancel)} sheetBackgroundColor={colors.white}>
+      <View style={[styles.confirmIconWrap, { backgroundColor: copy.iconBg }]}>
+        <Icon name={copy.iconName} variant="bold" size={verticalScale(32)} color={copy.iconColor} />
+      </View>
+      <Text style={styles.confirmTitle}>{copy.title}</Text>
+      <Text style={styles.confirmBody}>{copy.body}</Text>
+      <View style={styles.confirmButtonRow}>
+        <Pressable onPress={loading ? undefined : guard(onCancel)} disabled={loading} style={styles.confirmCancelButton}>
+          <Text style={styles.confirmCancelLabel}>Cancel</Text>
+        </Pressable>
+        <Pressable onPress={loading ? undefined : guard(onConfirm)} disabled={loading} style={styles.confirmButton}>
+          {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.confirmButtonLabel}>{copy.confirmLabel}</Text>}
+        </Pressable>
+      </View>
+    </BottomSheetCard>
+  );
+}
+
+const PAUSE_RESUME_SUCCESS_COPY = {
+  pause: { title: 'Listing Paused', body: 'Buyers can no longer find this listing until you resume it.' },
+  resume: { title: 'Listing Resumed', body: 'Your listing is active again and visible to buyers.' },
+};
+
+function PauseResumeSuccessSheet({ action, onClose }: { action: 'pause' | 'resume'; onClose: () => void }) {
+  const guard = useSingleTap();
+  const copy = PAUSE_RESUME_SUCCESS_COPY[action];
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)} sheetBackgroundColor={colors.white}>
+      <View style={styles.doneIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(40)} color={colors.success} />
+      </View>
+      <Text style={styles.confirmTitle}>{copy.title}</Text>
+      <Text style={styles.confirmBody}>{copy.body}</Text>
+      <Pressable onPress={guard(onClose)} style={styles.doneCloseButton}>
+        <Text style={styles.doneCloseLabel}>Close</Text>
+      </Pressable>
+    </BottomSheetCard>
+  );
+}
+
 // Seller's own view of a listing — the basics only (hero, title, meta, description, brand,
 // condition, defects). No buyer-transaction conditionals (escrow note, seller contact card,
 // purchase-complete/review sections) and no footer actions — those live on listingDetailsModal,
@@ -170,7 +245,9 @@ export default function MyListingDetailsModal() {
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
-  const [pauseLoading, setPauseLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'pause' | 'resume' | null>(null);
+  const [successAction, setSuccessAction] = useState<'pause' | 'resume' | null>(null);
+  const [pauseResumeLoading, setPauseResumeLoading] = useState(false);
   // The seller's own transaction for this listing, once a buyer has paid — no GET
   // /transactions/by-listing endpoint, so this pulls the seller's own transactions (the general
   // /transactions endpoint, not the buyer-only /transactions/purchases) and matches by listing id.
@@ -224,28 +301,41 @@ export default function MyListingDetailsModal() {
     listingsApi.getListing(listing._id).then(setListing).catch(() => {});
   }
 
-  async function handlePause() {
-    if (!listing) return;
-    setPauseLoading(true);
-    try {
-      const updated = await listingsApi.archiveListing(listing._id);
-      setListing(updated);
-      showSuccessToast('Listing paused', 'Buyers can no longer find this listing.');
-    } catch (e) {
-      showErrorToast('Could not pause listing', extractErrorMessage(e));
-    } finally {
-      setPauseLoading(false);
-    }
-  }
-
-  // TODO: only an Archive listing endpoint is documented — no unarchive/reactivate counterpart yet.
-  function handleReactivate() {
-    showWarningToast('Not available yet', "Reactivating a paused listing isn't wired up yet.");
-  }
-
   // TODO: no listing edit screen exists yet (addItemModal is create-only) — placeholder toast.
   function handleEdit() {
     showWarningToast('Not available yet', "Editing a listing isn't available yet.");
+  }
+
+  async function confirmPause() {
+    if (!listing) return;
+    setPauseResumeLoading(true);
+    try {
+      const updated = await listingsApi.pauseListing(listing._id);
+      setListing(updated);
+      setConfirmAction(null);
+      setSuccessAction('pause');
+    } catch (e) {
+      showErrorToast('Could not pause listing', extractErrorMessage(e));
+      setConfirmAction(null);
+    } finally {
+      setPauseResumeLoading(false);
+    }
+  }
+
+  async function confirmResume() {
+    if (!listing) return;
+    setPauseResumeLoading(true);
+    try {
+      const updated = await listingsApi.resumeListing(listing._id);
+      setListing(updated);
+      setConfirmAction(null);
+      setSuccessAction('resume');
+    } catch (e) {
+      showErrorToast('Could not resume listing', extractErrorMessage(e));
+      setConfirmAction(null);
+    } finally {
+      setPauseResumeLoading(false);
+    }
   }
 
   // TODO: no support-contact flow exists yet — placeholder toast.
@@ -459,29 +549,25 @@ export default function MyListingDetailsModal() {
 
       <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
         <View style={styles.footerRow}>
-          {listing.status === 'archived' ? (
+          {listing.status === 'paused' ? (
             <>
               <Pressable onPress={guard(handleEdit)} style={styles.footerSecondaryButton}>
                 <Text style={styles.footerSecondaryLabel}>Edit Listing</Text>
               </Pressable>
-              <Pressable onPress={guard(handleReactivate)} style={styles.footerPrimaryButton}>
+              <Pressable onPress={guard(() => setConfirmAction('resume'))} style={styles.footerPrimaryButton}>
                 <Text style={styles.footerPrimaryLabel}>Reactivate Listing</Text>
               </Pressable>
             </>
           ) : listing.status === 'active' ? (
             <>
-              <Pressable
-                onPress={pauseLoading ? undefined : guard(handlePause)}
-                disabled={pauseLoading}
-                style={styles.footerSecondaryButton}
-              >
-                {pauseLoading ? <ActivityIndicator color={colors.gray700} /> : <Text style={styles.footerSecondaryLabel}>Pause Listing</Text>}
+              <Pressable onPress={guard(() => setConfirmAction('pause'))} style={styles.footerSecondaryButton}>
+                <Text style={styles.footerSecondaryLabel}>Pause Listing</Text>
               </Pressable>
               <Pressable onPress={guard(handleEdit)} style={styles.footerPrimaryButton}>
                 <Text style={styles.footerPrimaryLabel}>Edit Listing</Text>
               </Pressable>
             </>
-          ) : listing.status === 'flagged' ? (
+          ) : listing.status === 'reported' ? (
             <>
               <Pressable onPress={guard(handleContactSupport)} style={styles.footerSecondaryButton}>
                 <Text style={styles.footerSecondaryLabel}>Contact Support</Text>
@@ -521,6 +607,24 @@ export default function MyListingDetailsModal() {
             hideViewListing
           />
         </View>
+      ) : confirmAction === 'pause' ? (
+        <PauseResumeConfirmSheet
+          action="pause"
+          loading={pauseResumeLoading}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={confirmPause}
+        />
+      ) : confirmAction === 'resume' ? (
+        <PauseResumeConfirmSheet
+          action="resume"
+          loading={pauseResumeLoading}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={confirmResume}
+        />
+      ) : successAction === 'pause' ? (
+        <PauseResumeSuccessSheet action="pause" onClose={() => setSuccessAction(null)} />
+      ) : successAction === 'resume' ? (
+        <PauseResumeSuccessSheet action="resume" onClose={() => setSuccessAction(null)} />
       ) : null}
     </View>
   );
@@ -897,6 +1001,90 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingX.md,
   },
   footerPrimaryLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
+  },
+  confirmIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(72),
+    height: verticalScale(72),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.lg,
+  },
+  confirmTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  confirmBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.xl,
+  },
+  confirmButtonRow: {
+    flexDirection: 'row',
+    gap: spacingX.md,
+    paddingBottom: spacingY.md,
+  },
+  confirmCancelButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
+  },
+  confirmButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
+  },
+  doneIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(80),
+    height: verticalScale(80),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.successLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.lg,
+  },
+  doneCloseButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+    marginBottom: spacingY.md,
+  },
+  doneCloseLabel: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
     color: colors.white,

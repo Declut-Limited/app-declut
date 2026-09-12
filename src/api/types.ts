@@ -253,12 +253,7 @@ export interface Listing {
   state?: string;
   city?: string;
   address?: string;
-  /** 'pending_sale' isn't in the older documented status enum (Postman's admin listings filter only
-   *  lists active/archived/deleted/flagged/sold) — added per later, more specific product/backend
-   *  confirmation for the buyer-side escrow detail view. 'flagged' matches that admin enum directly
-   *  (confirmed 2026-09-12) — earlier UI here briefly used a 'reported' value that doesn't exist
-   *  server-side; 'flagged' is the real one. */
-  status: 'active' | 'pending_sale' | 'archived' | 'sold' | 'flagged';
+  status: 'active' | 'pending_sale' | 'sold' | 'reported' | 'paused';
   sellerId: string;
   /** Populated on GET /listings/:id (id or LST-#### slug) — not present on list/search results. Confirmed 2026-09-11: phoneNumber/totalSales/profileImageUrl (distinct field names from User's phone/soldCount/profileImageUrl) were added to this sub-object specifically for the buyer-side seller contact card. createdAt isn't confirmed on this sub-object — kept optional, degrades gracefully if absent. */
   seller?: ListingSeller;
@@ -431,7 +426,7 @@ export interface Transaction {
 export type PurchaseStatusFilter = 'active' | 'completed' | 'refunded' | 'disputed';
 
 /** GET /listings/mine query — omit entirely for every status ("All"). */
-export type MyListingsStatusFilter = 'active' | 'pending_sale' | 'sold' | 'flagged' | 'archived';
+export type MyListingsStatusFilter = 'active' | 'pending_sale' | 'sold' | 'reported' | 'paused';
 
 export interface CheckoutPayload {
   listingId: string;

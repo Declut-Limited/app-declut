@@ -21,8 +21,8 @@ const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text
   active: { label: 'Active', bg: colors.successLight, text: colors.success },
   pending_sale: { label: 'Sales Pending', bg: colors.warningLight, text: colors.warning700 },
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
-  archived: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
-  flagged: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
+  reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
+  paused: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
 };
 // listing.status's exact enum isn't fully confirmed backend-side — fall back rather than crash
 // on a status string this map doesn't have a style for yet.
@@ -31,10 +31,10 @@ const FALLBACK_STATUS_STYLE = STATUS_STYLES.active;
 const STATUS_TABS: { label: string; value: 'all' | MyListingsStatusFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Active', value: 'active' },
-  { label: 'Paused', value: 'archived' },
+  { label: 'Paused', value: 'paused' },
   { label: 'Sales Pending', value: 'pending_sale' },
   { label: 'Sold', value: 'sold' },
-  { label: 'Reported', value: 'flagged' },
+  { label: 'Reported', value: 'reported' },
 ];
 
 // FULL-SCREEN modal — Profile's "My Listings" row, GET /listings/mine.
@@ -92,10 +92,12 @@ export default function MyListingsModal() {
         ListFooterComponent={
           <>
             {loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footerLoading} /> : null}
-            <Pressable onPress={guard(onPostNewListing)} style={styles.postButton}>
-              <Icons.PlusIcon size={verticalScale(18)} color={colors.gray700} weight="bold" />
-              <Text style={styles.postButtonLabel}>Post a New Listing</Text>
-            </Pressable>
+            {statusFilter === 'all' && !loading && !refreshing && !loadingMore ? (
+              <Pressable onPress={guard(onPostNewListing)} style={styles.postButton}>
+                <Icons.PlusIcon size={verticalScale(18)} color={colors.gray700} weight="bold" />
+                <Text style={styles.postButtonLabel}>Post a New Listing</Text>
+              </Pressable>
+            ) : null}
           </>
         }
       />

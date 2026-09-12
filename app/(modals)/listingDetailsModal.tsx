@@ -672,7 +672,7 @@ export default function ListingDetailsModal() {
         </View>
       </View>
 
-      {!isOwnListing && listing.status !== 'archived' ? (
+      {!isOwnListing && listing.status !== 'paused' ? (
         <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
           {listing.status === 'active' ? (
             <View style={styles.footerPill}>
