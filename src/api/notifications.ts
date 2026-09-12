@@ -9,7 +9,3 @@ export async function registerDeviceTokens(tokens: DeviceTokenEntry[]) {
   const res = await apiClient.post<ApiEnvelope<RegisterDeviceTokensResponse>>('/notifications/register-token', payload);
   return res.data.data;
 }
-
-export async function unregisterDeviceToken(deviceToken: string) {
-  await apiClient.delete(`/notifications/token/${deviceToken}`);
-}

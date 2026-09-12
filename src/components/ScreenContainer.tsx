@@ -31,7 +31,8 @@ export function ScreenContainer({
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined}
+        // behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {scroll ? (
           <ScrollView

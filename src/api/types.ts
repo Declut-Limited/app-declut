@@ -67,18 +67,14 @@ export interface RegisterPayload {
   email: string;
   name: string;
   password: string;
-  /** Nigerian number: 07/08/09 + 9 local digits, or +234 international. Doubles as the alternate login identifier — must be unique. */
   phone: string;
-  /** Optional Expo push token — if present, added to deviceTokens (deduped, same as POST /notifications/register-token). */
-  pushToken?: string;
+  pushToken: string | undefined;
 }
 
 export interface LoginPayload {
-  /** Email or phone — whichever the account was registered with. */
   identifier: string;
   password: string;
-  /** Optional Expo push token — if present, added to deviceTokens (deduped, same as POST /notifications/register-token). */
-  pushToken?: string;
+  pushToken: string | undefined;
 }
 
 export interface GoogleSignInPayload {

@@ -13,17 +13,20 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const registeredOnce = useRef(false);
 
   useEffect(() => {
-    // /notifications/register-token is JwtAuthGuard-protected, so there's
-    // nothing to register until a session exists. Only attempt once per app
-    // session — a failure here must never block navigation (see CLAUDE.md).
-    if (status !== 'authenticated' || registeredOnce.current) return;
+    // /notifications/register-token is JwtAuthGuard-protected, so there's nothing to register
+    // until a session exists. Only attempt once per app session — a failure here must never block
+    // navigation (see CLAUDE.md). email_phone accounts already sent their push token inline on
+    // /auth/login or /auth/register (now a required payload field), so calling this again here
+    // would just be redundant — only google accounts need it, since GoogleSignInPayload has no
+    // pushToken field at all.
+    if (status !== 'authenticated' || registeredOnce.current || user?.authProvider !== 'google') return;
     registeredOnce.current = true;
 
     registerForPushNotificationsAsync()
@@ -32,7 +35,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         await savePushToken(token);
       })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
-  }, [status]);
+  }, [status, user?.authProvider]);
 
   useEffect(() => {
     const receivedSub = Notifications.addNotificationReceivedListener((n) => {

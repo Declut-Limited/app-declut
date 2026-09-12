@@ -28,12 +28,14 @@ import dayjs from 'dayjs';
 import Animated, {
   Easing,
   interpolate,
+  runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import { StatusBar } from 'expo-status-bar';
 import { BottomSheetCard, EmptyState } from '@/components';
 import Icon from '@/components/Icon';
 import * as Icons from 'phosphor-react-native';
@@ -171,13 +173,21 @@ export default function ListingDetailsModal() {
   const heroScrollRef = useRef<ScrollView>(null);
 
   // Drives the floating back/share header's background fade-in — transparent over the hero,
-  // solid once scrolled roughly past it.
+  // solid once scrolled roughly past it — and the status bar content color riding along with it:
+  // light (white) while it's still over the photo, dark (black) once the header goes opaque white.
   const scrollY = useSharedValue(0);
+  const [statusBarStyle, setStatusBarStyle] = useState<'light' | 'dark'>('light');
+  const isStatusBarDark = useSharedValue(false);
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
+    const shouldBeDark = event.contentOffset.y > FLOATING_HEADER_FADE_END;
+    if (shouldBeDark !== isStatusBarDark.value) {
+      isStatusBarDark.value = shouldBeDark;
+      runOnJS(setStatusBarStyle)(shouldBeDark ? 'dark' : 'light');
+    }
   });
   const floatingHeaderStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [HERO_HEIGHT * 0.6, HERO_HEIGHT], [0, 1], 'clamp'),
+    opacity: interpolate(scrollY.value, [FLOATING_HEADER_FADE_START, FLOATING_HEADER_FADE_END], [0, 1], 'clamp'),
   }));
 
   const [listing, setListing] = useState<Listing | null>(null);
@@ -511,6 +521,7 @@ export default function ListingDetailsModal() {
 
   return (
     <View style={styles.root}>
+      <StatusBar style={statusBarStyle} animated />
       <Animated.ScrollView
         onScroll={scrollHandler}
         scrollEventThrottle={16}
@@ -1399,7 +1410,12 @@ function ListingDetailsSkeleton() {
   );
 }
 
-const HERO_HEIGHT = verticalScale(360);
+const HERO_HEIGHT = verticalScale(340);
+// Fade-in window for the floating header's white background (and the status bar's light→dark
+// flip) — moved earlier than the old [0.6, 1] * HERO_HEIGHT range so it kicks in soon after the
+// user starts scrolling instead of waiting until they're almost past the whole hero image.
+const FLOATING_HEADER_FADE_START = HERO_HEIGHT * 0.15;
+const FLOATING_HEADER_FADE_END = HERO_HEIGHT * 0.5;
 
 const styles = StyleSheet.create({
   root: {
