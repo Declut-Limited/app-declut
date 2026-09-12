@@ -152,6 +152,8 @@ export interface LegalDocumentBodyProps {
 export interface BottomSheetCardProps extends ViewProps {
   /** When provided, the backdrop becomes tappable-to-dismiss. Omitted (default) keeps the backdrop inert — the KYC chain relies on that to stay non-dismissible. */
   onBackdropPress?: () => void;
+  /** Overrides the sheet's own background (default colors.background) — for callers whose design wants a plain white sheet instead. */
+  sheetBackgroundColor?: string;
 }
 
 export interface TextLinkProps {

@@ -20,16 +20,12 @@ const STATUS_META: Record<TransactionStatus, { label: string; bg: string; text: 
   pending_payment: { label: 'Pending Payment', bg: colors.gray100, text: colors.gray600 },
   escrow_active: { label: 'Ongoing', bg: colors.warning50, text: colors.warning700 },
   awaiting_inspection: { label: 'Ongoing', bg: colors.warning50, text: colors.warning700 },
-  completed: { label: 'Completed', bg: colors.primary50, text: colors.primaryLight600 },
+  completed: { label: 'Released', bg: colors.primary50, text: colors.primaryLight600 },
   cancelled: { label: 'Cancelled', bg: colors.rose50, text: colors.rose700 },
   disputed: { label: 'Disputed', bg: colors.error50, text: colors.error700 },
   refunded: { label: 'Refunded', bg: colors.rose50, text: colors.rose700 },
 };
 
-// 'active' maps server-side to awaiting_inspection only — not every in-progress status. No "All"
-// tab per design — starts on "Active". The design's 4th tab reads "Cancelled", but the documented
-// query only accepts active|completed|refunded|disputed (no "cancelled") — mapped to 'refunded'
-// as the closest fit rather than sending a value the backend doesn't accept.
 const FILTERS: { label: string; value: PurchaseStatusFilter }[] = [
   { label: 'Active', value: 'active' },
   { label: 'Completed', value: 'completed' },

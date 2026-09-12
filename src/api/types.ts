@@ -446,19 +446,24 @@ export interface ConfirmCodePayload {
   code: string;
 }
 
+/** Confirmed 2026-09-12 against POST /reviews and GET /reviews/listing/:listingId — always buyer→seller, one per listing ever. */
 export interface Review {
   id: string;
-  transactionId: string;
+  listingId: string;
+  transactionId?: string;
   rating: number;
-  comment: string;
+  comment?: string;
   reviewerId: string;
   revieweeId: string;
+  createdAt?: string;
 }
 
 export interface LeaveReviewPayload {
-  transactionId: string;
+  listingId: string;
+  /** 1-5, required. */
   rating: number;
-  comment: string;
+  /** Optional, <=1000 chars. */
+  comment?: string;
 }
 
 /** Batched as of 2026-07-23 — 1-10 entries per call, token min 10 chars, platform optional. */

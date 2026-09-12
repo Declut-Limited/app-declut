@@ -19,6 +19,7 @@ export const colors = {
   ink: '#111827',
   success: '#16A34A',
   successLight: '#DCFCE7',
+  success25: '#F6FEF9',
   success50: '#ECFDF3',
   success700: '#027A48',
 
@@ -31,6 +32,7 @@ export const colors = {
 
   danger: '#DC2626',
   dangerLight: '#FEE2E2',
+  goldPrimary: '#FBBF24',
   goldClick: '#A28300',
   rose: '#F9B4AF',
   rose50: '#FFF1F3',

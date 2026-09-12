@@ -11,6 +11,7 @@ import {
   StyleProp,
   StyleSheet,
   Text,
+  TextInput,
   UIManager,
   useWindowDimensions,
   View,
@@ -39,8 +40,9 @@ import * as Icons from 'phosphor-react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { listingsApi, transactionsApi } from '@/api';
-import type { Listing } from '@/api/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { listingsApi, reviewsApi, transactionsApi } from '@/api';
+import type { Listing, Review, Transaction } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate, getProfileImage } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
@@ -162,6 +164,7 @@ export default function ListingDetailsModal() {
     resumeTransactionId?: string;
   }>();
   const isOwnListing = isMine === 'true';
+  const { user } = useAuth();
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -183,10 +186,22 @@ export default function ListingDetailsModal() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paymentStep, setPaymentStep] = useState<'none' | 'terms' | "summary" | 'success'>('none');
   const [paying, setPaying] = useState(false);
+  // The "Pay ₦X to seller?" gate in front of confirmTransaction — an irreversible action.
+  const [confirmSheetOpen, setConfirmSheetOpen] = useState(false);
+  const [confirmingTransaction, setConfirmingTransaction] = useState(false);
+  // The buyer's transaction behind this listing (pending_sale → awaiting_inspection, sold →
+  // completed) — the listing itself doesn't carry a transactionId, so this is found by matching
+  // the buyer's own transactions to this listing.
+  const [myTransaction, setMyTransaction] = useState<Transaction | null>(null);
   // In-app checkout — the Paystack page renders inside a WebView instead of handing off to the
   // system browser, so it reads as part of the app rather than a separate app switch.
   const [checkout, setCheckout] = useState<{ transactionId: string; url: string } | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [myReview, setMyReview] = useState<Review | null>(null);
+  const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -220,6 +235,44 @@ export default function ListingDetailsModal() {
     return () => clearTimeout(timer);
   }, [listing]);
 
+  // Finds the buyer's own transaction for this listing once it's pending_sale or sold — there's
+  // no GET /transactions/by-listing endpoint, so this pulls the buyer's purchases (status filter
+  // matches the listing status: 'active' maps server-side to awaiting_inspection while
+  // pending_sale, 'completed' once sold) and matches by listing id. Best-effort: only looks at the
+  // first page, so a buyer with many simultaneous purchases in the same bucket could miss a match
+  // further back.
+  useEffect(() => {
+    if (!listing || (listing.status !== 'pending_sale' && listing.status !== 'sold')) return;
+    let cancelled = false;
+    transactionsApi
+      .listMyPurchases(1, 50, listing.status === 'sold' ? 'completed' : 'active')
+      .then((result) => {
+        if (cancelled) return;
+        const match = result.results.find((t) => t.listing?._id === listing._id) ?? null;
+        setMyTransaction(match);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [listing]);
+
+  // The buyer's own review for this listing, once sold — drives whether Buyer Feedback shows the
+  // review or a "rate this seller" prompt.
+  useEffect(() => {
+    if (!listing || listing.status !== 'sold') return;
+    let cancelled = false;
+    reviewsApi
+      .getReviewForListing(listing._id)
+      .then((review) => {
+        if (!cancelled) setMyReview(review);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [listing]);
+
   // Thumbnail taps drive the carousel programmatically; swiping drives activeIndex the other way
   // via the ScrollView's onMomentumScrollEnd below — both paths stay in sync either way.
   function goToMediaIndex(index: number) {
@@ -240,15 +293,67 @@ export default function ListingDetailsModal() {
     setPaymentStep('terms');
   }
 
-  // TODO: this screen never fetches the transaction behind a pending_sale listing (only the
-  // listing itself), and there's no confirmed endpoint yet for either action — "confirm code" in
-  // the Postman collection is seller-only (the buyer's confirmationCode gets read out to the
-  // seller, who inputs it elsewhere), and dispute-filing hasn't been wired up here. Placeholder
-  // toasts until both are confirmed with backend.
   function handleConfirmItemFine() {
-    showWarningToast('Not available yet', "Confirming the item isn't wired up yet.");
+    setConfirmSheetOpen(true);
   }
 
+  // Buyer's own "item is fine, release my money" action — distinct from confirmCode (that's the
+  // seller entering a code the buyer read out to them in person). Same full-screen overlay used
+  // while polling for Paystack's webhook confirmation, reused here for the same "waiting on a
+  // backend confirmation" feel. On success: the review prompt opens right away while the listing
+  // (now 'sold') refetches in the background, so the page is already showing the post-sale
+  // content by the time the review sheet is dismissed.
+  async function handleConfirmPayment() {
+    if (!listing || !myTransaction) {
+      showErrorToast('Could not confirm', 'Please close this and try again in a moment.');
+      return;
+    }
+    setConfirmSheetOpen(false);
+    setConfirmingTransaction(true);
+    try {
+      await transactionsApi.confirmTransaction(myTransaction._id);
+      showSuccessToast('Item confirmed', 'Funds have been released to the seller.');
+      listingsApi.getListing(listing._id).then(setListing).catch(() => {});
+      setReviewRating(0);
+      setReviewComment('');
+      setReviewSheetOpen(true);
+    } catch (e) {
+      showErrorToast('Could not confirm', extractErrorMessage(e));
+    } finally {
+      setConfirmingTransaction(false);
+    }
+  }
+
+  function handleOpenReviewSheet() {
+    setReviewRating(0);
+    setReviewComment('');
+    setReviewSheetOpen(true);
+  }
+
+  async function handleSubmitReview() {
+    if (!listing) return;
+    if (reviewRating < 1) {
+      showErrorToast('Please select a rating', 'Tap a star to rate the seller.');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const review = await reviewsApi.leaveReview({
+        listingId: listing._id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || undefined,
+      });
+      setMyReview(review);
+      setReviewSheetOpen(false);
+      showSuccessToast('Thanks for the feedback!', 'Your review has been posted.');
+    } catch (e) {
+      showErrorToast('Could not submit review', extractErrorMessage(e));
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
+
+  // TODO: no documented dispute-filing endpoint for this yet — placeholder toast.
   function handleReportProblem() {
     showWarningToast('Not available yet', "Reporting a problem isn't wired up yet.");
   }
@@ -448,7 +553,7 @@ export default function ListingDetailsModal() {
               </Text>
             </View>
             <View style={styles.metaItem}>
-              <Icon name="star-1" variant="bold" size={verticalScale(18)} color={colors.primary} />
+              <Icons.StarIcon size={verticalScale(18)} color={colors.primary} weight="fill" />
               <Text style={styles.metaText}>{(listing.seller?.trustScore ?? 0).toFixed(1)}</Text>
             </View>
             <View style={styles.metaItem}>
@@ -459,11 +564,29 @@ export default function ListingDetailsModal() {
 
           <View style={styles.divider} />
 
-          {listing.status !== 'active' ? (
-            <SellerContactCard seller={listing.seller} address={listing.address ?? listing.locationLabel} coordinates={listing.location.coordinates} />
+          {listing.status === 'sold' ? (
+            <PurchaseCompleteNote amount={myTransaction?.amount ?? listing.price} reference={myTransaction?.reference} />
           ) : null}
 
-          {listing.status === 'pending_sale' ? <EscrowHoldNote amount={listing.price} /> : null}
+          {listing.status === 'sold' ? (
+            <BuyerFeedbackSection
+              review={myReview}
+              buyerName={user?.name ?? 'You'}
+              buyerAvatar={user?.profileImageUrl}
+              onRateSeller={handleOpenReviewSheet}
+            />
+          ) : null}
+
+          {listing.status !== 'active' ? (
+            <SellerContactCard
+              seller={listing.seller}
+              address={listing.address ?? listing.locationLabel}
+              coordinates={listing.location.coordinates}
+              compact={listing.status === 'sold'}
+            />
+          ) : null}
+
+          {listing.status === 'pending_sale' ? <EscrowHoldNote amount={myTransaction?.amount ?? listing.price} /> : null}
 
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.sectionBody}>{listing.description}</Text>
@@ -511,7 +634,7 @@ export default function ListingDetailsModal() {
         </View>
       </View>
 
-      {!isOwnListing && (listing.status === 'active' || listing.status === 'pending_sale') ? (
+      {!isOwnListing && listing.status !== 'archived' ? (
         <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
           {listing.status === 'active' ? (
             <View style={styles.footerPill}>
@@ -520,7 +643,7 @@ export default function ListingDetailsModal() {
                 <Text style={styles.buyButtonLabel}>Buy Now</Text>
               </Pressable>
             </View>
-          ) : (
+          ) : listing.status === 'pending_sale' ? (
             <>
               <Pressable onPress={guard(handleConfirmItemFine)} style={styles.confirmFineButton}>
                 <Text style={styles.confirmFineButtonLabel}>Item is Fine - Pay the Seller</Text>
@@ -529,6 +652,10 @@ export default function ListingDetailsModal() {
                 <Text style={styles.reportProblemButtonLabel}>Report A Problem With This Item</Text>
               </Pressable>
             </>
+          ) : (
+            <Pressable onPress={guard(() => router.replace('/'))} style={styles.findDealButton}>
+              <Text style={styles.findDealButtonLabel}>Find Your Next Deal</Text>
+            </Pressable>
           )}
         </SafeAreaView>
       ) : null}
@@ -556,6 +683,32 @@ export default function ListingDetailsModal() {
         </View>
       ) : null}
 
+      {confirmSheetOpen ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ConfirmPaySheet
+            amount={myTransaction?.amount ?? listing.price}
+            sellerName={listing.seller?.name ?? 'the seller'}
+            onCancel={() => setConfirmSheetOpen(false)}
+            onConfirm={handleConfirmPayment}
+          />
+        </View>
+      ) : null}
+
+      {reviewSheetOpen ? (
+        <View style={StyleSheet.absoluteFill}>
+          <RateSellerSheet
+            listing={listing}
+            rating={reviewRating}
+            comment={reviewComment}
+            submitting={submittingReview}
+            onRatingChange={setReviewRating}
+            onCommentChange={setReviewComment}
+            onDismiss={() => setReviewSheetOpen(false)}
+            onSubmit={handleSubmitReview}
+          />
+        </View>
+      ) : null}
+
       {checkout ? (
         <PaystackCheckoutWebView
           url={checkout.url}
@@ -567,6 +720,13 @@ export default function ListingDetailsModal() {
         <View style={styles.confirmingOverlay}>
           <ActivityIndicator color={colors.white} size="large" />
           <Text style={styles.confirmingText}>Confirming your payment…</Text>
+        </View>
+      ) : null}
+
+      {confirmingTransaction ? (
+        <View style={styles.confirmingOverlay}>
+          <ActivityIndicator color={colors.white} size="large" />
+          <Text style={styles.confirmingText}>Releasing payment to the seller…</Text>
         </View>
       ) : null}
     </View>
@@ -618,14 +778,17 @@ interface SellerContactCardProps {
   address?: string;
   /** GeoJSON [lng, lat] — flipped for Google's lat,lng-ordered APIs below. */
   coordinates: [number, number];
+  /** Once sold, there's nothing left to arrange — just who you dealt with, no call button or map. */
+  compact?: boolean;
 }
 
 // Shown once a listing is no longer just browsable (status !== 'active') — pickup contact + location,
-// matching the "unlocking the seller's details" step buyers land on after payment.
-function SellerContactCard({ seller, address, coordinates }: SellerContactCardProps) {
+// matching the "unlocking the seller's details" step buyers land on after payment. Drops the call
+// button/map in compact mode (status === 'sold') since there's no pickup left to arrange.
+function SellerContactCard({ seller, address, coordinates, compact }: SellerContactCardProps) {
   const guard = useSingleTap();
   const [lng, lat] = coordinates;
-  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  const hasCoords = !compact && Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
   const staticMapUrl = hasCoords
     ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=650x300&scale=2&markers=color:red%7C${lat},${lng}&key=${GOOGLE_STATIC_MAPS_KEY}`
     : null;
@@ -643,7 +806,7 @@ function SellerContactCard({ seller, address, coordinates }: SellerContactCardPr
   return (
     <View style={styles.sellerCard}>
       <View style={styles.sellerHeaderRow}>
-        <Image source={getProfileImage(seller?.profileImageUrl)} style={styles.sellerAvatar} />
+        <Image source={getProfileImage(seller?.profileImageUrl)} style={[styles.sellerAvatar, compact && styles.sellerAvatarRinged]} />
         <View style={styles.sellerHeaderText}>
           <Text style={styles.sellerName} numberOfLines={1}>
             {seller?.name ?? 'Seller'}
@@ -652,7 +815,7 @@ function SellerContactCard({ seller, address, coordinates }: SellerContactCardPr
             {seller?.totalSales ?? 0} Sales{seller?.createdAt ? `  •  Member since ${dayjs(seller.createdAt).format('YYYY')}` : ''}
           </Text>
         </View>
-        {seller?.phoneNumber ? (
+        {seller?.phoneNumber && !compact ? (
           <Pressable onPress={guard(handleCall)} style={styles.sellerCallButton} hitSlop={8}>
             <Icon name="call" variant="linear" size={verticalScale(20)} color={colors.primary} />
           </Pressable>
@@ -696,6 +859,85 @@ function EscrowHoldNote({ amount }: { amount: number }) {
       >
         <Text style={styles.escrowExtendLink}>Running Late? Extend by 24 hours (once)</Text>
       </Pressable>
+    </View>
+  );
+}
+
+interface StarRowProps {
+  rating: number;
+  size?: number;
+  interactive?: boolean;
+  onChange?: (next: number) => void;
+  style?: StyleProp<ViewStyle>;
+}
+
+function StarRow({ rating, size = 16, interactive, onChange, style }: StarRowProps) {
+  const guard = useSingleTap();
+
+  return (
+    <View style={[styles.starRow, style]}>
+      {[1, 2, 3, 4, 5].map((value) =>
+        interactive ? (
+          <Pressable key={value} onPress={guard(() => onChange?.(value))} hitSlop={4}>
+            <Icons.StarIcon size={verticalScale(size)} color={value <= rating ? colors.goldPrimary : colors.gray300} weight="fill" />
+          </Pressable>
+        ) : (
+          <Icons.StarIcon key={value} size={verticalScale(size)} color={value <= rating ? colors.goldPrimary : colors.gray300} weight="fill" />
+        )
+      )}
+    </View>
+  );
+}
+
+// Only shown once a listing is sold — the amount/reference of the buyer's own now-completed transaction.
+function PurchaseCompleteNote({ amount, reference }: { amount: number; reference?: string }) {
+  return (
+    <View style={styles.purchaseCompleteCard}>
+      <View style={styles.purchaseCompleteTitleRow}>
+        <Icon name="security-safe" variant="bold" size={verticalScale(18)} color={colors.success} />
+        <Text style={styles.purchaseCompleteTitle}>Purchase complete - Seller paid</Text>
+      </View>
+      <Text style={styles.purchaseCompleteSubtitle}>
+        {formatCurrency(amount, 2)}
+        {reference ? `  •  Ref: ${reference}` : ''}
+      </Text>
+    </View>
+  );
+}
+
+interface BuyerFeedbackSectionProps {
+  review: Review | null;
+  buyerName: string;
+  buyerAvatar?: string;
+  onRateSeller: () => void;
+}
+
+// Shows the buyer's own review once left (GET /reviews/listing/:listingId), or a prompt to leave
+// one — the sheet itself is opened automatically right after confirmTransaction succeeds, but a
+// buyer who tapped "Maybe Later" there needs another way back into it.
+function BuyerFeedbackSection({ review, buyerName, buyerAvatar, onRateSeller }: BuyerFeedbackSectionProps) {
+  const guard = useSingleTap();
+
+  return (
+    <View style={styles.feedbackSection}>
+      <Text style={styles.feedbackSectionTitle}>Buyer Feedback</Text>
+      {review ? (
+        <View style={styles.feedbackCard}>
+          <View style={styles.feedbackCardHeader}>
+            <Image source={getProfileImage(buyerAvatar)} style={styles.feedbackAvatar} />
+            <Text style={styles.feedbackName} numberOfLines={1}>
+              {buyerName}
+            </Text>
+            <StarRow rating={review.rating} size={16} />
+          </View>
+          <Text style={styles.feedbackComment}>{review.comment || "No Comment"}</Text>
+        </View>
+      ) : (
+        <Pressable onPress={guard(onRateSeller)} style={styles.feedbackPrompt}>
+          <Text style={styles.feedbackPromptText}>You haven't rated this seller yet.</Text>
+          <Text style={styles.feedbackPromptLink}>Rate Seller</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -953,6 +1195,121 @@ function PaymentSuccessSheet({ amount, onClose }: PaymentSuccessSheetProps) {
       <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
         <Text style={styles.successCloseLabel}>Close</Text>
       </Pressable>
+    </BottomSheetCard>
+  );
+}
+
+interface ConfirmPaySheetProps {
+  amount: number;
+  sellerName: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// Gate in front of the pending_sale footer's "Item is Fine - Pay the Seller" button — an
+// irreversible action (calls POST /transactions/:id/confirm-transaction, releasing escrow), so it
+// gets its own explicit yes/no step rather than firing straight off the footer tap. Closes
+// immediately on confirm — the full-screen confirmingOverlay (same one used after Paystack
+// checkout) takes over from there while the request is in flight.
+function ConfirmPaySheet({ amount, sellerName, onCancel, onConfirm }: ConfirmPaySheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onCancel)} sheetBackgroundColor={colors.white}>
+      <View style={styles.confirmPayIconWrap}>
+        <Icon name="shield-security" variant="bold" size={verticalScale(36)} color={colors.success} />
+      </View>
+      <Text style={styles.confirmPayTitle}>Pay {formatCurrency(amount)} to {sellerName}?</Text>
+      <Text style={styles.confirmPaySubtitle}>
+        Only confirm if you've checked the item and it's what you paid for.{' '}
+        <Text style={styles.confirmPaySubtitleBold}>This releases your money and can't be reversed.</Text>
+      </Text>
+      <View style={styles.confirmPayButtonRow}>
+        <Pressable onPress={guard(onCancel)} style={styles.confirmPayCancelButton}>
+          <Text style={styles.confirmPayCancelLabel}>Not yet, I'm still checking</Text>
+        </Pressable>
+        <Pressable onPress={guard(onConfirm)} style={styles.confirmPayConfirmButton}>
+          <Text style={styles.confirmPayConfirmLabel}>Yes, Pay the Seller</Text>
+        </Pressable>
+      </View>
+    </BottomSheetCard>
+  );
+}
+
+interface RateSellerSheetProps {
+  listing: Listing;
+  rating: number;
+  comment: string;
+  submitting: boolean;
+  onRatingChange: (next: number) => void;
+  onCommentChange: (next: string) => void;
+  onDismiss: () => void;
+  onSubmit: () => void;
+}
+
+// Opened automatically right after confirmTransaction succeeds (also reachable again via the
+// Buyer Feedback section's "Rate Seller" prompt if dismissed with "Maybe Later" the first time).
+function RateSellerSheet({ listing, rating, comment, submitting, onRatingChange, onCommentChange, onDismiss, onSubmit }: RateSellerSheetProps) {
+  const guard = useSingleTap();
+  const seller = listing.seller;
+
+  return (
+    <BottomSheetCard onBackdropPress={submitting ? undefined : guard(onDismiss)} sheetBackgroundColor={colors.white}>
+      <Text style={styles.rateSheetTitle}>How did this deal go?</Text>
+
+      <View style={styles.rateSheetItemRow}>
+        <Image source={{ uri: listing.mainImageUrl }} style={styles.rateSheetItemImage} />
+        <View style={styles.rateSheetItemText}>
+          <Text style={styles.rateSheetItemTitle} numberOfLines={1}>
+            {listing.title}
+          </Text>
+          <Text style={styles.rateSheetItemPrice}>{formatCurrency(listing.price)}</Text>
+        </View>
+        <View style={styles.rateSheetItemMeta}>
+          <View style={styles.rateSheetReleasedPill}>
+            <Text style={styles.rateSheetReleasedPillText}>Released</Text>
+          </View>
+          <Text style={styles.rateSheetSellerName} numberOfLines={1}>
+            {seller?.name ?? 'Seller'}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.rateSheetSectionTitle}>Rate Seller</Text>
+
+      <View style={styles.rateSheetSellerRow}>
+        <Image source={getProfileImage(seller?.profileImageUrl)} style={styles.rateSheetSellerAvatar} />
+        <View>
+          <Text style={styles.rateSheetSellerRowName}>{seller?.name ?? 'Seller'}</Text>
+          <View style={styles.rateSheetSellerRowMeta}>
+            <Icons.StarIcon size={verticalScale(14)} color={colors.goldPrimary} weight="fill" />
+            <Text style={styles.rateSheetSellerRowMetaText}>
+              {(seller?.trustScore ?? 0).toFixed(1)} ({seller?.totalSales ?? 0} items sold)
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <StarRow rating={rating} size={36} interactive onChange={submitting ? undefined : onRatingChange} style={styles.rateSheetStars} />
+
+      <TextInput
+        style={styles.rateSheetCommentInput}
+        placeholder="Tell other buyers about the seller (optional)"
+        placeholderTextColor={colors.gray400}
+        value={comment}
+        onChangeText={onCommentChange}
+        multiline
+        editable={!submitting}
+      />
+
+      <View style={styles.rateSheetButtonRow}>
+        <Pressable onPress={submitting ? undefined : guard(onDismiss)} disabled={submitting} style={styles.rateSheetLaterButton}>
+          <Text style={styles.rateSheetLaterLabel}>Maybe Later</Text>
+        </Pressable>
+        <Pressable onPress={submitting ? undefined : guard(onSubmit)} disabled={submitting} style={styles.rateSheetSubmitButton}>
+          {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.rateSheetSubmitLabel}>Submit Review</Text>}
+        </Pressable>
+      </View>
     </BottomSheetCard>
   );
 }
@@ -1299,6 +1656,10 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     backgroundColor: colors.gray100,
   },
+  sellerAvatarRinged: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
   sellerHeaderText: {
     flex: 1,
     gap: verticalScale(4),
@@ -1389,6 +1750,94 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.warning700,
     textDecorationLine: 'underline',
+  },
+  starRow: {
+    flexDirection: 'row',
+    gap: spacingX.xs,
+  },
+  purchaseCompleteCard: {
+    backgroundColor: colors.success25,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.lg,
+    marginBottom: spacingY.xl,
+  },
+  purchaseCompleteTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.xs,
+    marginBottom: spacingY.xs,
+  },
+  purchaseCompleteTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.success,
+  },
+  purchaseCompleteSubtitle: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.success,
+  },
+  feedbackSection: {
+    marginBottom: spacingY.xl,
+  },
+  feedbackSectionTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+    marginBottom: spacingY.md,
+  },
+  feedbackCard: {
+    backgroundColor: colors.warning25,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.lg,
+  },
+  feedbackCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.sm,
+    marginBottom: spacingY.sm,
+  },
+  feedbackAvatar: {
+    width: verticalScale(36),
+    height: verticalScale(36),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+  },
+  feedbackName: {
+    flex: 1,
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+  },
+  feedbackComment: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.sm,
+    lineHeight: fontSize.sm * 1.5,
+    color: colors.gray600,
+  },
+  feedbackPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.cardBackground,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    paddingHorizontal: spacingX.lg,
+    paddingVertical: spacingY.lg,
+  },
+  feedbackPromptText: {
+    flex: 1,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+  },
+  feedbackPromptLink: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.sm,
+    color: colors.primary,
   },
   sectionTitle: {
     fontFamily: fontFamily.bold,
@@ -1560,6 +2009,20 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.lg,
     color: colors.error,
+  },
+  findDealButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  findDealButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.gray700,
   },
   paySheetTitle: {
     fontFamily: fontFamily.bold,
@@ -1737,5 +2200,224 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
     color: colors.gray700,
+  },
+  confirmPayIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(88),
+    height: verticalScale(88),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.success50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacingY.xl,
+    marginBottom: spacingY.xl,
+  },
+  confirmPayTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.md,
+  },
+  confirmPaySubtitle: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.xl,
+  },
+  confirmPaySubtitleBold: {
+    fontFamily: fontFamily.bold,
+    color: colors.ink,
+  },
+  confirmPayButtonRow: {
+    flexDirection: 'row',
+    gap: spacingX.md,
+    paddingBottom: spacingY.md,
+  },
+  confirmPayCancelButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.md,
+  },
+  confirmPayCancelLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray600,
+    textAlign: 'center',
+  },
+  confirmPayConfirmButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.md,
+  },
+  confirmPayConfirmLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
+    textAlign: 'center',
+  },
+  rateSheetTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.xl,
+  },
+  rateSheetItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.md,
+    backgroundColor: colors.gray50,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.md,
+    marginBottom: spacingY.xl,
+  },
+  rateSheetItemImage: {
+    width: verticalScale(56),
+    height: verticalScale(56),
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+  },
+  rateSheetItemText: {
+    flex: 1,
+    gap: verticalScale(4),
+  },
+  rateSheetItemTitle: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.ink,
+  },
+  rateSheetItemPrice: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+  },
+  rateSheetItemMeta: {
+    alignItems: 'flex-end',
+    gap: verticalScale(4),
+  },
+  rateSheetReleasedPill: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    paddingHorizontal: spacingX.sm,
+    paddingVertical: verticalScale(2),
+  },
+  rateSheetReleasedPillText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.xs,
+    color: colors.primary,
+  },
+  rateSheetSellerName: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.xs,
+    color: colors.gray500,
+  },
+  rateSheetSectionTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+    marginBottom: spacingY.md,
+    textAlign: "center"
+  },
+  rateSheetSellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacingX.md,
+    marginBottom: spacingY.xl,
+  },
+  rateSheetSellerAvatar: {
+    width: verticalScale(52),
+    height: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.gray100,
+  },
+  rateSheetSellerRowName: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    marginBottom: verticalScale(4),
+  },
+  rateSheetSellerRowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.xs,
+  },
+  rateSheetSellerRowMetaText: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+  },
+  rateSheetStars: {
+    alignSelf: 'center',
+    gap: spacingX.md,
+    marginBottom: spacingY.xl,
+  },
+  rateSheetCommentInput: {
+    minHeight: verticalScale(90),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray50,
+    paddingHorizontal: spacingX.md,
+    paddingVertical: spacingY.md,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.ink,
+    textAlignVertical: 'top',
+    marginBottom: spacingY.xl,
+  },
+  rateSheetButtonRow: {
+    flexDirection: 'row',
+    gap: spacingX.md,
+    paddingBottom: spacingY.md,
+  },
+  rateSheetLaterButton: {
+    flex: 1,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.md,
+  },
+  rateSheetLaterLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray600,
+  },
+  rateSheetSubmitButton: {
+    flex: 2,
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.md,
+  },
+  rateSheetSubmitLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
   },
 });

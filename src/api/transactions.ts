@@ -46,6 +46,13 @@ export async function confirmCode(transactionId: string, payload: ConfirmCodePay
   return res.data.data;
 }
 
+// Buyer-only. The buyer's own "item is fine, release my money" action — distinct from
+// confirmCode above (which is the seller entering a code the buyer read out to them in person).
+export async function confirmTransaction(transactionId: string) {
+  const res = await apiClient.post<ApiEnvelope<Transaction>>(`/transactions/${transactionId}/confirm-transaction`);
+  return res.data.data;
+}
+
 // No buyer-facing cancel once paid — UI should stop offering this action once
 // status has moved past pending_payment (see CLAUDE.md).
 export async function cancelTransaction(transactionId: string) {

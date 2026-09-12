@@ -28,7 +28,7 @@ const DISMISS_VELOCITY = 800; // px/s — a fast fling dismisses regardless of d
 // opacity and the sheet's slide are driven by the same translateY value — dragging the handle (or
 // tapping the backdrop, when dismissible) fades the backdrop in lockstep with the sheet's position
 // rather than as an independent, disconnected animation.
-export function BottomSheetCard({ style, children, onBackdropPress, ...rest }: BottomSheetCardProps) {
+export function BottomSheetCard({ style, children, onBackdropPress, sheetBackgroundColor, ...rest }: BottomSheetCardProps) {
   const dismissible = !!onBackdropPress;
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const sheetHeight = useSharedValue(0);
@@ -82,7 +82,11 @@ export function BottomSheetCard({ style, children, onBackdropPress, ...rest }: B
         {/* Dims independently of the sheet below — must stay a separate layer, not a parent of the sheet, or animating its opacity would fade the sheet's content along with it. */}
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, dimStyle]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={dismissible ? close : undefined} disabled={!dismissible} />
-        <AnimatedPressable style={[styles.sheet, sheetStyle]} onPress={() => {}} onLayout={(event) => handleSheetLayout(event.nativeEvent.layout.height)}>
+        <AnimatedPressable
+          style={[styles.sheet, sheetBackgroundColor ? { backgroundColor: sheetBackgroundColor } : null, sheetStyle]}
+          onPress={() => {}}
+          onLayout={(event) => handleSheetLayout(event.nativeEvent.layout.height)}
+        >
           <GestureDetector gesture={pan}>
             <View style={styles.handleZone}>
               <View style={styles.dragHandle} />
