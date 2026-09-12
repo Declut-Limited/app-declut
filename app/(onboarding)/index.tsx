@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
   },
   headline: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize['3xl'],
-    lineHeight: fontSize['3xl'] * 1.25,
+    fontSize: fontSize['2xl'],
+    lineHeight: fontSize['2xl'] * 1.5,
     color: colors.ink,
   },
   footer: {

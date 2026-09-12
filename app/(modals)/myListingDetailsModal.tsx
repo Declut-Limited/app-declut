@@ -60,7 +60,7 @@ type NoteTone = 'neutral' | 'info' | 'warning';
 const STATUS_NOTE: Record<Listing['status'], { title: string; body: string; tone: NoteTone }> = {
   active: { title: 'Your listing is live', body: 'Buyers can discover and purchase this item right now.', tone: 'info' },
   archived: { title: 'Listing Paused', body: 'This listing is currently hidden from buyers.', tone: 'neutral' },
-  reported: {
+  flagged: {
     title: 'Action Required',
     body: "We've identified information in this report that needs your attention. Review the report for what to do next.",
     tone: 'warning',
@@ -72,6 +72,9 @@ const STATUS_NOTE: Record<Listing['status'], { title: string; body: string; tone
   },
   sold: { title: 'Sold successfully', body: 'This item was successfully sold through Declut.', tone: 'info' },
 };
+// listing.status's exact enum isn't fully confirmed backend-side — fall back rather than crash
+// on a status string these maps don't have an entry for yet.
+const FALLBACK_STATUS_NOTE = STATUS_NOTE.active;
 
 // transaction.inspectionStatus's shape isn't confirmed against a real response yet, so this
 // derives the "Inspection" row from the well-documented transaction.status instead.
@@ -91,8 +94,9 @@ const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text
   pending_sale: { label: 'Sales Pending', bg: colors.warningLight, text: colors.warning700 },
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
   archived: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
-  reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
+  flagged: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
 };
+const FALLBACK_STATUS_STYLE = STATUS_STYLES.active;
 
 const NOTE_TONE_STYLES: Record<NoteTone, { bg: string; iconBg: string; text: string }> = {
   neutral: { bg: colors.gray100, iconBg: colors.gray700, text: colors.gray700 },
@@ -300,6 +304,8 @@ export default function MyListingDetailsModal() {
     ...(listing.video ? [{ uri: listing.video.secureUrl, isVideo: true }] : []),
   ];
   const conditionLabel = CONDITION_OPTIONS.find((option) => option.value === listing.condition)?.label ?? listing.condition;
+  const statusStyle = STATUS_STYLES[listing.status] ?? FALLBACK_STATUS_STYLE;
+  const statusNote = STATUS_NOTE[listing.status] ?? FALLBACK_STATUS_NOTE;
 
   return (
     <View style={styles.root}>
@@ -357,8 +363,8 @@ export default function MyListingDetailsModal() {
 
         <View style={styles.body}>
           <View style={styles.badgeRow}>
-            <View style={[styles.statusPill, { backgroundColor: STATUS_STYLES[listing.status].bg }]}>
-              <Text style={[styles.statusPillText, { color: STATUS_STYLES[listing.status].text }]}>{STATUS_STYLES[listing.status].label}</Text>
+            <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
+              <Text style={[styles.statusPillText, { color: statusStyle.text }]}>{statusStyle.label}</Text>
             </View>
             <Text style={styles.postedText}>Posted {formatDate(listing.createdAt)}</Text>
           </View>
@@ -380,7 +386,7 @@ export default function MyListingDetailsModal() {
 
           <View style={styles.divider} />
 
-          <StatusNoteCard {...STATUS_NOTE[listing.status]} />
+          <StatusNoteCard {...statusNote} />
 
           {listing.status === 'pending_sale' && transaction ? (
             <>
@@ -475,7 +481,7 @@ export default function MyListingDetailsModal() {
                 <Text style={styles.footerPrimaryLabel}>Edit Listing</Text>
               </Pressable>
             </>
-          ) : listing.status === 'reported' ? (
+          ) : listing.status === 'flagged' ? (
             <>
               <Pressable onPress={guard(handleContactSupport)} style={styles.footerSecondaryButton}>
                 <Text style={styles.footerSecondaryLabel}>Contact Support</Text>

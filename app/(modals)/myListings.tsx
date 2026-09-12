@@ -22,8 +22,11 @@ const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text
   pending_sale: { label: 'Sales Pending', bg: colors.warningLight, text: colors.warning700 },
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
   archived: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
-  reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
+  flagged: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
 };
+// listing.status's exact enum isn't fully confirmed backend-side — fall back rather than crash
+// on a status string this map doesn't have a style for yet.
+const FALLBACK_STATUS_STYLE = STATUS_STYLES.active;
 
 const STATUS_TABS: { label: string; value: 'all' | MyListingsStatusFilter }[] = [
   { label: 'All', value: 'all' },
@@ -31,7 +34,7 @@ const STATUS_TABS: { label: string; value: 'all' | MyListingsStatusFilter }[] = 
   { label: 'Paused', value: 'archived' },
   { label: 'Sales Pending', value: 'pending_sale' },
   { label: 'Sold', value: 'sold' },
-  { label: 'Reported', value: 'reported' },
+  { label: 'Reported', value: 'flagged' },
 ];
 
 // FULL-SCREEN modal — Profile's "My Listings" row, GET /listings/mine.
@@ -114,7 +117,7 @@ interface MyListingCardProps {
 /** "My Listings" row — status pill instead of location, plus a view count (0 until the backend returns viewCount; see comment on Listing). Tapping the card opens the actions sheet, not the listing detail screen directly — "View Listing" inside that sheet is the way there now. */
 function MyListingCard({ listing, onPress }: MyListingCardProps) {
   const guard = useSingleTap();
-  const status = STATUS_STYLES[listing.status];
+  const status = STATUS_STYLES[listing.status] ?? FALLBACK_STATUS_STYLE;
 
   return (
     <Pressable onPress={guard(onPress)} style={styles.card}>

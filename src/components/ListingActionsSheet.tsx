@@ -27,7 +27,7 @@ interface ListingActionsSheetProps {
 // Shared between myListings.tsx (tapping a card) and myListingDetailsModal.tsx (the floating
 // header's ••• button). Which rows show depends entirely on listing.status:
 // - View Listing: always, unless hideViewListing.
-// - Edit/Delete Listing: only active or reported.
+// - Edit/Delete Listing: only active or flagged.
 // - Pause Listing: only active. Resume Listing: only archived (paused) — no confirmed
 //   "unarchive"/"reactivate" endpoint exists yet, so Resume is a placeholder for now.
 // - View Transaction / Contact Buyer: only pending_sale or sold.
@@ -41,7 +41,7 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
   const canResume = listing.status === 'archived';
   const canShare = listing.status === 'active';
   const canViewTransactionOrContact = listing.status === 'pending_sale' || listing.status === 'sold';
-  const canEditOrDelete = listing.status === 'active' || listing.status === 'reported';
+  const canEditOrDelete = listing.status === 'active' || listing.status === 'flagged';
 
   function handleViewListing() {
     onClose();
