@@ -48,25 +48,6 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Dev-only network visibility — separate from the refresh-retry interceptor below so it never
-// affects control flow, just answers "did this request actually leave the device / come back".
-apiClient.interceptors.response.use(
-  (response) => {
-    if (__DEV__) console.log(`[API] <- ${response.status} ${response.config.url}`);
-    return response;
-  },
-  (error: AxiosError) => {
-    if (__DEV__) {
-      if (error.response) {
-        console.error(`[API] <- ${error.response.status} ${error.config?.url}`, error.response.data);
-      } else {
-        console.error(`[API] no response for ${error.config?.url} — network error / timeout / unreachable host`, error.message);
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
 // Concurrent 401s during an in-flight refresh all await the same promise
 // instead of each firing their own /auth/refresh call.
 let refreshInFlight: Promise<AuthTokens | null> | null = null;
@@ -102,6 +83,9 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
 // These return 401 for a wrong/expired OTP (business logic, not an invalid access token) — must not trigger a silent token refresh + retry, or a wrong code can look like a session expiry and sign the user out mid-verification.
 const REFRESH_EXEMPT_PATHS = ['/auth/refresh', '/auth/login', '/auth/verify-email', '/auth/verify-otp'];
 
+// Registered BEFORE the dev-logging interceptor below so a 401 that's about to be silently
+// refreshed-and-retried never reaches it — otherwise the logger prints a scary "401" line for
+// every expired-token request even when it's transparently recovered a moment later.
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -118,6 +102,26 @@ apiClient.interceptors.response.use(
       }
     }
 
+    return Promise.reject(error);
+  }
+);
+
+// Dev-only network visibility — only ever sees a 401 here if the refresh-retry interceptor above
+// couldn't recover it (no refresh token, refresh itself failed, or the path is refresh-exempt),
+// so what prints is always a real, unrecovered failure worth looking at.
+apiClient.interceptors.response.use(
+  (response) => {
+    if (__DEV__) console.log(`[API] <- ${response.status} ${response.config.url}`);
+    return response;
+  },
+  (error: AxiosError) => {
+    if (__DEV__) {
+      if (error.response) {
+        console.error(`[API] <- ${error.response.status} ${error.config?.url}`, error.response.data);
+      } else {
+        console.error(`[API] no response for ${error.config?.url} — network error / timeout / unreachable host`, error.message);
+      }
+    }
     return Promise.reject(error);
   }
 );

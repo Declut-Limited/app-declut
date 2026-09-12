@@ -53,9 +53,18 @@ export async function confirmTransaction(transactionId: string) {
   return res.data.data;
 }
 
-// No buyer-facing cancel once paid — UI should stop offering this action once
-// status has moved past pending_payment (see CLAUDE.md).
+// Pre-payment abandonment only (pending_payment) — UI should stop offering this action once
+// status has moved past that (see CLAUDE.md). Distinct from cancelPurchase below, which is the
+// post-payment, fee-applying cancellation added 2026-09-12.
 export async function cancelTransaction(transactionId: string) {
   const res = await apiClient.patch<ApiEnvelope<Transaction>>(`/transactions/${transactionId}/cancel`);
+  return res.data.data;
+}
+
+// Buyer-only. Post-payment cancellation (escrow_active/awaiting_inspection) — a 10% service fee
+// applies, half of it compensating the seller; the rest is refunded. Confirmed 2026-09-12,
+// supersedes CLAUDE.md's older "no buyer-facing cancel once paid" note.
+export async function cancelPurchase(transactionId: string) {
+  const res = await apiClient.post<ApiEnvelope<Transaction>>(`/transactions/${transactionId}/cancel-purchase`);
   return res.data.data;
 }

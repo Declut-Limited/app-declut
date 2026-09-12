@@ -35,11 +35,6 @@ export async function googleSignIn(payload: GoogleSignInPayload) {
   return res.data.data;
 }
 
-export async function refresh(refreshToken: string) {
-  const res = await apiClient.post<ApiEnvelope<AuthTokens>>('/auth/refresh', { refreshToken });
-  return res.data.data;
-}
-
 export async function logout(refreshToken: string) {
   await apiClient.post('/auth/logout', { refreshToken });
 }

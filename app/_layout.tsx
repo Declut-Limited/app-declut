@@ -81,6 +81,7 @@ export default function RootLayout() {
                           <Stack.Screen name="(modals)/privacyPolicy" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/termsOfUse" options={{ presentation: 'modal' }} />
                           <Stack.Screen name="(modals)/notificationSettingModal" options={{ presentation: 'modal' }} />
+                          <Stack.Screen name="(modals)/submitReportModal" options={{ presentation: 'modal' }} />
                         </Stack>
                       {/* </View> */}
                     </SearchFilterProvider>

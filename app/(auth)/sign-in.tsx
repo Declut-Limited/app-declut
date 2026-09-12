@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import axios from 'axios';
 import {
   AuthLogo,
   Button,
@@ -17,7 +18,7 @@ import { verticalScale } from '@/utils/styling';
 import { isVerified, useAuth } from '@/contexts/AuthContext';
 import { login as loginRequest, googleSignIn } from '@/api/auth';
 import { extractErrorMessage } from '@/api/client';
-import { getGoogleIdToken, GoogleSignInCancelledError } from '@/lib/googleAuth';
+import { GoogleSignInCancelledError, useGoogleSignIn } from '@/lib/googleAuth';
 import { getPushToken } from '@/lib/pushToken';
 import { validateRequired } from '@/lib/validators';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
@@ -30,6 +31,7 @@ interface FieldErrors {
 
 export default function SignInScreen() {
   const { establishSession } = useAuth();
+  const { signIn: signInWithGoogle } = useGoogleSignIn();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,18 +69,32 @@ export default function SignInScreen() {
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
+    if (__DEV__) console.log('[SignIn] Google button tapped');
     try {
-      const idToken = await getGoogleIdToken();
+      const idToken = await signInWithGoogle();
+      if (__DEV__) console.log('[SignIn] got idToken, calling POST /auth/google');
       const tokens = await googleSignIn({ idToken });
+      if (__DEV__) console.log('[SignIn] /auth/google succeeded, establishing session');
       const user = await establishSession(tokens);
+      if (__DEV__) console.log('[SignIn] session established', { emailVerified: user.emailVerified, kycStatus: user.kycStatus });
       if (isVerified(user)) router.replace('/');
     } catch (e) {
       if (e instanceof GoogleSignInCancelledError) {
         // User backed out of the account picker — not a real failure, no error UI needed.
+        if (__DEV__) console.log('[SignIn] Google sign-in cancelled by user');
       } else if (e instanceof Error && e.message.includes('not available in Expo Go')) {
+        if (__DEV__) console.warn('[SignIn] Google sign-in unavailable — needs a custom dev client', e);
         showWarningToast('Not available yet', 'Google sign-in needs a custom dev client build.');
       } else {
         const message = extractErrorMessage(e, 'Google sign-in failed. Please try again.');
+        if (__DEV__) {
+          console.error('[SignIn] Google sign-in failed', {
+            status: axios.isAxiosError(e) ? e.response?.status : undefined,
+            data: axios.isAxiosError(e) ? e.response?.data : undefined,
+            message,
+            error: e,
+          });
+        }
         setError(message);
         showErrorToast('Google sign-in failed', message);
       }
