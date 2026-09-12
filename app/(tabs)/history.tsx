@@ -128,11 +128,11 @@ function PurchaseCard({ transaction, onPress }: PurchaseCardProps) {
         </View>
       </View>
 
-      <View style={styles.divider} />
+      {(isActive && deadline) && (
+        <>
+          <View style={styles.divider} />
 
-      <View style={styles.cardFooter}>
-        {isActive && deadline ? (
-          <>
+          <View style={styles.cardFooter}>
             <View style={styles.footerLeft}>
               <Icons.ClockIcon size={verticalScale(16)} color={colors.gray400} />
               <Text style={styles.footerText}>
@@ -143,13 +143,9 @@ function PurchaseCard({ transaction, onPress }: PurchaseCardProps) {
               <Text style={styles.continueText}>Continue</Text>
               <Icons.ArrowRightIcon size={verticalScale(16)} color={colors.primary} weight="bold" />
             </Pressable>
-          </>
-        ) : (
-          <Text style={styles.footerText}>
-            {transaction.confirmationCode ? `Confirmation code: ${transaction.confirmationCode}` : transaction.updatedAt ? formatDate(transaction.updatedAt) : ''}
-          </Text>
-        )}
-      </View>
+          </View>
+        </>
+      )}
     </Pressable>
   );
 }

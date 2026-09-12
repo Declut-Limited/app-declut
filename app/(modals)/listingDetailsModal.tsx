@@ -41,7 +41,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { listingsApi, reviewsApi, transactionsApi } from '@/api';
+import { listingsApi, reviewsApi, transactionsApi, usersApi } from '@/api';
 import type { Listing, Review, Transaction } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate, getProfileImage } from '@/utils/helpers';
@@ -61,6 +61,15 @@ const GOOGLE_STATIC_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? 
 // no backing endpoint yet (nothing in the Postman collection covers a per-transaction inspection
 // extension), so the link below just surfaces a toast rather than pretending to call something real.
 const ESCROW_NOTE_BODY = `Pick up and inspect within ${INSPECTION_WINDOW_HOURS} hours. No pickup by then and the order auto-cancels with a 10% fee (half compensates the seller). After handover, funds release automatically at the end of the window unless you report a problem.`;
+
+type ReportReason = 'not_as_described' | 'damaged' | 'wrong_item' | 'other';
+
+const REPORT_REASONS: { value: ReportReason; label: string }[] = [
+  { value: 'not_as_described', label: "Item isn't as described" },
+  { value: 'damaged', label: 'Item is damaged or faulty' },
+  { value: 'wrong_item', label: 'I received the wrong item' },
+  { value: 'other', label: 'Something else' },
+];
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -202,6 +211,10 @@ export default function ListingDetailsModal() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<ReportReason | null>(null);
+  const [reportDescription, setReportDescription] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -353,9 +366,28 @@ export default function ListingDetailsModal() {
     }
   }
 
-  // TODO: no documented dispute-filing endpoint for this yet — placeholder toast.
   function handleReportProblem() {
+    setReportReason(null);
+    setReportDescription('');
+    setReportSheetOpen(true);
+  }
+
+  // TODO: the only "Create report" endpoint in the Postman collection is under /admin/reports
+  // (adminAccessToken, requires a reporterId the caller supplies) — there's no buyer-facing,
+  // self-authenticated dispute-filing endpoint yet. Placeholder toast until one exists.
+  function handleSubmitReport() {
+    if (!reportReason) return;
+    setReportSheetOpen(false);
     showWarningToast('Not available yet', "Reporting a problem isn't wired up yet.");
+  }
+
+  // TODO: distinct from transactionsApi.cancelTransaction, which is explicitly pre-payment only
+  // ("No buyer-facing cancel once paid" — see CLAUDE.md and that function's own comment). This is
+  // the post-payment, 10%-fee cancellation the design calls for, and there's no confirmed endpoint
+  // for it yet either.
+  function handleCancelPurchaseWithFee() {
+    setReportSheetOpen(false);
+    showWarningToast('Not available yet', "Cancelling a paid purchase isn't wired up yet.");
   }
 
   async function handleMakePayment() {
@@ -423,6 +455,26 @@ export default function ListingDetailsModal() {
     transactionsApi.cancelTransaction(transactionId)
       .then(() => { if (__DEV__) console.log(`[Checkout] cancelled unconfirmed transaction=${transactionId}`); })
       .catch((e) => { if (__DEV__) console.warn(`[Checkout] cancelTransaction failed for transaction=${transactionId} (backend sweep is the fallback)`, e); });
+  }
+
+  // Closing the "Transfer Received" sheet: the listing is now pending_sale, so refetch it (not
+  // awaited — this screen's own UI reacts to `listing` updating whenever it resolves) and, since
+  // the buyer just moved money through the app, nudge them to set up payouts too in case they ever
+  // sell something themselves — same check-and-redirect addItemModal.tsx uses after a fresh
+  // publish, just triggered by this money-moving moment instead.
+  async function handlePaymentSuccessClose() {
+    setPaymentStep('none');
+    if (listing) {
+      listingsApi.getListing(listing._id).then(setListing).catch(() => {});
+    }
+    try {
+      const profile = await usersApi.getMyProfile();
+      if (!profile.hasPayoutDetails) {
+        router.replace('/(modals)/payoutDetailsModal');
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[Checkout] could not check hasPayoutDetails after payment', e);
+    }
   }
 
   // Resumes the confirm/poll/success flow when entered via the cold-launch deep-link path
@@ -675,9 +727,7 @@ export default function ListingDetailsModal() {
           ) : (
             <PaymentSuccessSheet
               amount={listing.price}
-              onClose={() => {
-                setPaymentStep('none');
-              }}
+              onClose={handlePaymentSuccessClose}
             />
           )}
         </View>
@@ -705,6 +755,21 @@ export default function ListingDetailsModal() {
             onCommentChange={setReviewComment}
             onDismiss={() => setReviewSheetOpen(false)}
             onSubmit={handleSubmitReview}
+          />
+        </View>
+      ) : null}
+
+      {reportSheetOpen ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ReportProblemSheet
+            reason={reportReason}
+            description={reportDescription}
+            submitting={submittingReport}
+            onReasonChange={setReportReason}
+            onDescriptionChange={setReportDescription}
+            onDismiss={() => setReportSheetOpen(false)}
+            onSubmit={handleSubmitReport}
+            onCancelPurchase={handleCancelPurchaseWithFee}
           />
         </View>
       ) : null}
@@ -790,7 +855,7 @@ function SellerContactCard({ seller, address, coordinates, compact }: SellerCont
   const [lng, lat] = coordinates;
   const hasCoords = !compact && Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
   const staticMapUrl = hasCoords
-    ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=650x300&scale=2&markers=color:red%7C${lat},${lng}&key=${GOOGLE_STATIC_MAPS_KEY}`
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=650x300&scale=6&markers=color:red%7C${lat},${lng}&key=${GOOGLE_STATIC_MAPS_KEY}`
     : null;
 
   function handleCall() {
@@ -1310,6 +1375,92 @@ function RateSellerSheet({ listing, rating, comment, submitting, onRatingChange,
           {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.rateSheetSubmitLabel}>Submit Review</Text>}
         </Pressable>
       </View>
+    </BottomSheetCard>
+  );
+}
+
+interface ReportProblemSheetProps {
+  reason: ReportReason | null;
+  description: string;
+  submitting: boolean;
+  onReasonChange: (next: ReportReason) => void;
+  onDescriptionChange: (next: string) => void;
+  onDismiss: () => void;
+  onSubmit: () => void;
+  onCancelPurchase: () => void;
+}
+
+// Opened from the pending_sale footer's "Report A Problem With This Item" button.
+function ReportProblemSheet({
+  reason,
+  description,
+  submitting,
+  onReasonChange,
+  onDescriptionChange,
+  onDismiss,
+  onSubmit,
+  onCancelPurchase,
+}: ReportProblemSheetProps) {
+  const guard = useSingleTap();
+  const canSubmit = !!reason && !submitting;
+
+  return (
+    <BottomSheetCard onBackdropPress={submitting ? undefined : guard(onDismiss)} sheetBackgroundColor={colors.white}>
+      <View style={styles.reportHeaderRow}>
+        <Text style={styles.reportTitle}>What went wrong?</Text>
+        <Pressable onPress={submitting ? undefined : guard(onDismiss)} style={styles.reportCloseButton} hitSlop={8}>
+          <Icons.XIcon size={verticalScale(16)} color={colors.white} weight="bold" />
+        </Pressable>
+      </View>
+      <Text style={styles.reportSubtitle}>Your money stays frozen in escrow while we look into it.</Text>
+
+      <View style={styles.reportOptionList}>
+        {REPORT_REASONS.map((option) => {
+          const selected = reason === option.value;
+          return (
+            <Pressable
+              key={option.value}
+              onPress={submitting ? undefined : guard(() => onReasonChange(option.value))}
+              style={[styles.reportOptionRow, selected && styles.reportOptionRowSelected]}
+            >
+              <Text style={[styles.reportOptionLabel, selected && styles.reportOptionLabelSelected]}>{option.label}</Text>
+              {selected ? <Icon name="tick-circle" variant="bold" size={verticalScale(24)} color={colors.primary} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {reason === 'other' ? (
+        <TextInput
+          style={styles.reportDescriptionInput}
+          placeholder="Describe the issue..."
+          placeholderTextColor={colors.gray400}
+          value={description}
+          onChangeText={onDescriptionChange}
+          multiline
+          editable={!submitting}
+        />
+      ) : null}
+
+      <Pressable
+        onPress={canSubmit ? guard(onSubmit) : undefined}
+        disabled={!canSubmit}
+        style={[styles.reportSubmitButton, !canSubmit && styles.reportSubmitButtonDisabled]}
+      >
+        {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.reportSubmitLabel}>Submit Report</Text>}
+      </Pressable>
+
+      <View style={styles.reportWarningRow}>
+        <Icon name="info-circle" variant="bold" size={verticalScale(16)} color={colors.gray500} />
+        <Text style={styles.reportWarningText}>False reports can lead to account suspension.</Text>
+      </View>
+
+      <View style={styles.reportDivider} />
+
+      <Text style={styles.reportCancelPrompt}>Nothing wrong with the item — you just can't proceed?</Text>
+      <Pressable onPress={submitting ? undefined : guard(onCancelPurchase)} hitSlop={8}>
+        <Text style={styles.reportCancelLink}>Cancel Purchase (10% service fee applies)</Text>
+      </Pressable>
     </BottomSheetCard>
   );
 }
@@ -2419,5 +2570,122 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
     color: colors.white,
+  },
+  reportHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: spacingY.sm,
+  },
+  reportTitle: {
+    flex: 1,
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+  },
+  reportCloseButton: {
+    width: verticalScale(32),
+    height: verticalScale(32),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray700,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportSubtitle: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray500,
+    marginBottom: spacingY.xl,
+  },
+  reportOptionList: {
+    gap: spacingY.lg,
+    marginBottom: spacingY.lg,
+  },
+  reportOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.md,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    paddingHorizontal: spacingX.lg,
+    paddingVertical: spacingY.lg,
+  },
+  reportOptionRowSelected: {
+    backgroundColor: colors.primaryLight,
+  },
+  reportOptionLabel: {
+    flex: 1,
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.gray700,
+  },
+  reportOptionLabelSelected: {
+    color: colors.ink,
+  },
+  reportDescriptionInput: {
+    minHeight: verticalScale(90),
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray50,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacingX.md,
+    paddingVertical: spacingY.md,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    textAlignVertical: 'top',
+    marginBottom: spacingY.lg,
+  },
+  reportSubmitButton: {
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.md,
+  },
+  reportSubmitButtonDisabled: {
+    opacity: 0.5,
+  },
+  reportSubmitLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
+  },
+  reportWarningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacingX.xs,
+    marginBottom: spacingY.xl,
+  },
+  reportWarningText: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+  },
+  reportDivider: {
+    height: 1,
+    backgroundColor: colors.gray100,
+    marginBottom: spacingY.xl,
+  },
+  reportCancelPrompt: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.xs,
+  },
+  reportCancelLink: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    marginBottom: spacingY.md,
   },
 });
