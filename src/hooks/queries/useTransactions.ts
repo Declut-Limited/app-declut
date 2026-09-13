@@ -35,6 +35,20 @@ export function useMyTransactionForListing(listingId: string | undefined, enable
   });
 }
 
+/** Single-transaction fetch, incl. the audit-log `progress` timeline — transactionDetailsModal,
+ *  reached from either party's "View Transaction". Buyer-or-seller ownership is enforced
+ *  server-side (403 otherwise), so no client-side ownership check is needed here. Same LIVE +
+ *  realtime reasoning as the lookups above — RealtimeContext invalidates queryKeys.transactions.all
+ *  on a socket event, which covers this key's shared prefix too. */
+export function useTransactionDetail(transactionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.transactions.detail(transactionId ?? ''),
+    queryFn: () => transactionsApi.getTransaction(transactionId as string),
+    enabled: !!transactionId,
+    staleTime: STALE_TIME.LIVE,
+  });
+}
+
 /** A transaction status change can flip the listing behind it (active <-> pending_sale <-> sold)
  *  and always affects both transaction lookups above plus History's own list. */
 function invalidateAfterTransactionChange(queryClient: QueryClient, listingId: string | null | undefined) {

@@ -400,6 +400,19 @@ export interface TransactionParty {
   slug: string;
 }
 
+/** One entry in Transaction.progress — the transaction's own audit-log timeline, oldest-first.
+ *  `label` is the backend's own human-readable step title (e.g. "Buyer paid"), used verbatim
+ *  rather than re-derived from `event`/`newState` — see GET /transactions/:id in the Postman
+ *  collection. Only present on GET /transactions/:id (single-transaction fetch), not on the list
+ *  endpoints. */
+export interface TransactionProgressEntry {
+  event: string;
+  label: string;
+  oldState: string | null;
+  newState: string;
+  createdAt: string;
+}
+
 export interface Transaction {
   _id: string;
   /** Populated inline, but only ever { _id, title } — no image, no seller. null if the referenced listing was deleted. */
@@ -420,6 +433,8 @@ export interface Transaction {
   escrow?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** Only present on GET /transactions/:id — see TransactionProgressEntry. */
+  progress?: TransactionProgressEntry[];
 }
 
 /** GET /transactions/purchases query — 'active' maps server-side to awaiting_inspection only; omit entirely for every status. */

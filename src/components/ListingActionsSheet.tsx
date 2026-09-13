@@ -11,6 +11,7 @@ import { extractErrorMessage } from '@/api/client';
 import type { Listing } from '@/api/types';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { usePauseListingMutation, useResumeListingMutation, useDeleteListingMutation } from '@/hooks/queries/useListings';
+import { useMyTransactionForListing } from '@/hooks/queries/useTransactions';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
 
 interface ListingActionsSheetProps {
@@ -55,6 +56,11 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
   const canViewTransactionOrContact = listing.status === 'pending_sale' || listing.status === 'sold';
   const canEditOrDelete = listing.status === 'active' || listing.status === 'reported';
 
+  // myListingDetailsModal already has this fetched and passes the same query key, so this just
+  // subscribes to the same cache there — only myListings.tsx (which never fetches it otherwise)
+  // actually triggers a fresh request here.
+  const { data: transaction = null } = useMyTransactionForListing(listing._id, canViewTransactionOrContact);
+
   function handleViewListing() {
     onClose();
     router.push({ pathname: '/(modals)/myListingDetailsModal', params: { id: listing._id } });
@@ -85,9 +91,13 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
     });
   }
 
-  // TODO: no seller-side transaction-detail screen exists yet — placeholder toast.
   function handleViewTransaction() {
-    showWarningToast('Not available yet', "Viewing the transaction isn't available yet.");
+    if (!transaction) {
+      showErrorToast('Could not open transaction', 'Please close this and try again in a moment.');
+      return;
+    }
+    onClose();
+    router.push({ pathname: '/(modals)/transactionDetailsModal', params: { transactionId: transaction._id } });
   }
 
   // TODO: no messaging/contact feature exists yet — placeholder toast.

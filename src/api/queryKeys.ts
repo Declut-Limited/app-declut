@@ -44,6 +44,8 @@ export const queryKeys = {
     purchasesLookup: (filter: PurchaseStatusFilter) => [...queryKeys.transactions.all, 'purchases', 'lookup', filter] as const,
     // Seller-side equivalent (GET /transactions, not /transactions/purchases) — myListingDetailsModal.
     myTransactionsLookup: () => [...queryKeys.transactions.all, 'mine', 'lookup'] as const,
+    // Single-transaction fetch (GET /transactions/:id) — transactionDetailsModal.
+    detail: (id: string) => [...queryKeys.transactions.all, 'detail', id] as const,
   },
   reviews: {
     all: ['reviews'] as const,

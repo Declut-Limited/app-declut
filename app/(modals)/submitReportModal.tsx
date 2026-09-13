@@ -13,7 +13,7 @@ import { reportsApi } from '@/api';
 import { useCancelPurchaseMutation } from '@/hooks/queries/useTransactions';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency } from '@/utils/helpers';
-import { showErrorToast, showSuccessToast } from '@/lib/toast';
+import { showErrorToast } from '@/lib/toast';
 
 const CANCEL_FEE_PERCENT = 10;
 
@@ -46,6 +46,7 @@ export default function SubmitReportModal() {
   const [description, setDescription] = useState('');
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
   const [cancelSuccessOpen, setCancelSuccessOpen] = useState(false);
+  const [reportSuccessOpen, setReportSuccessOpen] = useState(false);
 
   // Write-only — no list of the caller's own reports exists yet to invalidate, so a plain
   // useMutation (rather than one of the shared hooks) is enough here.
@@ -71,13 +72,15 @@ export default function SubmitReportModal() {
     createReportMutation.mutate(
       { title, reason: reasonText, listingId, reporterId: user.id },
       {
-        onSuccess: () => {
-          showSuccessToast('Report submitted', "We'll look into it and follow up if needed.");
-          router.back();
-        },
+        onSuccess: () => setReportSuccessOpen(true),
         onError: (e) => showErrorToast('Could not submit report', extractErrorMessage(e)),
       }
     );
+  }
+
+  function handleCloseReportSuccess() {
+    setReportSuccessOpen(false);
+    router.back();
   }
 
   // Distinct from useCancelTransactionMutation, which is pre-payment only. This is the
@@ -202,6 +205,12 @@ export default function SubmitReportModal() {
           <CancelSuccessSheet refund={refundAmount} fee={cancelFee} onClose={handleCloseCancelSuccess} />
         </View>
       ) : null}
+
+      {reportSuccessOpen ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ReportSuccessSheet onClose={handleCloseReportSuccess} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -262,6 +271,25 @@ function CancelSuccessSheet({ refund, fee, onClose }: CancelSuccessSheetProps) {
         {formatCurrency(refund)} will be refunded to your bank account within 24 hours ({formatCurrency(fee)} service fee
         applied)
       </Text>
+      <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
+        <Text style={styles.successCloseLabel}>Close</Text>
+      </Pressable>
+    </BottomSheetCard>
+  );
+}
+
+// Shown once the report is actually submitted, in place of the toast-and-close this used to do —
+// same shape as CancelSuccessSheet above, local to this file for the same reason.
+function ReportSuccessSheet({ onClose }: { onClose: () => void }) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)} sheetBackgroundColor={colors.white}>
+      <View style={styles.successIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(72)} color={colors.success} />
+      </View>
+      <Text style={styles.successTitle}>Report Submitted</Text>
+      <Text style={styles.successSubtitle}>We'll look into it and follow up if needed.</Text>
       <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
         <Text style={styles.successCloseLabel}>Close</Text>
       </Pressable>

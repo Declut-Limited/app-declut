@@ -343,9 +343,12 @@ export default function MyListingDetailsModal() {
     showWarningToast('Not available yet', "Contacting the buyer isn't available yet.");
   }
 
-  // TODO: no seller-side transaction-detail screen exists yet — placeholder toast.
   function handleViewTransaction() {
-    showWarningToast('Not available yet', "Viewing the transaction isn't available yet.");
+    if (!transaction) {
+      showErrorToast('Could not open transaction', 'Please close this and try again in a moment.');
+      return;
+    }
+    router.push({ pathname: '/(modals)/transactionDetailsModal', params: { transactionId: transaction._id } });
   }
 
   // TODO: no prefill-from-existing-listing flow exists yet — placeholder toast.
