@@ -7,18 +7,15 @@ import Icon from './Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
-import { listingsApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
 import type { Listing } from '@/api/types';
 import { useSingleTap } from '@/hooks/useSingleTap';
+import { usePauseListingMutation, useResumeListingMutation, useDeleteListingMutation } from '@/hooks/queries/useListings';
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
 
 interface ListingActionsSheetProps {
   listing: Listing;
   onClose: () => void;
-  /** Refetches after an action actually changes something (pause/resume/delete) — a list refresh
-   *  on myListings, a single-listing refetch on myListingDetailsModal. */
-  onChanged: () => void;
   /** myListingDetailsModal opens this sheet from the listing it's already showing — "View Listing"
    *  there would just navigate back to itself, so that screen omits it. myListings.tsx (tapping a
    *  card in the list) leaves it in, since that's the only way there to a single listing's detail. */
@@ -35,11 +32,15 @@ type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delet
 // - View Transaction / Contact Buyer: only pending_sale or sold.
 // - Share Listing: only active.
 // Only one sheet is ever mounted at a time — `view` swaps the options list out for a confirmation
-// or success sheet instead of stacking one on top of the other.
-export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListing }: ListingActionsSheetProps) {
+// or success sheet instead of stacking one on top of the other. Pause/resume/delete all invalidate
+// their own caches (see useListings.ts) — myListings' list and myListingDetailsModal's own detail
+// query pick up the change on their own, no manual refetch callback needed here.
+export function ListingActionsSheet({ listing, onClose, hideViewListing }: ListingActionsSheetProps) {
   const guard = useSingleTap();
   const [view, setView] = useState<SheetView>('actions');
-  const [pendingAction, setPendingAction] = useState<'pause' | 'resume' | 'delete' | null>(null);
+  const pauseMutation = usePauseListingMutation();
+  const resumeMutation = useResumeListingMutation();
+  const deleteMutation = useDeleteListingMutation();
 
   const canPause = listing.status === 'active';
   const canResume = listing.status === 'paused';
@@ -57,30 +58,24 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
     showWarningToast('Not available yet', "Editing a listing isn't available yet.");
   }
 
-  async function confirmPause() {
-    setPendingAction('pause');
-    try {
-      await listingsApi.pauseListing(listing._id);
-      setView('success-pause');
-    } catch (e) {
-      showErrorToast('Could not pause listing', extractErrorMessage(e));
-      setView('actions');
-    } finally {
-      setPendingAction(null);
-    }
+  function confirmPause() {
+    pauseMutation.mutate(listing._id, {
+      onSuccess: () => setView('success-pause'),
+      onError: (e) => {
+        showErrorToast('Could not pause listing', extractErrorMessage(e));
+        setView('actions');
+      },
+    });
   }
 
-  async function confirmResume() {
-    setPendingAction('resume');
-    try {
-      await listingsApi.resumeListing(listing._id);
-      setView('success-resume');
-    } catch (e) {
-      showErrorToast('Could not resume listing', extractErrorMessage(e));
-      setView('actions');
-    } finally {
-      setPendingAction(null);
-    }
+  function confirmResume() {
+    resumeMutation.mutate(listing._id, {
+      onSuccess: () => setView('success-resume'),
+      onError: (e) => {
+        showErrorToast('Could not resume listing', extractErrorMessage(e));
+        setView('actions');
+      },
+    });
   }
 
   // TODO: no seller-side transaction-detail screen exists yet — placeholder toast.
@@ -101,23 +96,20 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
     }
   }
 
-  async function confirmDelete() {
-    setPendingAction('delete');
-    try {
-      await listingsApi.deleteListing(listing._id);
-      showSuccessToast('Listing deleted');
-      onChanged();
-      onClose();
-    } catch (e) {
-      showErrorToast('Could not delete listing', extractErrorMessage(e));
-      setView('actions');
-    } finally {
-      setPendingAction(null);
-    }
+  function confirmDelete() {
+    deleteMutation.mutate(listing._id, {
+      onSuccess: () => {
+        showSuccessToast('Listing deleted');
+        onClose();
+      },
+      onError: (e) => {
+        showErrorToast('Could not delete listing', extractErrorMessage(e));
+        setView('actions');
+      },
+    });
   }
 
   function handleSuccessClose() {
-    onChanged();
     onClose();
   }
 
@@ -132,7 +124,7 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
         confirmLabel="Pause Listing"
         confirmBg={colors.primary}
         confirmColor={colors.white}
-        loading={pendingAction === 'pause'}
+        loading={pauseMutation.isPending}
         onCancel={() => setView('actions')}
         onConfirm={confirmPause}
       />
@@ -150,7 +142,7 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
         confirmLabel="Resume Listing"
         confirmBg={colors.primary}
         confirmColor={colors.white}
-        loading={pendingAction === 'resume'}
+        loading={resumeMutation.isPending}
         onCancel={() => setView('actions')}
         onConfirm={confirmResume}
       />
@@ -168,7 +160,7 @@ export function ListingActionsSheet({ listing, onClose, onChanged, hideViewListi
         confirmLabel="Delete Listing"
         confirmBg={colors.error50}
         confirmColor={colors.danger}
-        loading={pendingAction === 'delete'}
+        loading={deleteMutation.isPending}
         onCancel={() => setView('actions')}
         onConfirm={confirmDelete}
       />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Keyboard, Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import * as Icons from 'phosphor-react-native';
@@ -37,6 +37,8 @@ export interface AddItemBasicInfoStepProps {
   onOpenStateSheet: () => void;
   area: string;
   onOpenAreaSheet: () => void;
+  /** True while getAreaOptions(state) is being computed after a state is selected — see addItemModal.tsx. */
+  areaLoading?: boolean;
   address: string;
   onAddressChange: (value: string) => void;
   /** Set when the address text was picked from a Google Places suggestion; cleared on free-typed edits. */
@@ -64,6 +66,7 @@ export function AddItemBasicInfoStep({
   onOpenStateSheet,
   area,
   onOpenAreaSheet,
+  areaLoading,
   address,
   onAddressChange,
   onAddressLocationChange,
@@ -132,9 +135,10 @@ export function AddItemBasicInfoStep({
         <LabeledPicker
           label="Area"
           value={area}
-          placeholder="Select a state first"
+          placeholder={areaLoading ? 'Loading areas…' : 'Select a state first'}
           onPress={onOpenAreaSheet}
-          disabled={!state}
+          disabled={!state || areaLoading}
+          loading={areaLoading}
           error={errors.area}
         />
         <LabeledAddressInput
@@ -310,10 +314,12 @@ interface LabeledPickerProps {
   placeholder: string;
   onPress: () => void;
   disabled?: boolean;
+  /** Shows a spinner in place of the chevron — for options computed/fetched after another field changes (e.g. Area after State). */
+  loading?: boolean;
   error?: string;
 }
 
-function LabeledPicker({ label, value, placeholder, onPress, disabled, error }: LabeledPickerProps) {
+function LabeledPicker({ label, value, placeholder, onPress, disabled, loading, error }: LabeledPickerProps) {
   const guard = useSingleTap();
 
   // A text field could still be focused when a picker is tapped — close the keyboard first so it
@@ -341,7 +347,11 @@ function LabeledPicker({ label, value, placeholder, onPress, disabled, error }: 
           <Text style={styles.fieldLabel}>{label}</Text>
           <Text style={[styles.fieldValue, !value && styles.fieldValuePlaceholder]}>{value || placeholder}</Text>
         </View>
-        <Icons.CaretDownIcon size={verticalScale(16)} color={disabled ? colors.gray300 : colors.gray400} />
+        {loading ? (
+          <ActivityIndicator color={colors.gray400} />
+        ) : (
+          <Icons.CaretDownIcon size={verticalScale(16)} color={disabled ? colors.gray300 : colors.gray400} />
+        )}
       </Pressable>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>

@@ -8,13 +8,15 @@ import { verticalScale } from '@/utils/styling';
 import { getProfileImage } from '@/utils/helpers';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { mediaApi, usersApi } from '@/api';
+import { mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
+import { useUpdateProfileMutation } from '@/hooks/queries/useProfile';
 import { showErrorToast, showSuccessToast } from '@/lib/toast';
 
 export default function AccountDetailsModal() {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const guard = useSingleTap();
+  const updateProfileMutation = useUpdateProfileMutation();
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name ?? '');
@@ -49,8 +51,7 @@ export default function AccountDetailsModal() {
     try {
       const signature = await mediaApi.getUploadSignature();
       const uploaded = await mediaApi.uploadToCloudinary(uri, signature, 'image');
-      await usersApi.updateMyProfile({ profileImage: uploaded.secureUrl });
-      await refreshUser();
+      await updateProfileMutation.mutateAsync({ profileImage: uploaded.secureUrl });
     } catch (e) {
       showErrorToast('Could not update photo', extractErrorMessage(e));
       setAvatarPreviewUri(null);
@@ -75,8 +76,7 @@ export default function AccountDetailsModal() {
     if (!trimmed || saving) return;
     setSaving(true);
     try {
-      await usersApi.updateMyProfile({ name: trimmed });
-      await refreshUser();
+      await updateProfileMutation.mutateAsync({ name: trimmed });
       setEditing(false);
       showSuccessToast('Saved', 'Your account details have been updated.');
     } catch (e) {

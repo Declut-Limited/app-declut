@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
 import dayjs from 'dayjs';
@@ -12,13 +13,15 @@ import { verticalScale } from '@/utils/styling';
 import { formatNumber, getProfileImage } from '@/utils/helpers';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { isVerified, useAuth } from '@/contexts/AuthContext';
-import { mediaApi, usersApi } from '@/api';
+import { mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
+import { useUpdateProfileMutation } from '@/hooks/queries/useProfile';
 import { showErrorToast } from '@/lib/toast';
 
 export default function ProfileScreen() {
   const { user, signOut, refreshUser } = useAuth();
   const guard = useSingleTap();
+  const updateProfileMutation = useUpdateProfileMutation();
 
   const [refreshing, setRefreshing] = useState(false);
   // Optimistic local preview shown the instant a photo is picked, before the upload/PATCH round-trip resolves.
@@ -27,6 +30,19 @@ export default function ProfileScreen() {
   // Hard-denied gallery permission — same "send to Settings" primer used in AddItemModal.
   const [permissionPrompt, setPermissionPrompt] = useState<{ target: string; message: string } | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // This is a tab screen, so it stays mounted (not unmounted like a stack/modal screen) when you
+  // switch to another tab — without this, scroll position just sits wherever you left it. Resets
+  // on blur (leaving), not focus, so it's already back at the top by the time you return instead
+  // of visibly jumping there.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      };
+    }, [])
+  );
 
   async function onRefresh() {
     setRefreshing(true);
@@ -56,8 +72,7 @@ export default function ProfileScreen() {
     try {
       const signature = await mediaApi.getUploadSignature();
       const uploaded = await mediaApi.uploadToCloudinary(uri, signature, 'image');
-      await usersApi.updateMyProfile({ profileImage: uploaded.secureUrl });
-      await refreshUser();
+      await updateProfileMutation.mutateAsync({ profileImage: uploaded.secureUrl });
     } catch (e) {
       showErrorToast('Could not update photo', extractErrorMessage(e));
       setAvatarPreviewUri(null);
@@ -102,6 +117,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.flex}>
       <ScreenContainer
+        ref={scrollRef}
         edges={['top']}
         background={colors.white}
         header={<ScreenHeader title="Profile" showBack={false} />}

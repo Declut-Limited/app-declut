@@ -6,9 +6,11 @@ import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
+import { useMutation } from '@tanstack/react-query';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { reportsApi, transactionsApi } from '@/api';
+import { reportsApi } from '@/api';
+import { useCancelPurchaseMutation } from '@/hooks/queries/useTransactions';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency } from '@/utils/helpers';
 import { showErrorToast, showSuccessToast } from '@/lib/toast';
@@ -42,10 +44,14 @@ export default function SubmitReportModal() {
 
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
-  const [cancellingPurchase, setCancellingPurchase] = useState(false);
   const [cancelSuccessOpen, setCancelSuccessOpen] = useState(false);
+
+  // Write-only — no list of the caller's own reports exists yet to invalidate, so a plain
+  // useMutation (rather than one of the shared hooks) is enough here.
+  const createReportMutation = useMutation({ mutationFn: reportsApi.createReport });
+  const cancelPurchaseMutation = useCancelPurchaseMutation();
+  const submitting = createReportMutation.isPending;
 
   const canSubmit = !!reason && !submitting && (reason !== 'other' || !!description.trim());
 
@@ -56,43 +62,41 @@ export default function SubmitReportModal() {
   // POST /reports (regular-user, confirmed 2026-09-14) — title is a short summary, reason is the
   // fuller text. For a predefined option there's no separate free-text, so both just use its
   // label; "Something else" uses the buyer's own description as the reason.
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!canSubmit || !reason || !listingId || !user?.id) return;
     const selected = REPORT_REASONS.find((r) => r.value === reason);
     const title = reason === 'other' ? 'Something else' : selected?.label ?? 'Reported item';
     const reasonText = reason === 'other' ? description.trim() : selected?.label ?? title;
 
-    setSubmitting(true);
-    try {
-      await reportsApi.createReport({ title, reason: reasonText, listingId, reporterId: user.id });
-      showSuccessToast('Report submitted', "We'll look into it and follow up if needed.");
-      router.back();
-    } catch (e) {
-      showErrorToast('Could not submit report', extractErrorMessage(e));
-    } finally {
-      setSubmitting(false);
-    }
+    createReportMutation.mutate(
+      { title, reason: reasonText, listingId, reporterId: user.id },
+      {
+        onSuccess: () => {
+          showSuccessToast('Report submitted', "We'll look into it and follow up if needed.");
+          router.back();
+        },
+        onError: (e) => showErrorToast('Could not submit report', extractErrorMessage(e)),
+      }
+    );
   }
 
-  // Distinct from transactionsApi.cancelTransaction, which is pre-payment only. This is the
+  // Distinct from useCancelTransactionMutation, which is pre-payment only. This is the
   // post-payment, fee-applying cancellation — POST /transactions/:id/cancel-purchase, buyer-only.
   // Closes the confirm sheet immediately and shows the same full-screen overlay
   // listingDetailsModal uses while waiting on a backend confirmation, then the success sheet.
-  async function handleConfirmCancelPurchase() {
+  // onSuccess invalidates the listing/transaction caches (see useTransactions.ts), so
+  // listingDetailsModal — still mounted underneath, popped back to on close — picks up the
+  // cancelled/refunded status on its own instead of showing what it last rendered before this.
+  function handleConfirmCancelPurchase() {
     if (!transactionId) {
       showErrorToast('Could not cancel', 'Missing transaction — please close this and try again.');
       return;
     }
     setCancelSheetOpen(false);
-    setCancellingPurchase(true);
-    try {
-      await transactionsApi.cancelPurchase(transactionId);
-      setCancelSuccessOpen(true);
-    } catch (e) {
-      showErrorToast('Could not cancel purchase', extractErrorMessage(e));
-    } finally {
-      setCancellingPurchase(false);
-    }
+    cancelPurchaseMutation.mutate(transactionId, {
+      onSuccess: () => setCancelSuccessOpen(true),
+      onError: (e) => showErrorToast('Could not cancel purchase', extractErrorMessage(e)),
+    });
   }
 
   // TODO: this pops back to whatever's beneath submitReportModal on the stack (listingDetailsModal),
@@ -182,7 +186,7 @@ export default function SubmitReportModal() {
         </View>
       ) : null}
 
-      {cancellingPurchase ? (
+      {cancelPurchaseMutation.isPending ? (
         <View style={styles.confirmingOverlay}>
           <ActivityIndicator color={colors.white} size="large" />
           <Text style={styles.confirmingText}>Cancelling your purchase…</Text>

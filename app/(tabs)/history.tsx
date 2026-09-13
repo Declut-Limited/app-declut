@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Icons from 'phosphor-react-native';
 import dayjs from 'dayjs';
 import { EmptyState, ScreenContainer, ScreenHeader } from '@/components';
@@ -9,6 +10,8 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { transactionsApi } from '@/api';
+import { queryKeys } from '@/api/queryKeys';
+import { STALE_TIME } from '@/api/staleTimes';
 import type { PurchaseStatusFilter, Transaction, TransactionStatus } from '@/api/types';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -48,10 +51,24 @@ export default function HistoryScreen() {
   const guard = useSingleTap();
   const [filter, setFilter] = useState<PurchaseStatusFilter>('active');
 
+  // A tab screen stays mounted across tab switches (unlike a stack/modal screen), so without this
+  // the selected pill would just sit wherever it was left. Resets on blur (leaving), so it's
+  // already back to Active by the time you return.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setFilter('active');
+      };
+    }, [])
+  );
+
+  // LIVE: escrow/inspection status can change via a Paystack webhook or the seller's own action —
+  // see staleTimes.ts.
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings<Transaction>(
+    queryKeys.transactions.purchasesInfinite(filter),
     ({ page, limit }) => transactionsApi.listMyPurchases(page, limit, filter),
     true,
-    filter
+    STALE_TIME.LIVE
   );
 
   function onPressTransaction(transaction: Transaction) {

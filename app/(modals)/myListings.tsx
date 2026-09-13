@@ -9,6 +9,8 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
 import { listingsApi } from '@/api';
+import { queryKeys } from '@/api/queryKeys';
+import { STALE_TIME } from '@/api/staleTimes';
 import type { Listing, MyListingsStatusFilter } from '@/api/types';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -44,10 +46,13 @@ export default function MyListingsModal() {
   const [statusFilter, setStatusFilter] = useState<'all' | MyListingsStatusFilter>('all');
   const [actionListing, setActionListing] = useState<Listing | null>(null);
 
+  // BROWSE, not STATIC: a buyer transacting on one of these listings changes its status with no
+  // mutation on this device to invalidate it — see staleTimes.ts.
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
+    queryKeys.listings.mineInfinite(statusFilter),
     ({ page, limit }) => listingsApi.getMyListings(page, limit, statusFilter === 'all' ? undefined : statusFilter),
     true,
-    statusFilter
+    STALE_TIME.BROWSE
   );
 
   function onPostNewListing() {
@@ -105,7 +110,7 @@ export default function MyListingsModal() {
 
       {actionListing ? (
         <View style={StyleSheet.absoluteFill}>
-          <ListingActionsSheet listing={actionListing} onClose={() => setActionListing(null)} onChanged={refresh} />
+          <ListingActionsSheet listing={actionListing} onClose={() => setActionListing(null)} />
         </View>
       ) : null}
     </ScreenContainer>

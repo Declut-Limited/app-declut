@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SplashScreen, Stack } from 'expo-router';
 import { IconContext } from 'phosphor-react-native';
 import { ErrorBoundary } from 'react-error-boundary';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -58,6 +60,7 @@ export default function RootLayout() {
       ) : (
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider style={{ flex: 1 }}>
+            <QueryClientProvider client={queryClient}>
             <IconContext.Provider value={{ size: verticalScale(22), color: colors.gray700, weight: 'regular' }}>
               <AuthProvider>
                 <NotificationProvider>
@@ -90,6 +93,7 @@ export default function RootLayout() {
                 </NotificationProvider>
               </AuthProvider>
             </IconContext.Provider>
+            </QueryClientProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
       )}

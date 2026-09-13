@@ -4,6 +4,7 @@ import { clearSessionTokens, hydrateSession, onSessionExpired, setSessionTokens 
 import { getMyProfile } from '@/api/users';
 import { logout as logoutRequest, resendVerificationEmail } from '@/api/auth';
 import type { AuthTokens, User } from '@/api/types';
+import { queryClient } from '@/lib/queryClient';
 import {
   clearEmailOtpToken as persistClearEmailOtpToken,
   getEmailOtpToken,
@@ -160,6 +161,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateEmailOtpToken(null);
     setUser(null);
     setStatus('unauthenticated');
+    // Every cached listing/transaction/review/bank-account query is scoped to whoever was signed
+    // in — on a shared device the next sign-in must never render a stale frame of this account's
+    // data before its own fetches land.
+    queryClient.clear();
   }, [updateEmailOtpToken]);
 
   const completeOnboarding = useCallback(async () => {

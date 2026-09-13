@@ -34,8 +34,9 @@ import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { listingsApi, transactionsApi } from '@/api';
-import type { Listing, Transaction, TransactionStatus } from '@/api/types';
+import { useListingDetail, usePauseListingMutation, useResumeListingMutation } from '@/hooks/queries/useListings';
+import { useMyTransactionForListing } from '@/hooks/queries/useTransactions';
+import type { Listing, TransactionStatus } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
@@ -241,54 +242,34 @@ export default function MyListingDetailsModal() {
     opacity: interpolate(scrollY.value, [FLOATING_HEADER_FADE_START, FLOATING_HEADER_FADE_END], [0, 1], 'clamp'),
   }));
 
-  const [listing, setListing] = useState<Listing | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'pause' | 'resume' | null>(null);
   const [successAction, setSuccessAction] = useState<'pause' | 'resume' | null>(null);
-  const [pauseResumeLoading, setPauseResumeLoading] = useState(false);
+
+  const {
+    data: listing,
+    isLoading: isInitialLoading,
+    isFetching,
+    error: listingQueryError,
+    refetch: refetchQuery,
+  } = useListingDetail(id);
+  // Pull-to-refresh intentionally shows the same full-page skeleton as the initial fetch (see
+  // handleRefresh below), not a lightweight native spinner over stale content.
+  const loading = isInitialLoading || isFetching;
+  const error = listingQueryError ? extractErrorMessage(listingQueryError, 'Could not load this listing.') : null;
+
+  const pauseMutation = usePauseListingMutation();
+  const resumeMutation = useResumeListingMutation();
+  const pauseResumeLoading = confirmAction === 'pause' ? pauseMutation.isPending : resumeMutation.isPending;
+
   // The seller's own transaction for this listing, once a buyer has paid — no GET
   // /transactions/by-listing endpoint, so this pulls the seller's own transactions (the general
   // /transactions endpoint, not the buyer-only /transactions/purchases) and matches by listing id.
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    setLoading(true);
-    listingsApi
-      .getListing(id)
-      .then((data) => {
-        if (!cancelled) setListing(data);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(extractErrorMessage(e, 'Could not load this listing.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  useEffect(() => {
-    if (!listing || (listing.status !== 'pending_sale' && listing.status !== 'sold')) return;
-    let cancelled = false;
-    transactionsApi
-      .listMyTransactions(1, 50)
-      .then((result) => {
-        if (cancelled) return;
-        const match = result.results.find((t) => t.listing?._id === listing._id) ?? null;
-        setTransaction(match);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [listing]);
+  const { data: transaction = null } = useMyTransactionForListing(
+    listing?._id,
+    !!listing && (listing.status === 'pending_sale' || listing.status === 'sold')
+  );
 
   // Thumbnail taps drive the carousel programmatically; swiping drives activeIndex the other way
   // via the ScrollView's onMomentumScrollEnd below — both paths stay in sync either way.
@@ -297,26 +278,10 @@ export default function MyListingDetailsModal() {
     heroScrollRef.current?.scrollTo({ x: index * screenWidth, animated: true });
   }
 
-  function refetchListing() {
-    if (!listing) return;
-    listingsApi.getListing(listing._id).then(setListing).catch(() => {});
-  }
-
-  // Full reload (skeleton, since `loading` is what the early-return above keys off of) — pulling
-  // to refresh (the RefreshControl on the scroll view below) triggers the same skeleton as the
-  // initial fetch, not a separate lightweight spinner.
-  async function handleRefresh() {
-    if (!listing) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listingsApi.getListing(listing._id);
-      setListing(data);
-    } catch (e) {
-      setError(extractErrorMessage(e, 'Could not load this listing.'));
-    } finally {
-      setLoading(false);
-    }
+  // Pulling to refresh (the RefreshControl on the scroll view below) reuses the query's own
+  // refetch — `loading` only reflects the very first fetch, so this doesn't flash the full skeleton.
+  function handleRefresh() {
+    refetchQuery();
   }
 
   // TODO: no listing edit screen exists yet (addItemModal is create-only) — placeholder toast.
@@ -324,36 +289,32 @@ export default function MyListingDetailsModal() {
     showWarningToast('Not available yet', "Editing a listing isn't available yet.");
   }
 
-  async function confirmPause() {
+  function confirmPause() {
     if (!listing) return;
-    setPauseResumeLoading(true);
-    try {
-      const updated = await listingsApi.pauseListing(listing._id);
-      setListing(updated);
-      setConfirmAction(null);
-      setSuccessAction('pause');
-    } catch (e) {
-      showErrorToast('Could not pause listing', extractErrorMessage(e));
-      setConfirmAction(null);
-    } finally {
-      setPauseResumeLoading(false);
-    }
+    pauseMutation.mutate(listing._id, {
+      onSuccess: () => {
+        setConfirmAction(null);
+        setSuccessAction('pause');
+      },
+      onError: (e) => {
+        showErrorToast('Could not pause listing', extractErrorMessage(e));
+        setConfirmAction(null);
+      },
+    });
   }
 
-  async function confirmResume() {
+  function confirmResume() {
     if (!listing) return;
-    setPauseResumeLoading(true);
-    try {
-      const updated = await listingsApi.resumeListing(listing._id);
-      setListing(updated);
-      setConfirmAction(null);
-      setSuccessAction('resume');
-    } catch (e) {
-      showErrorToast('Could not resume listing', extractErrorMessage(e));
-      setConfirmAction(null);
-    } finally {
-      setPauseResumeLoading(false);
-    }
+    resumeMutation.mutate(listing._id, {
+      onSuccess: () => {
+        setConfirmAction(null);
+        setSuccessAction('resume');
+      },
+      onError: (e) => {
+        showErrorToast('Could not resume listing', extractErrorMessage(e));
+        setConfirmAction(null);
+      },
+    });
   }
 
   // TODO: no support-contact flow exists yet — placeholder toast.
@@ -630,7 +591,6 @@ export default function MyListingDetailsModal() {
           <ListingActionsSheet
             listing={listing}
             onClose={() => setActionSheetOpen(false)}
-            onChanged={refetchListing}
             hideViewListing
           />
         </View>

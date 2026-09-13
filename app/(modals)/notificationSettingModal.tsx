@@ -6,9 +6,9 @@ import { PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useAuth } from '@/contexts/AuthContext';
-import { notificationSettingsApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
-import type { NotificationSettings, UpdateNotificationSettingsPayload } from '@/api/types';
+import type { UpdateNotificationSettingsPayload } from '@/api/types';
+import { useMyNotificationSettings, useUpdateNotificationSettingsMutation } from '@/hooks/queries/useNotificationSettings';
 import { getPushToken, savePushToken } from '@/lib/pushToken';
 import { showErrorToast } from '@/lib/toast';
 
@@ -16,42 +16,15 @@ const SWITCH_ON_COLOR = '#101828';
 
 export default function NotificationSettingModal() {
   const { user } = useAuth();
-  const [settings, setSettings] = useState<NotificationSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: settings, isLoading: loading, error: settingsQueryError } = useMyNotificationSettings(user?.id);
+  const error = settingsQueryError ? extractErrorMessage(settingsQueryError, 'Could not load notification settings.') : null;
+  const updateMutation = useUpdateNotificationSettingsMutation(user?.id);
   const [permissionPrompt, setPermissionPrompt] = useState<{ target: string; message: string } | null>(null);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    notificationSettingsApi
-      .getMyNotificationSettings(user.id)
-      .then((data) => {
-        if (!cancelled) setSettings(data);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(extractErrorMessage(e, 'Could not load notification settings.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
-
-  // Optimistic — reverts on failure. `optimistic` only ever contains fields PATCH actually accepts.
-  async function patch(payload: UpdateNotificationSettingsPayload, optimistic: Partial<NotificationSettings>) {
-    if (!user?.id || !settings) return;
-    const previous = settings;
-    setSettings({ ...settings, ...optimistic });
-    try {
-      const updated = await notificationSettingsApi.updateMyNotificationSettings(user.id, payload);
-      setSettings(updated);
-    } catch (e) {
-      setSettings(previous);
-      showErrorToast('Could not update', extractErrorMessage(e));
-    }
+  function patch(payload: UpdateNotificationSettingsPayload) {
+    updateMutation.mutate(payload, {
+      onError: (e) => showErrorToast('Could not update', extractErrorMessage(e)),
+    });
   }
 
   // OS push permission can only be requested, never revoked, from inside the app — turning this ON
@@ -76,13 +49,13 @@ export default function NotificationSettingModal() {
       }
     }
     const channels = { push: next, email: settings.channels.email };
-    patch({ channels }, { channels });
+    patch({ channels });
   }
 
   function handleToggleEmail(next: boolean) {
     if (!settings) return;
     const channels = { push: settings.channels.push, email: next };
-    patch({ channels }, { channels });
+    patch({ channels });
   }
 
   return (
@@ -116,13 +89,13 @@ export default function NotificationSettingModal() {
               title="Transaction Updates"
               description="Get updates about your purchases, sales and transaction progress."
               value={settings.transactionUpdates}
-              onValueChange={(next) => patch({ transactionUpdates: next }, { transactionUpdates: next })}
+              onValueChange={(next) => patch({ transactionUpdates: next })}
             />
             <SettingRow
               title="Inspection Reminders"
               description="Receive reminders about upcoming inspection deadlines and required actions."
               value={settings.inspectionReminders}
-              onValueChange={(next) => patch({ inspectionReminders: next }, { inspectionReminders: next })}
+              onValueChange={(next) => patch({ inspectionReminders: next })}
             />
             <SettingRow
               title="Payment & Escrow Updates"
@@ -133,7 +106,7 @@ export default function NotificationSettingModal() {
               title="Dispute Updates"
               description="Receive updates when there is activity on a reported issue or dispute."
               value={settings.disputeUpdates}
-              onValueChange={(next) => patch({ disputeUpdates: next }, { disputeUpdates: next })}
+              onValueChange={(next) => patch({ disputeUpdates: next })}
               last
             />
             <Text style={styles.footnote}>Some critical transaction notifications may be required for the service to operate safely.</Text>

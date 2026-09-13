@@ -6,6 +6,8 @@ import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCardSkeleton, RecentListingCard, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
+import { queryKeys } from '@/api/queryKeys';
+import { STALE_TIME } from '@/api/staleTimes';
 import type { Listing } from '@/api/types';
 import { getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
@@ -15,7 +17,10 @@ const SKELETON_COUNT = 6;
 // FULL-SCREEN "SEE ALL" MODAL — Home's "Recently Posted" section, GET /listings/new
 export default function NewListingsModal() {
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
-    ({ page, limit }) => listingsApi.getNewListings({ page, limit })
+    queryKeys.listings.newInfinite(),
+    ({ page, limit }) => listingsApi.getNewListings({ page, limit }),
+    true,
+    STALE_TIME.BROWSE
   );
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -39,7 +44,7 @@ export default function NewListingsModal() {
     >
       <FlatList
         data={loading || refreshing ? [] : items}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         showsHorizontalScrollIndicator={false}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 70)}>

@@ -11,19 +11,28 @@ import { colors, spacingX, spacingY } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import type { ScreenContainerProps } from '@/utils/types';
 
-/** Shared shell for onboarding/auth/KYC screens: safe area + keyboard avoidance + background. */
-export function ScreenContainer({
-  scroll = true,
-  background = colors.background,
-  header,
-  footer,
-  edges = ['top', 'bottom'],
-  style,
-  children,
-  refreshControl,
-  avoidKeyboard = true,
-  ...rest
-}: ScreenContainerProps) {
+// /** Shared shell for onboarding/auth/KYC screens: safe area + keyboard avoidance + background. */
+// export function ScreenContainer({
+/** Shared shell for onboarding/auth/KYC screens: safe area + keyboard avoidance + background.
+ *  Forwards a ref to the internal ScrollView (when scroll=true) — e.g. so a tab screen can reset
+ *  its scroll position on blur, since tab screens stay mounted across tab switches instead of
+ *  unmounting like stack/modal screens. The ref is simply unused when scroll=false. */
+export const ScreenContainer = React.forwardRef<ScrollView, ScreenContainerProps>(function ScreenContainer(
+  {
+    scroll = true,
+    background = colors.background,
+    header,
+    footer,
+    edges = ['top', 'bottom'],
+    style,
+    children,
+    refreshControl,
+    avoidKeyboard = true,
+    ...rest
+// }: ScreenContainerProps) {  
+  },
+  ref
+) {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={edges}>
       <StatusBar style="dark" backgroundColor={background} />
@@ -36,6 +45,7 @@ export function ScreenContainer({
       >
         {scroll ? (
           <ScrollView
+            ref={ref}
             contentContainerStyle={[styles.scrollContent, style]}
             keyboardShouldPersistTaps="handled"
             refreshControl={refreshControl}
@@ -54,7 +64,7 @@ export function ScreenContainer({
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

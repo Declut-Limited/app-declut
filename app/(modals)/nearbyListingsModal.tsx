@@ -6,6 +6,8 @@ import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
+import { queryKeys } from '@/api/queryKeys';
+import { STALE_TIME } from '@/api/staleTimes';
 import type { Listing } from '@/api/types';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
@@ -43,6 +45,7 @@ export default function NearbyListingsModal() {
   }, []);
 
   const { items, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
+    queryKeys.listings.nearbyInfinite(coords ?? { lat: 0, lng: 0, radiusKm: DEFAULT_NEARBY_RADIUS_KM }),
     ({ page, limit }) =>
       listingsApi.getNearbyListings({
         lat: coords!.lat,
@@ -51,7 +54,8 @@ export default function NearbyListingsModal() {
         page,
         limit,
       }),
-    coords !== null
+    coords !== null,
+    STALE_TIME.BROWSE
   );
 
   function onPressListing(listing: Listing) {
@@ -80,7 +84,7 @@ export default function NearbyListingsModal() {
       ) : (
         <FlatList
           data={loading || refreshing ? [] : items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id}
           showsHorizontalScrollIndicator={false}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 70)}>

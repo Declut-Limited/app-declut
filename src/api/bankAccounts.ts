@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiClient } from './client';
 import type { ApiEnvelope, BankAccount, CreateBankAccountPayload } from './types';
 
@@ -14,10 +15,17 @@ export async function updateBankAccount(id: string, payload: CreateBankAccountPa
   return res.data.data;
 }
 
-/** Only the caller's own — 403 on anyone else's. */
+/** Only the caller's own — 403 on anyone else's. 404 (no bank account saved yet) resolves to null
+ *  rather than throwing — same pattern as reviewsApi.getReviewForListing — so paymentInfo.tsx's
+ *  empty state renders instead of a raw error. */
 export async function getMyBankAccount(userId: string) {
-  const res = await apiClient.get<ApiEnvelope<BankAccount>>(`/bank-accounts/user/${userId}`);
-  return res.data.data;
+  try {
+    const res = await apiClient.get<ApiEnvelope<BankAccount>>(`/bank-accounts/user/${userId}`);
+    return res.data.data;
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.status === 404) return null;
+    throw e;
+  }
 }
 
 // 409s if the caller has any escrow_active/awaiting_inspection transaction as seller — those must

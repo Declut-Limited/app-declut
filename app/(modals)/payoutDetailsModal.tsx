@@ -8,8 +8,8 @@ import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { useAuth } from '@/contexts/AuthContext';
-import { banksApi, bankAccountsApi } from '@/api';
+import { banksApi } from '@/api';
+import { useBanksList, useCreateBankAccountMutation, useUpdateBankAccountMutation } from '@/hooks/queries/useBankAccounts';
 import { extractErrorMessage } from '@/api/client';
 import type { Bank } from '@/api/types';
 import { showErrorToast } from '@/lib/toast';
@@ -28,11 +28,11 @@ export default function PayoutDetailsModal() {
   const { bankAccountId } = useLocalSearchParams<{ bankAccountId?: string }>();
   const isEditing = !!bankAccountId;
   const guard = useSingleTap();
-  const { refreshUser } = useAuth();
+  const createMutation = useCreateBankAccountMutation();
+  const updateMutation = useUpdateBankAccountMutation();
 
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [banksLoading, setBanksLoading] = useState(true);
-  const [banksError, setBanksError] = useState<string | null>(null);
+  const { data: banks = [], isLoading: banksLoading, error: banksQueryError } = useBanksList();
+  const banksError = banksQueryError ? extractErrorMessage(banksQueryError, 'Could not load banks.') : null;
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
 
   const [bankCode, setBankCode] = useState('');
@@ -41,18 +41,10 @@ export default function PayoutDetailsModal() {
   const [resolvedName, setResolvedName] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const saving = createMutation.isPending || updateMutation.isPending;
 
   const selectedBank = banks.find((b) => b.code === bankCode);
-
-  useEffect(() => {
-    banksApi
-      .getBanks()
-      .then(setBanks)
-      .catch((e) => setBanksError(extractErrorMessage(e, 'Could not load banks.')))
-      .finally(() => setBanksLoading(false));
-  }, []);
 
   // Re-resolves whenever either half of the pair changes — a stale resolved name for a since-
   // edited bank/account number must never be the one that gets submitted.
@@ -89,21 +81,16 @@ export default function PayoutDetailsModal() {
     router.dismissTo('/(tabs)/home');
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!canSave) return;
-    setSaving(true);
-    try {
-      if (bankAccountId) {
-        await bankAccountsApi.updateBankAccount(bankAccountId, { bankCode, accountNumber });
-      } else {
-        await bankAccountsApi.createBankAccount({ bankCode, accountNumber });
-      }
-      refreshUser(); // picks up the now-true hasPayoutDetails for next time
-      setSaveSuccess(true);
-    } catch (e) {
-      showErrorToast('Could not save bank account', extractErrorMessage(e));
-    } finally {
-      setSaving(false);
+    const onSuccess = () => setSaveSuccess(true);
+    const onError = (e: unknown) => showErrorToast('Could not save bank account', extractErrorMessage(e));
+    // Both mutations refresh AuthContext's user internally (see useBankAccounts.ts), which picks
+    // up the now-true hasPayoutDetails for next time.
+    if (bankAccountId) {
+      updateMutation.mutate({ id: bankAccountId, payload: { bankCode, accountNumber } }, { onSuccess, onError });
+    } else {
+      createMutation.mutate({ bankCode, accountNumber }, { onSuccess, onError });
     }
   }
 
@@ -146,7 +133,12 @@ export default function PayoutDetailsModal() {
           Add your bank account once — we'll automatically send your earnings here whenever your sales are paid out.
         </Text>
 
-        <Pressable onPress={guard(() => setBankPickerOpen(true))} style={styles.fieldBox}>
+        <Pressable
+          onPress={banksLoading ? undefined : guard(() => setBankPickerOpen(true))}
+          disabled={banksLoading}
+          style={[styles.fieldBox, banksLoading && styles.fieldBoxDisabled]}
+          accessibilityState={{ disabled: banksLoading }}
+        >
           {selectedBank ? (
             <View style={styles.bankLogoWrap}>
               <Image source={{ uri: selectedBank.logoUrl }} style={styles.bankLogo} contentFit="cover" cachePolicy="memory-disk" />
@@ -154,9 +146,15 @@ export default function PayoutDetailsModal() {
           ) : null}
           <View style={styles.fieldTextColumn}>
             <Text style={styles.fieldLabel}>Bank name</Text>
-            <Text style={[styles.fieldValue, !selectedBank && styles.fieldValuePlaceholder]}>{selectedBank?.name || 'Select your bank'}</Text>
+            <Text style={[styles.fieldValue, !selectedBank && styles.fieldValuePlaceholder]}>
+              {banksLoading ? 'Loading banks…' : selectedBank?.name || 'Select your bank'}
+            </Text>
           </View>
-          <Icon name="arrow-right-2" variant="linear" size={verticalScale(16)} color={colors.gray400} />
+          {banksLoading ? (
+            <ActivityIndicator color={colors.gray400} />
+          ) : (
+            <Icon name="arrow-right-2" variant="linear" size={verticalScale(16)} color={colors.gray400} />
+          )}
         </Pressable>
 
         <View style={[styles.fieldBox, accountFocused && styles.fieldBoxFocused]}>
@@ -297,6 +295,9 @@ const styles = StyleSheet.create({
   fieldBoxReadOnly: {
     backgroundColor: colors.gray50,
     borderColor: colors.gray50,
+  },
+  fieldBoxDisabled: {
+    opacity: 0.6,
   },
   fieldTextColumn: {
     flex: 1,

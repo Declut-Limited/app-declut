@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,19 +14,21 @@ import type { MediaSlot } from '@/components/addItem/AddItemMediaStep';
 import { AddItemPriceStep } from '@/components/addItem/AddItemPriceStep';
 import { AddItemPreviewStep } from '@/components/addItem/AddItemPreviewStep';
 import { CONDITION_OPTIONS, NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
+import type { DropdownOption } from '@/constants/formOptions';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
 import { showErrorToast, showWarningToast } from '@/lib/toast';
 import { validateLength, validateOptionalMaxLength, validatePrice, validateRequired } from '@/lib/validators';
-import { categoriesApi, listingsApi, mediaApi } from '@/api';
+import { mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
-import type { Category, CreateListingLocation, CreateListingPayload, ListingCondition, UploadSignature } from '@/api/types';
+import { useCategories } from '@/hooks/queries/useCategories';
+import { useCreateListingMutation } from '@/hooks/queries/useListings';
+import type { CreateListingLocation, CreateListingPayload, ListingCondition, UploadSignature } from '@/api/types';
 
 const TOTAL_STEPS = 3;
 const PREVIEW_STEP = TOTAL_STEPS + 1;
-const CATEGORY_PAGE_LIMIT = 20;
 
 // "Add Item" — steps 1-3 of 3, then a Preview screen beyond the numbered steps.
 export default function AddItemModal() {
@@ -38,15 +40,23 @@ export default function AddItemModal() {
   const [itemName, setItemName] = useState('');
   const [itemDescription, setItemDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesPage, setCategoriesPage] = useState(1);
-  const [categoriesHasMore, setCategoriesHasMore] = useState(true);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesLoadingMore, setCategoriesLoadingMore] = useState(false);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const {
+    categories,
+    loading: categoriesLoading,
+    loadingMore: categoriesLoadingMore,
+    error: categoriesError,
+    hasMore: categoriesHasMore,
+    loadMore: loadMoreCategories,
+  } = useCategories();
   const [itemBrand, setItemBrand] = useState('');
   const [state, setState] = useState('');
   const [area, setArea] = useState('');
+  // getAreaOptions is synchronous (a local country-state-city lookup, no network call), but for a
+  // state with a lot of cities it's heavy enough to block the JS thread for a beat right as the
+  // picker/sheet would otherwise open — deferring it a tick lets the loading state actually paint
+  // first instead of the UI just looking stuck.
+  const [areaOptions, setAreaOptions] = useState<DropdownOption[]>([]);
+  const [areaOptionsLoading, setAreaOptionsLoading] = useState(false);
   const [address, setAddress] = useState('');
   const [addressLocation, setAddressLocation] = useState<CreateListingLocation | null>(null);
   const [condition, setCondition] = useState('');
@@ -77,7 +87,8 @@ export default function AddItemModal() {
   const [priceError, setPriceError] = useState<string | undefined>(undefined);
 
   // Publish
-  const [publishing, setPublishing] = useState(false);
+  const createListingMutation = useCreateListingMutation();
+  const publishing = createListingMutation.isPending;
   const [publishSuccess, setPublishSuccess] = useState(false);
 
   const photoCount = photos.filter(Boolean).length;
@@ -319,30 +330,6 @@ export default function AddItemModal() {
     setRemoveTarget(null);
   }
 
-  // Fetched once for the whole modal (not re-fetched every time the sheet opens/closes) — mirrors
-  // filterByModal's Categories pagination.
-  const loadCategories = useCallback(async (page: number) => {
-    if (page === 1) setCategoriesLoading(true);
-    else setCategoriesLoadingMore(true);
-
-    try {
-      const data = await categoriesApi.getAllCategories({ page, limit: CATEGORY_PAGE_LIMIT });
-      setCategories((prev) => (page === 1 ? data.results : [...prev, ...data.results]));
-      setCategoriesPage(page);
-      setCategoriesHasMore(data.hasMore ?? page * CATEGORY_PAGE_LIMIT < data.total);
-      setCategoriesError(null);
-    } catch (e) {
-      setCategoriesError(extractErrorMessage(e, 'Could not load categories.'));
-    } finally {
-      setCategoriesLoading(false);
-      setCategoriesLoadingMore(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadCategories(1);
-  }, [loadCategories]);
-
   const categoryLabel = categories.find((c) => c.id === category)?.title;
 
   function clearBasicInfoError(field: keyof AddItemBasicInfoStepErrors) {
@@ -403,46 +390,49 @@ export default function AddItemModal() {
     setArea(''); // areas are state-dependent — clear a now-invalid selection
     setActiveSheet(null);
     clearBasicInfoError('state');
+
+    // Deferred a tick so the Area field's loading spinner actually paints before the (synchronous
+    // but sometimes heavy) lookup runs — see areaOptionsLoading's declaration above.
+    setAreaOptionsLoading(true);
+    setTimeout(() => {
+      setAreaOptions(getAreaOptions(value));
+      setAreaOptionsLoading(false);
+    }, 0);
   }
 
-  async function handlePublish() {
+  function handlePublish() {
     if (!mediaComplete || publishing || !addressLocation) return;
-    setPublishing(true);
-    try {
-      const uploadedPhotos = photos.filter((p): p is MediaSlot & { uploaded: NonNullable<MediaSlot['uploaded']> } => !!p?.uploaded);
+    const uploadedPhotos = photos.filter((p): p is MediaSlot & { uploaded: NonNullable<MediaSlot['uploaded']> } => !!p?.uploaded);
 
-      const payload: CreateListingPayload = {
-        title: itemName.trim(),
-        description: itemDescription.trim(),
-        categoryId: category,
-        price: Number(price),
-        brand: itemBrand.trim() || undefined,
-        state,
-        area,
-        address: address.trim(),
-        location: addressLocation,
-        condition: condition as ListingCondition,
-        hasDefect: !!hasDefects,
-        defectDescription: hasDefects ? defectsDescription.trim() : undefined,
-        images: uploadedPhotos.map((p, index) => ({
-          publicId: p.uploaded.publicId,
-          url: p.uploaded.url,
-          secureUrl: p.uploaded.secureUrl,
-          sortOrder: index,
-          isPrimary: index === 0,
-        })),
-        video: video?.uploaded
-          ? { publicId: video.uploaded.publicId, url: video.uploaded.url, secureUrl: video.uploaded.secureUrl }
-          : undefined,
-      };
+    const payload: CreateListingPayload = {
+      title: itemName.trim(),
+      description: itemDescription.trim(),
+      categoryId: category,
+      price: Number(price),
+      brand: itemBrand.trim() || undefined,
+      state,
+      area,
+      address: address.trim(),
+      location: addressLocation,
+      condition: condition as ListingCondition,
+      hasDefect: !!hasDefects,
+      defectDescription: hasDefects ? defectsDescription.trim() : undefined,
+      images: uploadedPhotos.map((p, index) => ({
+        publicId: p.uploaded.publicId,
+        url: p.uploaded.url,
+        secureUrl: p.uploaded.secureUrl,
+        sortOrder: index,
+        isPrimary: index === 0,
+      })),
+      video: video?.uploaded
+        ? { publicId: video.uploaded.publicId, url: video.uploaded.url, secureUrl: video.uploaded.secureUrl }
+        : undefined,
+    };
 
-      await listingsApi.createListing(payload);
-      setPublishSuccess(true);
-    } catch (e) {
-      showErrorToast('Could not publish listing', extractErrorMessage(e));
-    } finally {
-      setPublishing(false);
-    }
+    createListingMutation.mutate(payload, {
+      onSuccess: () => setPublishSuccess(true),
+      onError: (e) => showErrorToast('Could not publish listing', extractErrorMessage(e)),
+    });
   }
 
   // Before landing back home, make sure the seller actually has somewhere for payouts to go —
@@ -548,6 +538,7 @@ export default function AddItemModal() {
             onOpenStateSheet={() => setActiveSheet('state')}
             area={area}
             onOpenAreaSheet={() => setActiveSheet('area')}
+            areaLoading={areaOptionsLoading}
             address={address}
             onAddressChange={(value) => {
               setAddress(value);
@@ -636,7 +627,7 @@ export default function AddItemModal() {
               error={categoriesError}
               hasMore={categoriesHasMore}
               loadingMore={categoriesLoadingMore}
-              onLoadMore={() => loadCategories(categoriesPage + 1)}
+              onLoadMore={loadMoreCategories}
             />
           ) : activeSheet === 'condition' ? (
             <OptionPickerSheet
@@ -661,7 +652,7 @@ export default function AddItemModal() {
           ) : (
             <OptionPickerSheet
               title="Select area"
-              options={getAreaOptions(state)}
+              options={areaOptions}
               value={area}
               onSelect={(value) => {
                 setArea(value);
@@ -669,6 +660,7 @@ export default function AddItemModal() {
                 clearBasicInfoError('area');
               }}
               onClose={() => setActiveSheet(null)}
+              loading={areaOptionsLoading}
             />
           )}
         </View>

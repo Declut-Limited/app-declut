@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCard, ListingCardSkeleton, RecentListingCard, ScreenContainer } from '@/components';
 import Icon from '@/components/Icon';
@@ -10,6 +11,8 @@ import { scale, verticalScale } from '@/utils/styling';
 import { useAuth } from '@/contexts/AuthContext';
 import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
+import { queryKeys } from '@/api/queryKeys';
+import { STALE_TIME } from '@/api/staleTimes';
 import { extractErrorMessage } from '@/api/client';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -22,69 +25,57 @@ export default function HomeScreen() {
 
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
-  const [userLat, setUserLat] = useState<number | undefined>(undefined);
-  const [userLng, setUserLng] = useState<number | undefined>(undefined);
-  const [nearby, setNearby] = useState<Listing[] | null>(null);
-  const [nearbyLoading, setNearbyLoading] = useState(true);
-  const [nearbyError, setNearbyError] = useState<string | null>(null);
-  const [recent, setRecent] = useState<Listing[] | null>(null);
-  const [recentLoading, setRecentLoading] = useState(true);
-  const [recentError, setRecentError] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const loadNearby = useCallback(async () => {
-    setNearbyLoading(true);
-    try {
-      const device = await getDeviceLocation();
+  useEffect(() => {
+    getDeviceLocation().then((device) => {
       if (!device) {
         setLocationDenied(true);
         return;
       }
       setLocationDenied(false);
       setLocationLabel(device.label);
-      setUserLat(device.lat);
-      setUserLng(device.lng);
-      const data = await listingsApi.getNearbyListings({
-        lat: device.lat,
-        lng: device.lng,
-        radiusKm: DEFAULT_NEARBY_RADIUS_KM,
-        limit: SECTION_LIMIT,
-      });
-      setNearby(data.results ?? []);
-      setNearbyError(null);
-    } catch (e) {
-      setNearbyError(extractErrorMessage(e, 'Could not load nearby listings.'));
-    } finally {
-      setNearbyLoading(false);
-    }
+      setCoords({ lat: device.lat, lng: device.lng });
+    });
   }, []);
 
-  const loadRecent = useCallback(async () => {
-    setRecentLoading(true);
-    try {
-      const data = await listingsApi.getNewListings({ limit: SECTION_LIMIT });
-      setRecent(data.results ?? []);
-      setRecentError(null);
-    } catch (e) {
-      setRecentError(extractErrorMessage(e, 'Could not load recent listings.'));
-    } finally {
-      setRecentLoading(false);
-    }
-  }, []);
+  const nearbyParams = coords ? { lat: coords.lat, lng: coords.lng, radiusKm: DEFAULT_NEARBY_RADIUS_KM } : null;
 
-  useEffect(() => {
-    loadNearby();
-  }, [loadNearby]);
+  const {
+    data: nearbyData,
+    isLoading: nearbyLoading,
+    error: nearbyQueryError,
+    refetch: refetchNearby,
+  } = useQuery({
+    queryKey: queryKeys.listings.nearbyTeaser(nearbyParams ?? { lat: 0, lng: 0, radiusKm: DEFAULT_NEARBY_RADIUS_KM }),
+    queryFn: () => listingsApi.getNearbyListings({ ...nearbyParams!, limit: SECTION_LIMIT }),
+    enabled: !!nearbyParams,
+    staleTime: STALE_TIME.BROWSE,
+  });
+  const nearby = locationDenied ? [] : nearbyData?.results ?? null;
+  const nearbyError = nearbyQueryError ? extractErrorMessage(nearbyQueryError, 'Could not load nearby listings.') : null;
 
-  useEffect(() => {
-    loadRecent();
-  }, [loadRecent]);
+  const {
+    data: recentData,
+    isLoading: recentLoading,
+    error: recentQueryError,
+    refetch: refetchRecent,
+  } = useQuery({
+    queryKey: queryKeys.listings.newTeaser(),
+    queryFn: () => listingsApi.getNewListings({ limit: SECTION_LIMIT }),
+    staleTime: STALE_TIME.BROWSE,
+  });
+  const recent = recentData?.results ?? null;
+  const recentError = recentQueryError ? extractErrorMessage(recentQueryError, 'Could not load recent listings.') : null;
 
-  // The native pull indicator is never held open — `refreshing` always resolves to false, so it
-  // retracts the instant the pull gesture completes. The skeletons (nearbyLoading/recentLoading,
-  // set inside loadNearby/loadRecent above) carry the rest of the loading feedback from there.
+  const userLat = coords?.lat;
+  const userLng = coords?.lng;
+
+  // The native pull indicator is never held open — it retracts the instant the pull gesture
+  // completes. The skeletons (nearbyLoading/recentLoading) carry the rest of the loading feedback.
   function onRefresh() {
-    loadNearby();
-    loadRecent();
+    refetchNearby();
+    refetchRecent();
   }
 
   function goToSearch() {

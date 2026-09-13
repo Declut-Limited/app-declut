@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -8,9 +8,8 @@ import { OptionPickerSheet } from '@/components/addItem/OptionPickerSheet';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
-import { categoriesApi, listingsApi } from '@/api';
-import { extractErrorMessage } from '@/api/client';
-import type { Category } from '@/api/types';
+import { listingsApi } from '@/api';
+import { useCategories } from '@/hooks/queries/useCategories';
 import { DEFAULT_NEARBY_RADIUS_KM, getDeviceLocation } from '@/lib/location';
 import { NIGERIAN_STATE_OPTIONS, getAreaOptions } from '@/constants/formOptions';
 import { formatNumber } from '@/utils/helpers';
@@ -18,7 +17,6 @@ import { showWarningToast } from '@/lib/toast';
 import { toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
 import type { SearchFilters } from '@/contexts/SearchFilterContext';
 
-const CATEGORY_PAGE_LIMIT = 20;
 // No listings-count-by-filter endpoint exists yet — Price Range just needs sane outer bounds for the slider.
 const PRICE_BOUND_MIN = 100;
 const PRICE_BOUND_MAX = 100_000_000;
@@ -45,12 +43,14 @@ export default function FilterByModal() {
   const guard = useSingleTap();
   const { keyword, filters: committedFilters, setFilters: commitFilters } = useSearchFilter();
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesPage, setCategoriesPage] = useState(1);
-  const [categoriesHasMore, setCategoriesHasMore] = useState(true);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesLoadingMore, setCategoriesLoadingMore] = useState(false);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const {
+    categories,
+    loading: categoriesLoading,
+    loadingMore: categoriesLoadingMore,
+    error: categoriesError,
+    hasMore: categoriesHasMore,
+    loadMore: loadMoreCategories,
+  } = useCategories();
   // The backend only takes a single categoryId, so this is effectively single-select — see toggleCategory.
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(
     () => (committedFilters.categoryId ? new Set([committedFilters.categoryId]) : new Set())
@@ -205,28 +205,6 @@ export default function FilterByModal() {
     };
   }, [draftFilters, keyword, hasActiveFilters]);
 
-  const loadCategories = useCallback(async (page: number) => {
-    if (page === 1) setCategoriesLoading(true);
-    else setCategoriesLoadingMore(true);
-
-    try {
-      const data = await categoriesApi.getAllCategories({ page, limit: CATEGORY_PAGE_LIMIT });
-      setCategories((prev) => (page === 1 ? data.results : [...prev, ...data.results]));
-      setCategoriesPage(page);
-      setCategoriesHasMore(data.hasMore ?? page * CATEGORY_PAGE_LIMIT < data.total);
-      setCategoriesError(null);
-    } catch (e) {
-      setCategoriesError(extractErrorMessage(e, 'Could not load categories.'));
-    } finally {
-      setCategoriesLoading(false);
-      setCategoriesLoadingMore(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadCategories(1);
-  }, [loadCategories]);
-
   // Tapping the active chip again clears it; tapping a different one replaces the selection —
   // the backend only accepts one categoryId, so the chips are effectively single-select.
   function toggleCategory(id: string) {
@@ -358,7 +336,7 @@ export default function FilterByModal() {
 
       {!categoriesLoading && categoriesHasMore ? (
         <Pressable
-          onPress={guard(() => loadCategories(categoriesPage + 1))}
+          onPress={guard(loadMoreCategories)}
           style={styles.loadMoreButton}
           disabled={categoriesLoadingMore}
         >

@@ -10,10 +10,14 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { bankAccountsApi, banksApi } from '@/api';
+import { useBanksList, useDeleteBankAccountMutation, useMyBankAccount } from '@/hooks/queries/useBankAccounts';
+import { useSystemSettings } from '@/hooks/queries/useSystemSettings';
 import { extractErrorMessage } from '@/api/client';
-import type { Bank, BankAccount } from '@/api/types';
 import { showErrorToast } from '@/lib/toast';
+
+// Fallback until GET /settings resolves (or if it fails) — matches the rate this banner showed
+// before commissionPercentage was wired up live.
+const DEFAULT_COMMISSION_PERCENTAGE = 6;
 
 function Bone({ width, height, style }: { width: number | `${number}%`; height: number; style?: StyleProp<ViewStyle> }) {
   return <View style={[{ width, height, borderRadius: 4, backgroundColor: colors.gray100 }, style]} />;
@@ -43,74 +47,51 @@ function AccountCardSkeleton() {
 }
 
 export default function PaymentInfoModal() {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const guard = useSingleTap();
 
-  const [account, setAccount] = useState<BankAccount | null>(null);
-  // logoUrl lives on the /banks list, not on BankAccount itself — fetched alongside the account
-  // and matched by bankCode.
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: account = null,
+    isLoading: loading,
+    error: accountQueryError,
+  } = useMyBankAccount(user?.id, !!user?.hasPayoutDetails);
+  const error = accountQueryError ? extractErrorMessage(accountQueryError, 'Could not load your payout account.') : null;
+  // logoUrl lives on the /banks list, not on BankAccount itself — matched by bankCode.
+  const { data: banks = [] } = useBanksList();
+  const { data: systemSettings } = useSystemSettings();
+  const commissionPercentage = systemSettings?.commissionPercentage ?? DEFAULT_COMMISSION_PERCENTAGE;
+  const deleteMutation = useDeleteBankAccountMutation();
+
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
-  const [removing, setRemoving] = useState(false);
   const [removeSuccess, setRemoveSuccess] = useState(false);
 
   const bankLogoUrl = account ? banks.find((b) => b.code === account.bankCode)?.logoUrl : undefined;
-
-  useEffect(() => {
-    if (!user?.id || !user.hasPayoutDetails) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([bankAccountsApi.getMyBankAccount(user.id), banksApi.getBanks().catch(() => [])])
-      .then(([accountData, banksData]) => {
-        if (!cancelled) {
-          setAccount(accountData);
-          setBanks(banksData);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setError(extractErrorMessage(e, 'Could not load your payout account.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, user?.hasPayoutDetails]);
 
   function onAddAccount() {
     router.push('/(modals)/payoutDetailsModal');
   }
 
-  async function handleConfirmRemove() {
-    if (!account || removing) return;
-    setRemoving(true);
-    try {
-      await bankAccountsApi.deleteBankAccount(account.id);
-      await refreshUser(); // picks up the now-false hasPayoutDetails
-      setAccount(null);
-      setRemoveConfirmOpen(false);
-      setRemoveSuccess(true);
-    } catch (e) {
-      setRemoveConfirmOpen(false);
-      // deleteBankAccount 409s specifically when the caller has an active transaction as seller
-      // (escrow_active/awaiting_inspection) — a purpose-built message here beats whatever generic
-      // string the backend happens to send back for that conflict.
-      const hasActiveTransactionConflict = axios.isAxiosError(e) && e.response?.status === 409;
-      showErrorToast(
-        hasActiveTransactionConflict
-          ? 'You have an active sale in escrow. Resolve it before removing your payout account.'
-          : extractErrorMessage(e),
-        'Could not remove account',
-      );
-    } finally {
-      setRemoving(false);
-    }
+  function handleConfirmRemove() {
+    if (!account || deleteMutation.isPending) return;
+    deleteMutation.mutate(account.id, {
+      onSuccess: () => {
+        setRemoveConfirmOpen(false);
+        setRemoveSuccess(true);
+      },
+      onError: (e) => {
+        setRemoveConfirmOpen(false);
+        // deleteBankAccount 409s specifically when the caller has an active transaction as seller
+        // (escrow_active/awaiting_inspection) — a purpose-built message here beats whatever generic
+        // string the backend happens to send back for that conflict.
+        const hasActiveTransactionConflict = axios.isAxiosError(e) && e.response?.status === 409;
+        showErrorToast(
+          hasActiveTransactionConflict
+            ? 'You have an active sale in escrow. Resolve it before removing your payout account.'
+            : extractErrorMessage(e),
+          'Could not remove account',
+        );
+      },
+    });
   }
 
   return (
@@ -121,7 +102,7 @@ export default function PaymentInfoModal() {
         </View>
         <View style={styles.bannerTextColumn}>
           <Text style={styles.bannerTitle}>Payout Account</Text>
-          <Text style={styles.bannerBody}>When a buyer confirms your item, your payout (after the 6% Declut commission) is sent here.</Text>
+          <Text style={styles.bannerBody}>When a buyer confirms your item, your payout (after the {commissionPercentage}% Declut commission) is sent here.</Text>
         </View>
       </View>
 
@@ -162,7 +143,7 @@ export default function PaymentInfoModal() {
       {removeConfirmOpen ? (
         <View style={StyleSheet.absoluteFill}>
           <RemoveAccountConfirmSheet
-            removing={removing}
+            removing={deleteMutation.isPending}
             onKeep={() => setRemoveConfirmOpen(false)}
             onRemove={handleConfirmRemove}
           />

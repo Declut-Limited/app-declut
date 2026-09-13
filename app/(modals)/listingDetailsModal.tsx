@@ -38,6 +38,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
+import { useQueryClient } from '@tanstack/react-query';
 import { BottomSheetCard, EmptyState } from '@/components';
 import Icon from '@/components/Icon';
 import * as Icons from 'phosphor-react-native';
@@ -45,8 +46,18 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { listingsApi, reviewsApi, settingsApi, transactionsApi, usersApi } from '@/api';
-import type { Listing, Review, Transaction } from '@/api/types';
+import { listingsApi, transactionsApi, usersApi } from '@/api';
+import { queryKeys } from '@/api/queryKeys';
+import { useListingDetail } from '@/hooks/queries/useListings';
+import {
+  useCancelTransactionMutation,
+  useCheckoutMutation,
+  useConfirmTransactionMutation,
+  useMyPurchaseForListing,
+} from '@/hooks/queries/useTransactions';
+import { useLeaveReviewMutation, useReviewForListing } from '@/hooks/queries/useReviews';
+import { calculatePaystackFee } from '@/lib/paystackFees';
+import type { Listing, Review } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate, getProfileImage } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
@@ -192,48 +203,35 @@ export default function ListingDetailsModal() {
     opacity: interpolate(scrollY.value, [FLOATING_HEADER_FADE_START, FLOATING_HEADER_FADE_END], [0, 1], 'clamp'),
   }));
 
-  const [listing, setListing] = useState<Listing | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [activeIndex, setActiveIndex] = useState(0);
   const [paymentStep, setPaymentStep] = useState<'none' | 'terms' | "summary" | 'success'>('none');
-  const [paying, setPaying] = useState(false);
   // The "Pay ₦X to seller?" gate in front of confirmTransaction — an irreversible action.
   const [confirmSheetOpen, setConfirmSheetOpen] = useState(false);
   const [confirmingTransaction, setConfirmingTransaction] = useState(false);
-  // The buyer's transaction behind this listing (pending_sale → awaiting_inspection, sold →
-  // completed) — the listing itself doesn't carry a transactionId, so this is found by matching
-  // the buyer's own transactions to this listing.
-  const [myTransaction, setMyTransaction] = useState<Transaction | null>(null);
   // In-app checkout — the Paystack page renders inside a WebView instead of handing off to the
   // system browser, so it reads as part of the app rather than a separate app switch.
   const [checkout, setCheckout] = useState<{ transactionId: string; url: string } | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
-  const [myReview, setMyReview] = useState<Review | null>(null);
   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
-  const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Full reload (skeleton, since `loading` is what the early-return below keys off of) — called
-  // on first focus, again after any action that can change this listing's status (paying,
-  // confirming inspection/completion, and — via the focus effect below — reporting a problem or
-  // requesting a refund, both of which happen on submitReportModal and only ever report back by
-  // popping to here), and by pulling to refresh (the RefreshControl on the scroll view below).
-  const reloadListing = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listingsApi.getListing(id);
-      setListing(data);
-    } catch (e) {
-      setError(extractErrorMessage(e, 'Could not load this listing.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  // `isLoading || isFetching` — pulling to refresh (the RefreshControl below) shows the same
+  // full-page skeleton as the initial fetch, not a lightweight native spinner over stale content.
+  const {
+    data: listing,
+    isLoading: isInitialLoading,
+    isFetching,
+    error: listingQueryError,
+    refetch: reloadListing,
+  } = useListingDetail(id);
+  const loading = isInitialLoading || isFetching;
+  const error = listingQueryError ? extractErrorMessage(listingQueryError, 'Could not load this listing.') : null;
 
+  // Refetches on first focus, and again every time this screen regains focus — after paying,
+  // confirming inspection/completion, or reporting a problem/requesting a refund on
+  // submitReportModal, all of which only ever report back by popping to here.
   useFocusEffect(
     useCallback(() => {
       reloadListing();
@@ -243,7 +241,7 @@ export default function ListingDetailsModal() {
   // Registers a view 5s after the listing actually loads — the backend owns de-duping (one
   // counted view per viewer/listing per hour), so this just needs to fire once; no toast either
   // way, a view registration is never something the buyer needs to see confirmed or fail. When it
-  // actually counts, silently refetch (no skeleton — this is cosmetic, not a state change worth
+  // actually counts, silently invalidate (no skeleton — this is cosmetic, not a state change worth
   // reloadListing's full-page treatment) so the views count on screen reflects the bump.
   useEffect(() => {
     if (!listing) return;
@@ -251,52 +249,41 @@ export default function ListingDetailsModal() {
       listingsApi
         .registerListingView(listing._id)
         .then((result) => {
-          if (result.counted) {
-            listingsApi.getListing(listing._id).then(setListing).catch(() => {});
-          }
+          if (!result.counted) return;
+          // Written straight into the cache instead of invalidateQueries — an invalidate would
+          // flip this query's own isFetching (loading below is isInitialLoading || isFetching),
+          // which re-triggers the full-page skeleton for what's meant to be an invisible bump.
+          listingsApi
+            .getListing(listing._id)
+            .then((data) => queryClient.setQueryData(queryKeys.listings.detail(listing._id), data))
+            .catch(() => {});
         })
         .catch(() => {});
     }, 5000);
     return () => clearTimeout(timer);
-  }, [listing]);
+  }, [listing, queryClient]);
 
-  // Finds the buyer's own transaction for this listing once it's pending_sale or sold — there's
-  // no GET /transactions/by-listing endpoint, so this pulls the buyer's purchases (status filter
-  // matches the listing status: 'active' maps server-side to awaiting_inspection while
-  // pending_sale, 'completed' once sold) and matches by listing id. Best-effort: only looks at the
-  // first page, so a buyer with many simultaneous purchases in the same bucket could miss a match
-  // further back.
-  useEffect(() => {
-    if (!listing || (listing.status !== 'pending_sale' && listing.status !== 'sold')) return;
-    let cancelled = false;
-    transactionsApi
-      .listMyPurchases(1, 50, listing.status === 'sold' ? 'completed' : 'active')
-      .then((result) => {
-        if (cancelled) return;
-        const match = result.results.find((t) => t.listing?._id === listing._id) ?? null;
-        setMyTransaction(match);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [listing]);
+  // The buyer's transaction behind this listing (pending_sale → awaiting_inspection, sold →
+  // completed) — the listing itself doesn't carry a transactionId, so this is found by matching
+  // the buyer's own transactions to this listing. Status filter matches the listing status:
+  // 'active' maps server-side to awaiting_inspection while pending_sale, 'completed' once sold.
+  // Best-effort: only looks at the first page, so a buyer with many simultaneous purchases in the
+  // same bucket could miss a match further back.
+  const showBuyerTransaction = !!listing && (listing.status === 'pending_sale' || listing.status === 'sold');
+  const { data: myTransaction = null } = useMyPurchaseForListing(
+    listing?._id,
+    listing?.status === 'sold' ? 'completed' : 'active',
+    showBuyerTransaction
+  );
 
   // The buyer's own review for this listing, once sold — drives whether Buyer Feedback shows the
   // review or a "rate this seller" prompt.
-  useEffect(() => {
-    if (!listing || listing.status !== 'sold') return;
-    let cancelled = false;
-    reviewsApi
-      .getReviewForListing(listing._id)
-      .then((review) => {
-        if (!cancelled) setMyReview(review);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [listing]);
+  const { data: myReview = null } = useReviewForListing(listing?._id, listing?.status === 'sold');
+
+  const checkoutMutation = useCheckoutMutation();
+  const confirmTransactionMutation = useConfirmTransactionMutation();
+  const cancelTransactionMutation = useCancelTransactionMutation();
+  const leaveReviewMutation = useLeaveReviewMutation();
 
   // Thumbnail taps drive the carousel programmatically; swiping drives activeIndex the other way
   // via the ScrollView's onMomentumScrollEnd below — both paths stay in sync either way.
@@ -328,26 +315,29 @@ export default function ListingDetailsModal() {
   // backend confirmation" feel. On success: the review prompt opens right away while the listing
   // (now 'sold') refetches in the background, so the page is already showing the post-sale
   // content by the time the review sheet is dismissed.
-  async function handleConfirmPayment() {
+  function handleConfirmPayment() {
     if (!listing || !myTransaction) {
       showErrorToast('Could not confirm', 'Please close this and try again in a moment.');
       return;
     }
     setConfirmSheetOpen(false);
     setConfirmingTransaction(true);
-    try {
-      await transactionsApi.confirmTransaction(myTransaction._id);
-      showSuccessToast('Item confirmed', 'Funds have been released to the seller.');
-    } catch (e) {
-      showErrorToast('Could not confirm', extractErrorMessage(e));
-      setConfirmingTransaction(false);
-      return;
-    }
-    setConfirmingTransaction(false);
-    await reloadListing();
-    setReviewRating(0);
-    setReviewComment('');
-    setReviewSheetOpen(true);
+    // onSuccess invalidates this listing's detail query (now 'sold') — it refetches in the
+    // background, so the page is already showing the post-sale content by the time the review
+    // sheet is dismissed.
+    confirmTransactionMutation.mutate(myTransaction._id, {
+      onSuccess: () => {
+        showSuccessToast('Item confirmed', 'Funds have been released to the seller.');
+        setConfirmingTransaction(false);
+        setReviewRating(0);
+        setReviewComment('');
+        setReviewSheetOpen(true);
+      },
+      onError: (e) => {
+        showErrorToast('Could not confirm', extractErrorMessage(e));
+        setConfirmingTransaction(false);
+      },
+    });
   }
 
   function handleOpenReviewSheet() {
@@ -356,27 +346,24 @@ export default function ListingDetailsModal() {
     setReviewSheetOpen(true);
   }
 
-  async function handleSubmitReview() {
+  function handleSubmitReview() {
     if (!listing) return;
     if (reviewRating < 1) {
       showErrorToast('Please select a rating', 'Tap a star to rate the seller.');
       return;
     }
-    setSubmittingReview(true);
-    try {
-      const review = await reviewsApi.leaveReview({
-        listingId: listing._id,
-        rating: reviewRating,
-        comment: reviewComment.trim() || undefined,
-      });
-      setMyReview(review);
-      setReviewSheetOpen(false);
-      showSuccessToast('Thanks for the feedback!', 'Your review has been posted.');
-    } catch (e) {
-      showErrorToast('Could not submit review', extractErrorMessage(e));
-    } finally {
-      setSubmittingReview(false);
-    }
+    leaveReviewMutation.mutate(
+      { listingId: listing._id, rating: reviewRating, comment: reviewComment.trim() || undefined },
+      {
+        onSuccess: () => {
+          setReviewSheetOpen(false);
+          showSuccessToast('Thanks for the feedback!', 'Your review has been posted.');
+        },
+        onError: (e) => {
+          showErrorToast('Could not submit review', extractErrorMessage(e));
+        },
+      }
+    );
   }
 
   function handleReportProblem() {
@@ -391,23 +378,22 @@ export default function ListingDetailsModal() {
     });
   }
 
-  async function handleMakePayment() {
-    if (!listing || paying) return;
-    setPaying(true);
+  function handleMakePayment() {
+    if (!listing || checkoutMutation.isPending) return;
     if (__DEV__) console.log(`[Checkout] handleMakePayment: POST /transactions — listing=${listing._id} callbackUrl=${PAYSTACK_CALLBACK_URL}`);
-    try {
-      const { transactionId, paystackAuthorizationUrl } = await transactionsApi.checkout({
-        listingId: listing._id,
-        callbackUrl: PAYSTACK_CALLBACK_URL,
-      });
-      if (__DEV__) console.log(`[Checkout] checkout() succeeded — transactionId=${transactionId} url=${paystackAuthorizationUrl}`);
-      setCheckout({ transactionId, url: paystackAuthorizationUrl });
-    } catch (e) {
-      console.error('[Checkout] handleMakePayment failed', axios.isAxiosError(e) ? { status: e.response?.status, data: e.response?.data } : e);
-      showErrorToast('Could not start checkout', extractErrorMessage(e));
-    } finally {
-      setPaying(false);
-    }
+    checkoutMutation.mutate(
+      { listingId: listing._id, callbackUrl: PAYSTACK_CALLBACK_URL },
+      {
+        onSuccess: ({ transactionId, paystackAuthorizationUrl }) => {
+          if (__DEV__) console.log(`[Checkout] checkout() succeeded — transactionId=${transactionId} url=${paystackAuthorizationUrl}`);
+          setCheckout({ transactionId, url: paystackAuthorizationUrl });
+        },
+        onError: (e) => {
+          console.error('[Checkout] handleMakePayment failed', axios.isAxiosError(e) ? { status: e.response?.status, data: e.response?.data } : e);
+          showErrorToast('Could not start checkout', extractErrorMessage(e));
+        },
+      }
+    );
   }
 
   // Polls until escrow_active or attempts run out, showing the confirming overlay throughout.
@@ -420,6 +406,13 @@ export default function ListingDetailsModal() {
     try {
       const transaction = await getTransactionResult(transactionId);
       if (__DEV__) console.log(`[Checkout] pollForPaymentConfirmation: ${transaction ? 'CONFIRMED' : 'not confirmed'} — transaction=${transactionId}`);
+      if (transaction) {
+        // Payment confirmed outside of a mutation (this is a raw poll) — tell every screen that
+        // could be showing this listing/transaction to refetch.
+        queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
+        if (transaction.listing?._id) queryClient.invalidateQueries({ queryKey: queryKeys.listings.detail(transaction.listing._id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.listings.lists() });
+      }
       return transaction;
     } finally {
       setConfirmingPayment(false);
@@ -453,9 +446,10 @@ export default function ListingDetailsModal() {
     // to cancel anything already past pending_payment, so a webhook that lands a moment after this
     // call can't be clobbered by it.
     showWarningToast('Payment not completed', 'You can try again anytime.');
-    transactionsApi.cancelTransaction(transactionId)
-      .then(() => { if (__DEV__) console.log(`[Checkout] cancelled unconfirmed transaction=${transactionId}`); })
-      .catch((e) => { if (__DEV__) console.warn(`[Checkout] cancelTransaction failed for transaction=${transactionId} (backend sweep is the fallback)`, e); });
+    cancelTransactionMutation.mutate(transactionId, {
+      onSuccess: () => { if (__DEV__) console.log(`[Checkout] cancelled unconfirmed transaction=${transactionId}`); },
+      onError: (e) => { if (__DEV__) console.warn(`[Checkout] cancelTransaction failed for transaction=${transactionId} (backend sweep is the fallback)`, e); },
+    });
   }
 
   // Closing the "Transfer Received" sheet: the listing is now pending_sale, so refetch it (not
@@ -728,7 +722,7 @@ export default function ListingDetailsModal() {
           ) : paymentStep === "summary" ? (
             <PaySummarySheet
               listing={listing}
-              paying={paying}
+              paying={checkoutMutation.isPending}
               onClose={() => setPaymentStep('none')}
               onCancelPurchase={() => setPaymentStep('none')}
               onMakePayment={handleMakePayment}
@@ -759,7 +753,7 @@ export default function ListingDetailsModal() {
             listing={listing}
             rating={reviewRating}
             comment={reviewComment}
-            submitting={submittingReview}
+            submitting={leaveReviewMutation.isPending}
             onRatingChange={setReviewRating}
             onCommentChange={setReviewComment}
             onDismiss={() => setReviewSheetOpen(false)}
@@ -1163,9 +1157,6 @@ function BeforeYouPaySheet({ onClose, onContinue }: BeforeYouPaySheetProps) {
   );
 }
 
-// Fallback until GET /settings resolves (or if it fails) — matches the rate this sheet used before commissionPercentage was fetched live.
-const DEFAULT_COMMISSION_PERCENTAGE = 10;
-
 interface PaySummarySheetProps {
   listing: Listing;
   paying: boolean;
@@ -1178,16 +1169,10 @@ interface PaySummarySheetProps {
 // way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
 function PaySummarySheet({ listing, paying, onClose, onCancelPurchase, onMakePayment }: PaySummarySheetProps) {
   const guard = useSingleTap();
-  const [commissionPercentage, setCommissionPercentage] = useState(DEFAULT_COMMISSION_PERCENTAGE);
-
-  useEffect(() => {
-    settingsApi
-      .getSettings()
-      .then((settings) => setCommissionPercentage(settings.commissionPercentage))
-      .catch(() => {});
-  }, []);
-
-  const fee = listing.price * (commissionPercentage / 100);
+  // This is Paystack's own transaction fee (1.5% + ₦100, waived under ₦2,500, capped at ₦2,000)
+  // — not Declut's commissionPercentage, which is a seller-side deduction from the payout, never
+  // added to what the buyer pays (see SystemSettings in api/types.ts).
+  const fee = calculatePaystackFee(listing.price);
   const total = listing.price + fee;
 
   return (

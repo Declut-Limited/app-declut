@@ -47,9 +47,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             style={styles.icon}
           >
             {hidden ? (
-              <Icons.EyeIcon size={verticalScale(24)} color={colors.gray400} />
+              <Icons.EyeIcon size={verticalScale(26)} color={colors.gray400} />
             ) : (
-              <Icons.EyeSlashIcon size={verticalScale(24)} color={colors.gray400} />
+              <Icons.EyeSlashIcon size={verticalScale(26)} color={colors.gray400} />
             )}
           </Text>
         ) : customIcon ? (

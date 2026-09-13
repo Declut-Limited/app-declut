@@ -12,6 +12,8 @@ import { useSingleTap } from '@/hooks/useSingleTap';
 import { usePaginatedListings } from '@/hooks/usePaginatedListings';
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recentSearches';
 import { listingsApi } from '@/api';
+import { queryKeys } from '@/api/queryKeys';
+import { STALE_TIME } from '@/api/staleTimes';
 import type { Listing } from '@/api/types';
 import { summarizeFilters, toListingSearchParams, useSearchFilter } from '@/contexts/SearchFilterContext';
 
@@ -45,6 +47,19 @@ export default function SearchResultsModal() {
     getRecentSearches().then(setRecentSearches);
   }, []);
 
+  // Clears the shared search context on the way out — on unmount rather than only from the header's
+  // back button, so hardware back / swipe-to-dismiss (which skip handleBack entirely) are covered
+  // too. Doesn't fire from onPressListing/goToFilter, since those push on top without unmounting
+  // this screen — leaving here to refine the same search still works. setKeyword/setFilters are
+  // stable useState setters and resetFilters always targets the same constant regardless of when
+  // its closure was captured, so this is safe with an empty dependency array.
+  useEffect(() => {
+    return () => {
+      setKeyword('');
+      resetFilters();
+    };
+  }, []);
+
   // Drives the actual fetch below (stays debounced — filters combine with whatever keyword the
   // network call last committed to, never dropped or reset by typing).
   const hasActiveSearch = keyword.trim() !== '' || hasActiveFilters;
@@ -55,10 +70,12 @@ export default function SearchResultsModal() {
   // treated the same as network loading so typing never flashes an empty/"no results" state.
   const isPendingDebounce = query.trim() !== keyword.trim();
 
+  const searchParams = toListingSearchParams(filters, keyword);
   const { items, total, loading, loadingMore, refreshing, error, hasMore, loadMore, refresh } = usePaginatedListings(
-    ({ page, limit }) => listingsApi.searchListings({ ...toListingSearchParams(filters, keyword), page, limit }),
+    queryKeys.listings.searchInfinite(searchParams),
+    ({ page, limit }) => listingsApi.searchListings({ ...searchParams, page, limit }),
     hasActiveSearch,
-    `${keyword}|${JSON.stringify(filters)}`
+    STALE_TIME.BROWSE
   );
   // Text feedback ("Searching…") reacts to any pending state, including debounce.
   const isSearching = loading || refreshing || isPendingDebounce;
@@ -127,9 +144,6 @@ export default function SearchResultsModal() {
   }
 
   function handleBack() {
-    setQuery('');
-    setKeyword('');
-    resetFilters();
     router.back();
   }
 
@@ -211,7 +225,7 @@ export default function SearchResultsModal() {
       {showResultsArea ? (
         <FlatList
           data={isFetching ? [] : items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id}
           keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
           showsVerticalScrollIndicator={false}
