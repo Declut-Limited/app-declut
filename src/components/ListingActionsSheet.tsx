@@ -34,11 +34,16 @@ type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delet
 
 // Shared between myListings.tsx (tapping a card) and myListingDetailsModal.tsx (the floating
 // header's ••• button). Which rows show depends entirely on listing.status:
-// - View Listing: always, unless hideViewListing.
-// - Edit/Delete Listing: only active or reported.
+// - View Listing: always, unless hideViewListing or the listing is delisted.
+// - Edit Listing: only active.
 // - Pause Listing: only active. Resume Listing: only paused.
 // - View Transaction / Contact Buyer: only pending_sale or sold.
 // - Share Listing: only active.
+// - View Report: only reported. View Reason: only delisted.
+// - Delete Listing: active, reported, or delisted.
+// A reported listing therefore shows exactly View Listing / View Report / Delete Listing, and a
+// delisted one shows exactly View Reason / Delete Listing — every other row is gated to a status
+// that's mutually exclusive with both.
 // Only one sheet is ever mounted at a time — `view` swaps the options list out for a confirmation
 // or success sheet instead of stacking one on top of the other. Pause/resume/delete all invalidate
 // their own caches (see useListings.ts) — myListings' list and myListingDetailsModal's own detail
@@ -50,11 +55,14 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
   const resumeMutation = useResumeListingMutation();
   const deleteMutation = useDeleteListingMutation();
 
+  const isReported = listing.status === 'reported';
+  const isDelisted = listing.status === 'delisted';
   const canPause = listing.status === 'active';
   const canResume = listing.status === 'paused';
   const canShare = listing.status === 'active';
   const canViewTransactionOrContact = listing.status === 'pending_sale' || listing.status === 'sold';
-  const canEditOrDelete = listing.status === 'active' || listing.status === 'reported';
+  const canEdit = listing.status === 'active';
+  const canDelete = listing.status === 'active' || isReported || isDelisted;
 
   // myListingDetailsModal already has this fetched and passes the same query key, so this just
   // subscribes to the same cache there — only myListings.tsx (which never fetches it otherwise)
@@ -103,6 +111,17 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
   // TODO: no messaging/contact feature exists yet — placeholder toast.
   function handleContactBuyer() {
     showWarningToast('Not available yet', "Contacting the buyer isn't available yet.");
+  }
+
+  // TODO: no report-detail screen exists yet — same placeholder myListingDetailsModal's own
+  // footer "View Report" button (for this same status) uses.
+  function handleViewReport() {
+    showWarningToast('Not available yet', "Viewing the report isn't available yet.");
+  }
+
+  // TODO: no delist-reason screen exists yet — placeholder toast, same pattern as the above.
+  function handleViewReason() {
+    showWarningToast('Not available yet', "Viewing the delist reason isn't available yet.");
   }
 
   async function handleShare() {
@@ -206,9 +225,9 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
       </View>
 
       <View style={styles.actionsList}>
-        {hideViewListing ? null : <ActionRow label="View Listing" onPress={guard(handleViewListing)} />}
+        {hideViewListing || isDelisted ? null : <ActionRow label="View Listing" onPress={guard(handleViewListing)} />}
 
-        {canEditOrDelete ? <ActionRow label="Edit Listing" onPress={guard(handleEdit)} /> : null}
+        {canEdit ? <ActionRow label="Edit Listing" onPress={guard(handleEdit)} /> : null}
 
         {canPause ? (
           <ActionRow label="Pause Listing" onPress={guard(() => setView('confirm-pause'))} />
@@ -216,10 +235,13 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
           <ActionRow label="Resume Listing" onPress={guard(() => setView('confirm-resume'))} />
         ) : null}
 
+        {isReported ? <ActionRow label="View Report" onPress={guard(handleViewReport)} /> : null}
+        {isDelisted ? <ActionRow label="View Reason" onPress={guard(handleViewReason)} /> : null}
+
         {canViewTransactionOrContact ? <ActionRow label="View Transaction" onPress={guard(handleViewTransaction)} /> : null}
         {canViewTransactionOrContact ? <ActionRow label="Contact Buyer" onPress={guard(handleContactBuyer)} /> : null}
         {canShare ? <ActionRow label="Share Listing" onPress={guard(handleShare)} /> : null}
-        {canEditOrDelete ? <ActionRow label="Delete Listing" onPress={guard(() => setView('confirm-delete'))} danger /> : null}
+        {canDelete ? <ActionRow label="Delete Listing" onPress={guard(() => setView('confirm-delete'))} danger /> : null}
       </View>
     </BottomSheetCard>
   );

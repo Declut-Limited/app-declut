@@ -253,7 +253,11 @@ export interface Listing {
   state?: string;
   city?: string;
   address?: string;
-  status: 'active' | 'pending_sale' | 'sold' | 'reported' | 'paused';
+  // 'delisted' confirmed 2026-09-19 — admin-only moderation status (set/cleared via relist), not
+  // reachable through any seller-facing mutation in this app (pause/resume only ever toggle
+  // active<->paused). Broadcast realtime via the global `listings:updated` event, not the
+  // room-scoped `listing:update` pause/resume uses — see docs/realtime-feature.md.
+  status: 'active' | 'pending_sale' | 'sold' | 'reported' | 'paused' | 'delisted';
   sellerId: string;
   /** Populated on GET /listings/:id (id or LST-#### slug) — not present on list/search results. Confirmed 2026-09-11: phoneNumber/totalSales/profileImageUrl (distinct field names from User's phone/soldCount/profileImageUrl) were added to this sub-object specifically for the buyer-side seller contact card. createdAt isn't confirmed on this sub-object — kept optional, degrades gracefully if absent. */
   seller?: ListingSeller;
@@ -452,7 +456,7 @@ export interface Transaction {
 export type PurchaseStatusFilter = 'active' | 'completed' | 'refunded' | 'disputed';
 
 /** GET /listings/mine query — omit entirely for every status ("All"). */
-export type MyListingsStatusFilter = 'active' | 'pending_sale' | 'sold' | 'reported' | 'paused';
+export type MyListingsStatusFilter = 'active' | 'pending_sale' | 'sold' | 'reported' | 'paused' | 'delisted';
 
 export interface CheckoutPayload {
   listingId: string;

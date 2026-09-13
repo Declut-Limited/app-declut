@@ -26,6 +26,7 @@ const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
   reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
   paused: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
+  delisted: { label: 'Delisted', bg: colors.dangerLight, text: colors.danger },
 };
 // listing.status's exact enum isn't fully confirmed backend-side — fall back rather than crash
 // on a status string this map doesn't have a style for yet.
@@ -38,6 +39,7 @@ const STATUS_TABS: { label: string; value: 'all' | MyListingsStatusFilter }[] = 
   { label: 'Sales Pending', value: 'pending_sale' },
   { label: 'Sold', value: 'sold' },
   { label: 'Reported', value: 'reported' },
+  { label: 'Delisted', value: 'delisted' },
 ];
 
 // FULL-SCREEN modal — Profile's "My Listings" row, GET /listings/mine.

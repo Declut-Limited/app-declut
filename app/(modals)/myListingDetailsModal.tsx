@@ -74,6 +74,13 @@ const STATUS_NOTE: Record<Listing['status'], { title: string; body: string; tone
   },
   sold: { title: 'Sold successfully', body: 'This item was successfully sold through Declut.', tone: 'info' },
   paused: { title: 'Listing Paused', body: 'This listing is currently hidden from buyers.', tone: 'neutral' },
+  // Admin-only moderation status — distinct from a seller's own Pause. No seller-facing action
+  // resumes it themselves (see the CreateListingPayload/Listing.status comment in api/types.ts).
+  delisted: {
+    title: 'Listing Delisted',
+    body: 'This listing was removed by Declut and is no longer visible to buyers. Contact support if you believe this is a mistake.',
+    tone: 'warning',
+  },
 };
 // listing.status's exact enum isn't fully confirmed backend-side — fall back rather than crash
 // on a status string these maps don't have an entry for yet.
@@ -98,6 +105,7 @@ const STATUS_STYLES: Record<Listing['status'], { label: string; bg: string; text
   sold: { label: 'Sold', bg: colors.primaryLight, text: colors.primary },
   reported: { label: 'Reported', bg: colors.dangerLight, text: colors.danger },
   paused: { label: 'Paused', bg: colors.gray100, text: colors.gray500 },
+  delisted: { label: 'Delisted', bg: colors.dangerLight, text: colors.danger },
 };
 const FALLBACK_STATUS_STYLE = STATUS_STYLES.active;
 
@@ -587,6 +595,12 @@ export default function MyListingDetailsModal() {
                 <Text style={styles.footerPrimaryLabel}>View Transaction</Text>
               </Pressable>
             </>
+          ) : listing.status === 'delisted' ? (
+            // Admin-only moderation status — no seller-facing resume action, unlike Pause. Same
+            // "Contact Support" pattern as 'reported' below, since that's the only real next step.
+            <Pressable onPress={guard(handleContactSupport)} style={styles.footerPrimaryButton}>
+              <Text style={styles.footerPrimaryLabel}>Contact Support</Text>
+            </Pressable>
           ) : (
             <>
               <Pressable onPress={guard(handleRelistSimilar)} style={styles.footerSecondaryButton}>
