@@ -1,10 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { router } from 'expo-router';
+import { onlineManager } from '@tanstack/react-query';
 import { clearSessionTokens, hydrateSession, onSessionExpired, setSessionTokens } from '@/api/client';
 import { getMyProfile } from '@/api/users';
 import { logout as logoutRequest, resendVerificationEmail } from '@/api/auth';
 import type { AuthTokens, User } from '@/api/types';
 import { queryClient } from '@/lib/queryClient';
+import { showWarningToast } from '@/lib/toast';
 import {
   clearEmailOtpToken as persistClearEmailOtpToken,
   getEmailOtpToken,
@@ -64,46 +67,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSessionExpired(() => {
       setUser(null);
       setStatus('unauthenticated');
+      // Same reasoning as the manual signOut() below — every cached listing/transaction/review/
+      // bank-account query is scoped to whoever was just signed out.
+      queryClient.clear();
+      showWarningToast('Session expired', 'Please sign in again to continue.');
+      // Force navigation immediately regardless of which screen is currently mounted — updating
+      // `status` alone only redirects if app/index.tsx happens to be the active route. A user deep
+      // in (tabs)/home or a modal would otherwise be silently left on a now-signed-out screen.
+      router.replace('/(auth)/sign-in');
     });
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const [tokens, onboardingSeen, storedOtpToken] = await Promise.all([
-        hydrateSession(),
-        getOnboardingSeen(),
-        getEmailOtpToken(),
-      ]);
-      if (storedOtpToken) {
-        emailOtpTokenRef.current = storedOtpToken;
-        setEmailOtpToken(storedOtpToken);
-      }
+  const hydrate = useCallback(async () => {
+    const [tokens, onboardingSeen, storedOtpToken] = await Promise.all([
+      hydrateSession(),
+      getOnboardingSeen(),
+      getEmailOtpToken(),
+    ]);
+    if (storedOtpToken) {
+      emailOtpTokenRef.current = storedOtpToken;
+      setEmailOtpToken(storedOtpToken);
+    }
 
-      if (!tokens) {
+    if (!tokens) {
+      setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
+      return;
+    }
+
+    try {
+      const profile = await applyKycBypass(await getMyProfile());
+      setUser(profile);
+      setStatus('authenticated');
+    } catch (e) {
+      // A 401 here means the interceptor's own refresh attempt (client.ts) already exhausted its
+      // retries and got a definitive rejection from the server — tokens are already cleared and
+      // sessionExpiredHandler has already fired above. Anything else (no connectivity, a timeout,
+      // a 5xx) is NOT a reason to sign the user out — client.ts's refresh logic treats those as
+      // transient and never touches the stored session, so it's still perfectly valid, we just
+      // couldn't confirm it right now. Stay on 'loading' rather than guessing wrong; the
+      // online-retry effect below re-runs this once connectivity is confirmed back.
+      const isAuthFailure = axios.isAxiosError(e) && e.response?.status === 401;
+      if (isAuthFailure) {
+        await clearSessionTokens();
         setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
-        return;
       }
-
-      try {
-        const profile = await applyKycBypass(await getMyProfile());
-        setUser(profile);
-        setStatus('authenticated');
-      } catch (e) {
-        // A 401 here means even the interceptor's silent refresh attempt failed (client.ts has
-        // already cleared tokens and fired sessionExpiredHandler in that case) — a genuinely
-        // invalid session. Anything else (no connectivity, a timeout, a cold-starting backend)
-        // is NOT a reason to sign the user out — the stored session is still perfectly valid,
-        // we just couldn't confirm it right now. Stay on 'loading' rather than guessing wrong:
-        // NetworkContext's offline banner explains the wait, and reloads the app once
-        // connectivity returns, which re-runs this hydration with the still-valid tokens.
-        const isAuthFailure = axios.isAxiosError(e) && e.response?.status === 401;
-        if (isAuthFailure) {
-          await clearSessionTokens();
-          setStatus(onboardingSeen ? 'unauthenticated' : 'onboarding');
-        }
-      }
-    })();
+    }
   }, []);
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  // Safety net for a cold launch that starts offline (or loses connectivity mid-hydration):
+  // client.ts's own refresh retries cover brief blips during normal use, but the very first
+  // getMyProfile() call above has nothing to retry against if there's no connection at all yet.
+  // Retry hydration itself once connectivity is confirmed back — scoped to "still stuck loading"
+  // only, unlike the app-wide reload this replaced, which used to fire on every reconnect and force
+  // this same network call at the least reliable moment right after reconnecting.
+  useEffect(() => {
+    if (status !== 'loading') return;
+    return onlineManager.subscribe((isOnline) => {
+      if (isOnline) hydrate();
+    });
+  }, [status, hydrate]);
 
   const establishSession = useCallback(async (tokens: AuthTokens) => {
     await setSessionTokens(tokens);

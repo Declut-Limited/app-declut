@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query';
 import { extractErrorMessage } from '@/api/client';
 import type { PaginatedResponse } from '@/api/types';
@@ -29,7 +30,13 @@ export function usePaginatedListings<T>(queryKey: QueryKey, fetchPage: FetchPage
     staleTime,
   });
 
-  const items = query.data?.pages.flatMap((page) => page.results ?? []) ?? [];
+  // .flatMap() builds a brand-new array every call — without memoizing on query.data, `items`
+  // would get a new reference on every render regardless of whether the underlying data actually
+  // changed, which breaks any consumer that puts it (or something derived from it) in a useMemo/
+  // useEffect dependency array: the effect would think it changed and re-fire on every render,
+  // including its own setState calls — a self-perpetuating render loop (this is what caused
+  // filterByModal's "keeps refetching" bug, via useCategories -> draftFilters' own useMemo).
+  const items = useMemo(() => query.data?.pages.flatMap((page) => page.results ?? []) ?? [], [query.data]);
 
   return {
     items,

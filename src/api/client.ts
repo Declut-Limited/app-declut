@@ -2,11 +2,14 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { AuthTokens } from './types';
 import { clearTokens, getTokens, setTokens } from '@/lib/secureStore';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://unconscious-juli-idowu-space-4ff4116d.koyeb.app/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL!;
+
+const REQUEST_TIMEOUT_MS = 20000;
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: REQUEST_TIMEOUT_MS,
 });
 
 // In-memory mirror of the secure-store token pair. Every request reads from
@@ -52,22 +55,62 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 // instead of each firing their own /auth/refresh call.
 let refreshInFlight: Promise<AuthTokens | null> | null = null;
 
-async function refreshTokens(): Promise<AuthTokens | null> {
-  if (!currentTokens?.refreshToken) return null;
-  if (!refreshInFlight) {
-    refreshInFlight = axios
-      .post<{ data: AuthTokens }>(`${BASE_URL}/auth/refresh`, {
-        refreshToken: currentTokens.refreshToken,
-      })
-      .then(async (res) => {
-        const tokens = res.data.data;
-        await setSessionTokens(tokens);
-        return tokens;
-      })
-      .catch(async () => {
+const REFRESH_MAX_ATTEMPTS = 3;
+const REFRESH_RETRY_DELAY_MS = 800;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Backend contract (confirmed): /auth/refresh returns 401 for every rejection reason (expired,
+// revoked, rotated away by a login/refresh elsewhere) with an identical body — there's nothing to
+// distinguish "reasons" on. So 401 is the ONLY status treated as "this refresh token is truly
+// dead." Anything else — no response at all (offline/DNS/timeout) or a 5xx — is a transient
+// infra hiccup that says nothing about whether the refresh token itself is still valid, so it
+// must never wipe the session. A network blip mid-refresh used to be indistinguishable from an
+// actually-expired session; this is what fixes that.
+async function requestTokenRefresh(refreshToken: string): Promise<AuthTokens | null> {
+  for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
+    try {
+      if (__DEV__) console.log(`[API] -> POST /auth/refresh (attempt ${attempt}/${REFRESH_MAX_ATTEMPTS})`);
+      const res = await axios.post<{ data: AuthTokens }>(
+        `${BASE_URL}/auth/refresh`,
+        { refreshToken },
+        { timeout: REQUEST_TIMEOUT_MS }
+      );
+      if (__DEV__) console.log('[API] <- 200 /auth/refresh (rotated)');
+      return res.data.data;
+    } catch (err) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+
+      if (status === 401) {
+        if (__DEV__) console.warn('[API] <- 401 /auth/refresh — refresh token rejected, signing out');
         await clearSessionTokens();
         sessionExpiredHandler?.();
         return null;
+      }
+
+      if (__DEV__) {
+        console.warn(
+          `[API] /auth/refresh attempt ${attempt} failed transiently (${status ?? 'network/timeout'}) —`,
+          attempt === REFRESH_MAX_ATTEMPTS ? 'giving up, session left intact' : 'retrying'
+        );
+      }
+
+      if (attempt === REFRESH_MAX_ATTEMPTS) return null;
+      await delay(REFRESH_RETRY_DELAY_MS * attempt);
+    }
+  }
+  return null;
+}
+
+async function refreshTokens(): Promise<AuthTokens | null> {
+  if (!currentTokens?.refreshToken) return null;
+  if (!refreshInFlight) {
+    refreshInFlight = requestTokenRefresh(currentTokens.refreshToken)
+      .then(async (tokens) => {
+        if (tokens) await setSessionTokens(tokens);
+        return tokens;
       })
       .finally(() => {
         refreshInFlight = null;

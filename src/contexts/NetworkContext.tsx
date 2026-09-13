@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
-import { reloadAppAsync } from 'expo';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { StatusBar } from 'expo-status-bar';
@@ -40,10 +39,11 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
 
       if (!wasDisconnected.current) return;
 
-      // Reload once connectivity comes back — screens may hold stale data
-      // fetched while offline (e.g. a failed session hydrate on cold start).
-      reloadAppAsync();
-
+      // No full app reload here — react-query's onlineManager (queryClient.ts) already resumes/
+      // refetches paused queries on reconnect. A hard reload also has a nasty side effect: it forces
+      // the auth boot sequence (hydrateSession -> getMyProfile) to run its network calls at the exact
+      // moment the connection just came back and is least reliable, which used to make ordinary
+      // signal drops look like session expiry.
       setShowReconnected(true);
       Animated.parallel([
         Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
