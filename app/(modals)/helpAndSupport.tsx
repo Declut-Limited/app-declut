@@ -6,8 +6,7 @@ import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 
 const SUPPORT_EMAIL = 'Support@Declut.com';
-const SUPPORT_PHONE_DISPLAY = '+2349068814-677';
-const SUPPORT_PHONE_E164 = '+2349068814677';
+const SUPPORT_PHONE = '+2349068814677';
 
 export default function HelpAndSupportModal() {
   return (
@@ -27,20 +26,21 @@ export default function HelpAndSupportModal() {
       />
       <ContactRow
         label="Phone"
-        value={SUPPORT_PHONE_DISPLAY}
+        value={SUPPORT_PHONE}
         responseTime="Avg. Response time: 1 min"
         action={{
           label: 'Call',
           icon: <Icon name="call" variant="bold" size={verticalScale(14)} color={colors.primary} />,
-          onPress: () => Linking.openURL(`tel:${SUPPORT_PHONE_E164}`),
+          onPress: () => Linking.openURL(`tel:${SUPPORT_PHONE}`),
         }}
       />
       <ContactRow
         label="Chat"
         value="Whatsapp"
         subtitle="Start a conversation on Whatsapp"
+        responseTime="Avg. Response time: 1 min"
         btnIcon={<Icon name="whatsapp" variant="bold" size={verticalScale(20)} color="#25D366" />}
-        onPress={() => Linking.openURL(`https://wa.me/${SUPPORT_PHONE_E164.replace('+', '')}`)}
+        onPress={() => Linking.openURL(`https://wa.me/${SUPPORT_PHONE.replace('+', '')}`)}
       />
     </ScreenContainer>
   );

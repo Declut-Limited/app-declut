@@ -390,7 +390,8 @@ export default function ListingDetailsModal() {
         },
         onError: (e) => {
           console.error('[Checkout] handleMakePayment failed', axios.isAxiosError(e) ? { status: e.response?.status, data: e.response?.data } : e);
-          showErrorToast('Could not start checkout', extractErrorMessage(e));
+          // showErrorToast('Could not start checkout', extractErrorMessage(e));
+          showErrorToast(extractErrorMessage(e));
         },
       }
     );
@@ -1165,13 +1166,10 @@ interface PaySummarySheetProps {
   onMakePayment: () => void;
 }
 
-// Step 2 of checkout — order summary + the actual "pay" trigger. Buttons positioned the same
-// way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
+// Step 2 of checkout — order summary + the actual "pay" trigger. Buttons positioned the same way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
 function PaySummarySheet({ listing, paying, onClose, onCancelPurchase, onMakePayment }: PaySummarySheetProps) {
   const guard = useSingleTap();
-  // This is Paystack's own transaction fee (1.5% + ₦100, waived under ₦2,500, capped at ₦2,000)
-  // — not Declut's commissionPercentage, which is a seller-side deduction from the payout, never
-  // added to what the buyer pays (see SystemSettings in api/types.ts).
+  // This is Paystack's own transaction fee (1.5% + ₦100, waived under ₦2,500, capped at ₦2,000) — not Declut's commissionPercentage, which is a seller-side deduction from the payout, never added to what the buyer pays (see SystemSettings in api/types.ts).
   const fee = calculatePaystackFee(listing.price);
   const total = listing.price + fee;
 
@@ -1229,9 +1227,7 @@ interface PaymentSuccessSheetProps {
   onClose: () => void;
 }
 
-// Landed on once polling confirms escrow_active — buyer's confirmationCode isn't shown here per
-// the design (just the "unlocking" teaser); it's surfaced via toast on Close since there's no
-// dedicated order/transaction screen yet to carry it forward to.
+// Landed on once polling confirms escrow_active — buyer's confirmationCode isn't shown here per the design (just the "unlocking" teaser); it's surfaced via toast on Close since there's no dedicated order/transaction screen yet to carry it forward to.
 function PaymentSuccessSheet({ amount, onClose }: PaymentSuccessSheetProps) {
   const guard = useSingleTap();
 
@@ -1256,11 +1252,7 @@ interface ConfirmPaySheetProps {
   onConfirm: () => void;
 }
 
-// Gate in front of the pending_sale footer's "Item is Fine - Pay the Seller" button — an
-// irreversible action (calls POST /transactions/:id/confirm-transaction, releasing escrow), so it
-// gets its own explicit yes/no step rather than firing straight off the footer tap. Closes
-// immediately on confirm — the full-screen confirmingOverlay (same one used after Paystack
-// checkout) takes over from there while the request is in flight.
+// Gate in front of the pending_sale footer's "Item is Fine - Pay the Seller" button — an irreversible action (calls POST /transactions/:id/confirm-transaction, releasing escrow), so it gets its own explicit yes/no step rather than firing straight off the footer tap. Closes immediately on confirm — the full-screen confirmingOverlay (same one used after Paystack checkout) takes over from there while the request is in flight.
 function ConfirmPaySheet({ amount, sellerName, onCancel, onConfirm }: ConfirmPaySheetProps) {
   const guard = useSingleTap();
 
@@ -2140,7 +2132,7 @@ const styles = StyleSheet.create({
   },
   paySheetContinueLabel: {
     fontFamily: fontFamily.semibold,
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     color: colors.white,
   },
   paySheetCancel: {

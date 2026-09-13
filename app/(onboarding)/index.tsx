@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ImageSourcePropType, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
@@ -38,7 +38,6 @@ const SLIDES: { tag: string; variant: PillVariant; headline: string; image: Imag
 export default function OnboardingScreen() {
   const { completeOnboarding } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
-  const [activeIndex, setActiveIndex] = useState(0);
   const scrollX = useSharedValue(0);
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -47,10 +46,6 @@ export default function OnboardingScreen() {
     },
   });
 
-  function handleMomentumEnd(offsetX: number) {
-    setActiveIndex(Math.round(offsetX / screenWidth));
-  }
-
   async function goToAuth(path: '/(auth)/sign-in' | '/(auth)/sign-up') {
     await completeOnboarding();
     router.replace(path);
@@ -58,6 +53,10 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <View style={styles.topBar}>
+        <PaginationDots count={SLIDES.length} scrollX={scrollX} screenWidth={screenWidth} />
+      </View>
+
       <Animated.ScrollView
         style={styles.scroll}
         horizontal
@@ -65,7 +64,6 @@ export default function OnboardingScreen() {
         showsHorizontalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        onMomentumScrollEnd={(e) => handleMomentumEnd(e.nativeEvent.contentOffset.x)}
       >
         {SLIDES.map((slide, index) => (
           <Slide
@@ -73,8 +71,6 @@ export default function OnboardingScreen() {
             slide={slide}
             index={index}
             scrollX={scrollX}
-            activeIndex={activeIndex}
-            total={SLIDES.length}
             screenWidth={screenWidth}
           />
         ))}
@@ -93,15 +89,11 @@ function Slide({
   slide,
   index,
   scrollX,
-  activeIndex,
-  total,
   screenWidth,
 }: {
   slide: (typeof SLIDES)[number];
   index: number;
   scrollX: SharedValue<number>;
-  activeIndex: number;
-  total: number;
   screenWidth: number;
 }) {
   const cardStyle = useAnimatedStyle(() => {
@@ -115,9 +107,6 @@ function Slide({
   return (
     <View style={[styles.slide, { width: screenWidth }]}>
       <Animated.View style={[styles.card, cardStyle]}>
-        <View style={styles.cardTopBar}>
-          <PaginationDots count={total} activeIndex={activeIndex} />
-        </View>
         <Animated.Image source={slide.image} resizeMode="contain" style={styles.image} />
       </Animated.View>
       <View style={styles.content}>
@@ -134,7 +123,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flex: 1,
+  },
+  // Fixed above the paging ScrollView so it doesn't slide with the active slide's content.
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingHorizontal: spacingX.lg + spacingX.sm,
     paddingTop: spacingY.xl,
+    paddingBottom: spacingY.xs,
   },
   // Horizontal inset lives here (per-slide), not on the ScrollView itself — padding on a
   // horizontal pagingEnabled ScrollView shrinks its viewport below each slide's declared width,
@@ -149,15 +145,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radius.xl,
     borderCurve: 'continuous',
-    paddingVertical: spacingY.md,
+    paddingVertical: spacingY.sm,
     paddingHorizontal: spacingX.sm,
     marginBottom: spacingY['2xl'],
-  },
-  cardTopBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    paddingHorizontal: spacingX.lg,
-    paddingBottom: spacingY.xs,
   },
   image: {
     flex: 1,

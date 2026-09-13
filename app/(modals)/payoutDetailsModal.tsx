@@ -204,6 +204,7 @@ export default function PayoutDetailsModal() {
             onClose={() => setBankPickerOpen(false)}
             loading={banksLoading}
             error={banksError}
+            searchable={true}
           />
         </View>
       ) : null}

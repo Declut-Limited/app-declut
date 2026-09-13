@@ -20,26 +20,32 @@ import { useSingleTap } from '@/hooks/useSingleTap';
 const SECTION_LIMIT = 2;
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, status } = useAuth();
   const guard = useSingleTap();
 
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // Flips true once the location prompt has been answered either way (granted or denied) — gates Recently Posted below so it doesn't fire ahead of Listings Near You; the two start together once the permission decision is known, rather than Recently Posted racing off on mount.
+  const [locationResolved, setLocationResolved] = useState(false);
 
   useEffect(() => {
     getDeviceLocation().then((device) => {
       if (!device) {
         setLocationDenied(true);
+        setLocationResolved(true);
         return;
       }
       setLocationDenied(false);
       setLocationLabel(device.label);
       setCoords({ lat: device.lat, lng: device.lng });
+      setLocationResolved(true);
     });
   }, []);
 
   const nearbyParams = coords ? { lat: coords.lat, lng: coords.lng, radiusKm: DEFAULT_NEARBY_RADIUS_KM } : null;
+  // Also gated on auth status — without it, a still-mounted Home can fire a fresh fetch the instant sign-out clears the query cache (an active/enabled observer refetches when its cache entry is removed out from under it), leaking an authenticated-only request past logout.
+  const authed = status === 'authenticated';
 
   const {
     data: nearbyData,
@@ -49,7 +55,7 @@ export default function HomeScreen() {
   } = useQuery({
     queryKey: queryKeys.listings.nearbyTeaser(nearbyParams ?? { lat: 0, lng: 0, radiusKm: DEFAULT_NEARBY_RADIUS_KM }),
     queryFn: () => listingsApi.getNearbyListings({ ...nearbyParams!, limit: SECTION_LIMIT }),
-    enabled: !!nearbyParams,
+    enabled: !!nearbyParams && authed,
     staleTime: STALE_TIME.BROWSE,
   });
   const nearby = locationDenied ? [] : nearbyData?.results ?? null;
@@ -63,6 +69,7 @@ export default function HomeScreen() {
   } = useQuery({
     queryKey: queryKeys.listings.newTeaser(),
     queryFn: () => listingsApi.getNewListings({ limit: SECTION_LIMIT }),
+    enabled: locationResolved && authed,
     staleTime: STALE_TIME.BROWSE,
   });
   const recent = recentData?.results ?? null;
@@ -71,8 +78,7 @@ export default function HomeScreen() {
   const userLat = coords?.lat;
   const userLng = coords?.lng;
 
-  // The native pull indicator is never held open — it retracts the instant the pull gesture
-  // completes. The skeletons (nearbyLoading/recentLoading) carry the rest of the loading feedback.
+  // The native pull indicator is never held open — it retracts the instant the pull gesture completes. The skeletons (nearbyLoading/recentLoading) carry the rest of the loading feedback.
   function onRefresh() {
     refetchNearby();
     refetchRecent();
@@ -136,7 +142,8 @@ export default function HomeScreen() {
         subtitle={locationLabel ? `within ${DEFAULT_NEARBY_RADIUS_KM}km` : undefined}
         variant="all"
         listings={locationDenied ? [] : nearby}
-        loading={nearbyLoading}
+        // useQuery's isLoading is false while `enabled` is false, so without the locationResolved check this would flash the empty state during the location prompt instead of a skeleton.
+        loading={!locationResolved || nearbyLoading}
         emptyLabel={locationDenied ? 'Enable location to see listings near you.' : 'No nearby listings yet.'}
         error={nearbyError}
         onSeeAll={goToNearbyListings}
@@ -151,7 +158,7 @@ export default function HomeScreen() {
         title="Recently Posted"
         variant="recent"
         listings={recent}
-        loading={recentLoading}
+        loading={!locationResolved || recentLoading}
         emptyLabel="No listings yet."
         error={recentError}
         onSeeAll={goToNewListings}

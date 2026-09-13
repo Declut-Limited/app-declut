@@ -7,7 +7,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 
-const LIST_MAX_HEIGHT = verticalScale(420);
+const LIST_MAX_HEIGHT = verticalScale(435);
 
 interface OptionPickerSheetProps {
   title: string;
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     minHeight: verticalScale(56),
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    paddingHorizontal: spacingX.lg,
+    paddingHorizontal: spacingX.sm,
   },
   optionSelected: {
     backgroundColor: colors.primaryLight,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     color: colors.gray700,
   },
   checkCircle: {

@@ -169,7 +169,7 @@ export default function AddItemModal() {
     if (!(await ensureCameraAccess('Allow camera access to take a photo.'))) return;
 
     try {
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1, cameraType: ImagePicker.CameraType.back });
       if (result.canceled || !result.assets[0]) return;
       const uri = result.assets[0].uri;
       const emptyIndex = photos.findIndex((p) => !p);
@@ -263,7 +263,7 @@ export default function AddItemModal() {
     if (!(await ensureCameraAccess('Allow camera access to record a video.'))) return;
 
     try {
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], quality: 1 });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], quality: 1, cameraType: ImagePicker.CameraType.back });
       if (result.canceled || !result.assets[0]) return;
       uploadVideo(result.assets[0].uri);
     } catch {
@@ -453,8 +453,11 @@ export default function AddItemModal() {
     <View style={styles.flex}>
       <ScreenContainer
         background={colors.white}
-        // Step 1 owns its own KeyboardAwareScrollView — avoid nesting it inside this ScrollView too.
+        // Step 1 owns its own KeyboardAwareScrollView — avoid nesting it inside this ScrollView too,
+        // and disable this container's own KeyboardAvoidingView on that step so the two don't stack
+        // (stacking left a residual gap under the footer after the keyboard closed).
         scroll={step !== 1}
+        avoidKeyboard={step !== 1}
         header={
           <ScreenHeader
             title={isPreview ? 'Preview' : 'Add Item'}
@@ -648,6 +651,7 @@ export default function AddItemModal() {
               value={state}
               onSelect={handleSelectState}
               onClose={() => setActiveSheet(null)}
+              searchable
             />
           ) : (
             <OptionPickerSheet
@@ -661,6 +665,7 @@ export default function AddItemModal() {
               }}
               onClose={() => setActiveSheet(null)}
               loading={areaOptionsLoading}
+              searchable
             />
           )}
         </View>

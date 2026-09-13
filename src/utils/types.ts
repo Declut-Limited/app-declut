@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { PressableProps, RefreshControlProps, StyleProp, TextInputProps, ViewProps, ViewStyle } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 import type { Edge } from 'react-native-safe-area-context';
 import type { Listing } from '@/api/types';
 import type { DropdownOption } from '@/constants/formOptions';
@@ -169,7 +170,8 @@ export interface LegalConsentTextProps {
 
 export interface PaginationDotsProps {
   count: number;
-  activeIndex: number;
+  scrollX: SharedValue<number>;
+  screenWidth: number;
 }
 
 

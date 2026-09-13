@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -30,6 +30,8 @@ export default function ProfileScreen() {
   // Hard-denied gallery permission — same "send to Settings" primer used in AddItemModal.
   const [permissionPrompt, setPermissionPrompt] = useState<{ target: string; message: string } | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [deleteAccountConfirmOpen, setDeleteAccountConfirmOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // This is a tab screen, so it stays mounted (not unmounted like a stack/modal screen) when you
@@ -94,21 +96,21 @@ export default function ProfileScreen() {
 
   async function handleSignOut() {
     setLogoutConfirmOpen(false);
-    await signOut();
-    router.replace('/');
+    setLoggingOut(true);
+    try {
+      await signOut();
+      router.replace('/(auth)/sign-in');
+    } catch (e) {
+      setLoggingOut(false);
+      showErrorToast('Could not log out', extractErrorMessage(e));
+    }
   }
 
   // No account-deletion endpoint exists yet (see CLAUDE.md's working-style note on flagging gaps) —
   // this confirms intent without silently no-oping or firing a request that doesn't exist.
-  function confirmDeleteAccount() {
-    Alert.alert('Delete account?', "This will permanently delete your account and can't be undone.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => showErrorToast('Not available yet', "Account deletion isn't available yet — contact support."),
-      },
-    ]);
+  function handleConfirmDeleteAccount() {
+    setDeleteAccountConfirmOpen(false);
+    showErrorToast('Not available yet', "Account deletion isn't available yet — contact support.");
   }
 
   const verified = isVerified(user);
@@ -251,7 +253,7 @@ export default function ProfileScreen() {
             icon={<Icon name="trash" variant="linear" size={verticalScale(20)} color={colors.danger} />}
             label="Delete account"
             labelColor={colors.danger}
-            onPress={confirmDeleteAccount}
+            onPress={() => setDeleteAccountConfirmOpen(true)}
             chevron={false}
             last
           />
@@ -275,6 +277,12 @@ export default function ProfileScreen() {
       {logoutConfirmOpen ? (
         <LogoutConfirmSheet onCancel={() => setLogoutConfirmOpen(false)} onConfirm={handleSignOut} />
       ) : null}
+
+      {deleteAccountConfirmOpen ? (
+        <DeleteAccountConfirmSheet onCancel={() => setDeleteAccountConfirmOpen(false)} onConfirm={handleConfirmDeleteAccount} />
+      ) : null}
+
+      {loggingOut ? <LoggingOutOverlay /> : null}
     </View>
   );
 }
@@ -312,6 +320,54 @@ function LogoutConfirmSheet({ onCancel, onConfirm }: LogoutConfirmSheetProps) {
           </View>
         </BottomSheetCard>
       </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+interface DeleteAccountConfirmSheetProps {
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// Same Modal + GestureHandlerRootView wrapping as LogoutConfirmSheet, for the same reason (needs to
+// overflow the tab bar). No account-deletion endpoint exists yet — onConfirm is just the same
+// "not available yet" placeholder the row used before, wired to a real flow once one ships.
+function DeleteAccountConfirmSheet({ onCancel, onConfirm }: DeleteAccountConfirmSheetProps) {
+  const guard = useSingleTap();
+
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={onCancel}>
+      <GestureHandlerRootView style={styles.flex}>
+        <BottomSheetCard onBackdropPress={guard(onCancel)} sheetBackgroundColor={colors.white}>
+          <View style={styles.logoutIconWrap}>
+            <Icon name="trash" variant="bold" size={verticalScale(32)} color={colors.danger} />
+          </View>
+          <Text style={styles.logoutTitle}>Delete account?</Text>
+          <Text style={styles.logoutBody}>This will permanently delete your account and can't be undone.</Text>
+          <View style={styles.logoutButtonRow}>
+            <Pressable onPress={guard(onCancel)} style={styles.logoutCancelButton}>
+              <Text style={styles.logoutCancelLabel}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={guard(onConfirm)} style={styles.logoutConfirmButton}>
+              <Text style={styles.logoutConfirmLabel}>Delete</Text>
+            </Pressable>
+          </View>
+        </BottomSheetCard>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+// Full-screen, covers the tab bar too (same Modal-portal reasoning as the sheets above) — stays up
+// for the entire signOut() await so nothing navigates away, and nothing on this screen re-renders
+// with a cleared cache, until the token is actually gone.
+function LoggingOutOverlay() {
+  return (
+    <Modal transparent visible animationType="fade">
+      <View style={styles.loggingOutOverlay}>
+        <ActivityIndicator color={colors.white} size="large" />
+        <Text style={styles.loggingOutText}>Logging out…</Text>
+      </View>
     </Modal>
   );
 }
@@ -576,6 +632,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoutConfirmLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.white,
+  },
+  loggingOutOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacingY.md,
+    backgroundColor: 'rgba(17, 24, 39, 0.85)',
+  },
+  loggingOutText: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
     color: colors.white,
