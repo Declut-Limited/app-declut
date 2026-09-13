@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
 import * as Icons from 'phosphor-react-native';
 import { BottomSheetCard } from '@/components';
 import type { DropdownOption } from '@/constants/formOptions';
@@ -51,6 +52,15 @@ export function OptionPickerSheet({
     return options.filter((option) => option.label.toLowerCase().includes(query));
   }, [options, search, searchable]);
 
+  // Some remote lists (e.g. banks) have duplicate `value`s — index keeps this unique regardless,
+  // and is safe since this list's order never reshuffles in place.
+  const keyExtractor = useCallback((option: DropdownOption, index: number) => `${option.value}-${index}`, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: DropdownOption }) => <OptionRow option={item} selected={item.value === value} onSelect={onSelect} />,
+    [value, onSelect]
+  );
+
   return (
     <BottomSheetCard onBackdropPress={onClose}>
       <View style={styles.header}>
@@ -85,50 +95,68 @@ export function OptionPickerSheet({
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {visibleOptions.length === 0 ? (
-            <Text style={styles.emptyText}>No matches found.</Text>
-          ) : (
-            visibleOptions.map((option, index) => {
-              const selected = option.value === value;
-              return (
-                <Pressable
-                  // Some remote lists (e.g. banks) have duplicate `value`s — index keeps this
-                  // unique regardless, and is safe since this list's order never reshuffles in place.
-                  key={`${option.value}-${index}`}
-                  onPress={guard(() => onSelect(option.value))}
-                  style={[styles.option, selected && styles.optionSelected]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                >
-                  <View style={styles.optionMain}>
-                    {option.imageUrl ? (
-                      <View style={styles.optionImageWrap}>
-                        <Image source={{ uri: option.imageUrl }} style={styles.optionImage} />
-                      </View>
-                    ) : null}
-                    <Text style={styles.optionLabel}>{option.label}</Text>
-                  </View>
-                  {selected ? (
-                    <View style={styles.checkCircle}>
-                      <Icons.CheckIcon size={verticalScale(11)} color={colors.white} weight="bold" />
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })
-          )}
-
-          {hasMore ? (
-            <Pressable onPress={guard(() => onLoadMore?.())} style={styles.loadMoreButton} disabled={loadingMore}>
-              {loadingMore ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.loadMoreText}>Load More</Text>}
-            </Pressable>
-          ) : null}
-        </ScrollView>
+        <FlatList
+          style={styles.list}
+          data={visibleOptions}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          // Long static lists (State's 37 entries, Bank's ~30+ each with a logo image) don't need
+          // to mount every row up front — virtualizing is what actually fixes the slow-open/janky-
+          // scroll feel a plain ScrollView had here, on top of expo-image's own disk cache below.
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          removeClippedSubviews
+          ListEmptyComponent={<Text style={styles.emptyText}>No matches found.</Text>}
+          ListFooterComponent={
+            hasMore ? (
+              <Pressable onPress={guard(() => onLoadMore?.())} style={styles.loadMoreButton} disabled={loadingMore}>
+                {loadingMore ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.loadMoreText}>Load More</Text>}
+              </Pressable>
+            ) : null
+          }
+        />
       )}
     </BottomSheetCard>
   );
 }
+
+interface OptionRowProps {
+  option: DropdownOption;
+  selected: boolean;
+  onSelect: (value: string) => void;
+}
+
+// Extracted + memoized so scrolling (and the parent's own re-renders while a search query is being
+// typed) doesn't re-render every row — only the ones whose `selected`/`option` actually changed.
+const OptionRow = React.memo(function OptionRow({ option, selected, onSelect }: OptionRowProps) {
+  const guard = useSingleTap();
+
+  return (
+    <Pressable
+      onPress={guard(() => onSelect(option.value))}
+      style={[styles.option, selected && styles.optionSelected]}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+    >
+      <View style={styles.optionMain}>
+        {option.imageUrl ? (
+          <View style={styles.optionImageWrap}>
+            <Image source={{ uri: option.imageUrl }} style={styles.optionImage} contentFit="cover" cachePolicy="memory-disk" />
+          </View>
+        ) : null}
+        <Text style={styles.optionLabel}>{option.label}</Text>
+      </View>
+      {selected ? (
+        <View style={styles.checkCircle}>
+          <Icons.CheckIcon size={verticalScale(11)} color={colors.white} weight="bold" />
+        </View>
+      ) : null}
+    </Pressable>
+  );
+});
 
 const styles = StyleSheet.create({
   header: {

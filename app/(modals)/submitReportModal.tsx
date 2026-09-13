@@ -40,7 +40,7 @@ export default function SubmitReportModal() {
   const refundAmount = amount - cancelFee;
 
   const guard = useSingleTap();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
@@ -94,7 +94,11 @@ export default function SubmitReportModal() {
     }
     setCancelSheetOpen(false);
     cancelPurchaseMutation.mutate(transactionId, {
-      onSuccess: () => setCancelSuccessOpen(true),
+      onSuccess: () => {
+        setCancelSuccessOpen(true);
+        // totalAmountInEscrow just dropped (refund minus the service fee) — refresh AuthContext's user to match.
+        refreshUser().catch(() => {});
+      },
       onError: (e) => showErrorToast('Could not cancel purchase', extractErrorMessage(e)),
     });
   }

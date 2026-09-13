@@ -46,7 +46,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { listingsApi, transactionsApi, usersApi } from '@/api';
+import { listingsApi, transactionsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
 import { useListingDetail } from '@/hooks/queries/useListings';
 import {
@@ -64,7 +64,7 @@ import { CONDITION_OPTIONS } from '@/constants/formOptions';
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
 
 const PAYSTACK_CALLBACK_URL = 'declut://payment-callback';
-const PAYMENT_POLL_INTERVAL_MS = 2000;
+const PAYMENT_POLL_INTERVAL_MS = 10000;
 const PAYMENT_POLL_MAX_ATTEMPTS = 10;
 const INSPECTION_WINDOW_HOURS = 48;
 
@@ -179,7 +179,7 @@ export default function ListingDetailsModal() {
     resumeTransactionId?: string;
   }>();
   const isOwnListing = isMine === 'true';
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const guard = useSingleTap();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -217,25 +217,38 @@ export default function ListingDetailsModal() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
 
-  // `isLoading || isFetching` — pulling to refresh (the RefreshControl below) shows the same
-  // full-page skeleton as the initial fetch, not a lightweight native spinner over stale content.
   const {
     data: listing,
     isLoading: isInitialLoading,
-    isFetching,
     error: listingQueryError,
     refetch: reloadListing,
   } = useListingDetail(id);
-  const loading = isInitialLoading || isFetching;
   const error = listingQueryError ? extractErrorMessage(listingQueryError, 'Could not load this listing.') : null;
+
+  // Deliberate reloads (pull-to-refresh, focus-return, post-payment) show the same full-page
+  // skeleton as the initial fetch — but useListingDetail's own refetchInterval (see useListings.ts)
+  // also flips React Query's isFetching every ~10s while this listing is pending_sale, and that's a
+  // silent background poll, not something that should re-trigger the skeleton/RefreshControl spinner
+  // every time it ticks. Tracked separately from isFetching so only explicit reloads count.
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  const loading = isInitialLoading || manualRefreshing;
+
+  const reloadListingWithSkeleton = useCallback(async () => {
+    setManualRefreshing(true);
+    try {
+      await reloadListing();
+    } finally {
+      setManualRefreshing(false);
+    }
+  }, [reloadListing]);
 
   // Refetches on first focus, and again every time this screen regains focus — after paying,
   // confirming inspection/completion, or reporting a problem/requesting a refund on
   // submitReportModal, all of which only ever report back by popping to here.
   useFocusEffect(
     useCallback(() => {
-      reloadListing();
-    }, [reloadListing])
+      reloadListingWithSkeleton();
+    }, [reloadListingWithSkeleton])
   );
 
   // Registers a view 5s after the listing actually loads — the backend owns de-duping (one
@@ -332,6 +345,8 @@ export default function ListingDetailsModal() {
         setReviewRating(0);
         setReviewComment('');
         setReviewSheetOpen(true);
+        // totalAmountInEscrow just went down — refresh AuthContext's user to match.
+        refreshUser().catch(() => {});
       },
       onError: (e) => {
         showErrorToast('Could not confirm', extractErrorMessage(e));
@@ -460,9 +475,11 @@ export default function ListingDetailsModal() {
   // publish, just triggered by this money-moving moment instead.
   async function handlePaymentSuccessClose() {
     setPaymentStep('none');
-    await reloadListing();
+    await reloadListingWithSkeleton();
+    // Refreshes AuthContext's user (totalAmountInEscrow just went up) — also doubles as the
+    // hasPayoutDetails check below, so no separate GET /users/me is needed for that.
     try {
-      const profile = await usersApi.getMyProfile();
+      const profile = await refreshUser();
       if (!profile.hasPayoutDetails) {
         router.replace('/(modals)/payoutDetailsModal');
       }
@@ -537,7 +554,7 @@ export default function ListingDetailsModal() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={reloadListing} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />
+          <RefreshControl refreshing={loading} onRefresh={reloadListingWithSkeleton} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />
         }
       >
         <View style={styles.hero}>

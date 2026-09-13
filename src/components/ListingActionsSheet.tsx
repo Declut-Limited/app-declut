@@ -11,7 +11,7 @@ import { extractErrorMessage } from '@/api/client';
 import type { Listing } from '@/api/types';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { usePauseListingMutation, useResumeListingMutation, useDeleteListingMutation } from '@/hooks/queries/useListings';
-import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast';
+import { showErrorToast, showWarningToast } from '@/lib/toast';
 
 interface ListingActionsSheetProps {
   listing: Listing;
@@ -22,7 +22,7 @@ interface ListingActionsSheetProps {
   hideViewListing?: boolean;
 }
 
-type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delete' | 'success-pause' | 'success-resume';
+type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delete' | 'success-pause' | 'success-resume' | 'success-delete';
 
 // Shared between myListings.tsx (tapping a card) and myListingDetailsModal.tsx (the floating
 // header's ••• button). Which rows show depends entirely on listing.status:
@@ -98,10 +98,7 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing }: Listi
 
   function confirmDelete() {
     deleteMutation.mutate(listing._id, {
-      onSuccess: () => {
-        showSuccessToast('Listing deleted');
-        onClose();
-      },
+      onSuccess: () => setView('success-delete'),
       onError: (e) => {
         showErrorToast('Could not delete listing', extractErrorMessage(e));
         setView('actions');
@@ -173,6 +170,10 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing }: Listi
 
   if (view === 'success-resume') {
     return <DoneSheet title="Listing Resumed" body="Your listing is active again and visible to buyers." onClose={handleSuccessClose} />;
+  }
+
+  if (view === 'success-delete') {
+    return <DoneSheet title="Listing Deleted" body="This listing has been permanently removed." onClose={handleSuccessClose} />;
   }
 
   return (
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
     minHeight: verticalScale(56),
     borderRadius: radius.full,
     borderCurve: 'continuous',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.backgroundLight,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacingX.xl,
@@ -412,6 +413,6 @@ const styles = StyleSheet.create({
   doneCloseLabel: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
-    color: colors.white,
+    color: colors.gray700,
   },
 });

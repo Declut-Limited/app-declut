@@ -7,22 +7,17 @@ import type { CreateListingPayload, Listing } from '@/api/types';
 // LIVE, not STATIC: a listing's status is the visible half of its escrow lifecycle, and either
 // side can flip it while the other is looking (a buyer checking out while the seller has this
 // screen open, or vice versa) with no local mutation on this device to invalidate it.
-// listingDetailsModal additionally force-refetches on every focus (see its useFocusEffect) —
-// that bypasses staleness entirely, so this only governs how eagerly other viewers (chiefly
-// myListingDetailsModal, which has no such focus refetch) re-check.
-//
-// refetchInterval turns that "re-check" into a live poll while it actually matters: pending_sale
-// is the exact window where a buyer's confirm/report/cancel action can land at any second and the
-// other party (usually the seller, sitting on myListingDetailsModal) has no other way to find out
-// short of backgrounding the app and coming back. Once it's settled (active/sold/paused/reported)
-// there's nothing left to poll for, so this stops on its own — no interval running forever.
+// listingDetailsModal force-refetches on every focus (see its useFocusEffect) and both listing
+// detail screens refetch on pull-to-refresh — no background polling: the party whose action
+// actually changed something gets it live via their own mutation's cache invalidation, and the
+// other party catches up next time they look (return to the screen, or pull to refresh).
 export function useListingDetail(listingId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.listings.detail(listingId ?? ''),
     queryFn: () => listingsApi.getListing(listingId as string),
     enabled: !!listingId && (options?.enabled ?? true),
     staleTime: STALE_TIME.LIVE,
-    refetchInterval: (query) => (query.state.data?.status === 'pending_sale' ? 8000 : false),
+    refetchInterval: (query) => (query.state.data?.status === 'pending_sale' ? 10000 : false),
   });
 }
 

@@ -29,7 +29,7 @@ interface AuthContextValue {
   markKycVerified: () => void;
   signOut: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -150,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(async () => {
     const profile = await applyKycBypass(await getMyProfile());
     setUser(profile);
+    return profile;
   }, []);
 
   const signOut = useCallback(async () => {

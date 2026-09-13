@@ -2,23 +2,16 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { transactionsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
 import { STALE_TIME } from '@/api/staleTimes';
-import type { PurchaseStatusFilter, Transaction, TransactionStatus } from '@/api/types';
-
-// Only these two statuses are actually waiting on someone else's next move (the other party
-// confirming, an inspection deadline auto-cancelling, a webhook landing) — worth polling for.
-// pending_payment is waiting on Paystack's webhook specifically, already covered by
-// listingDetailsModal's own tight getTransactionResult poll while that overlay is up.
-function isInFlight(status: TransactionStatus | undefined) {
-  return status === 'escrow_active' || status === 'awaiting_inspection';
-}
+import type { PurchaseStatusFilter, Transaction } from '@/api/types';
 
 /** The buyer's own transaction for a listing. There's no GET /transactions/by-listing endpoint,
  *  so this pulls the buyer's first page of purchases for whichever status the listing's own
  *  status implies, and picks out the one that matches (see CLAUDE.md). Deliberately a distinct
  *  query key from History's own infinite purchases list (queryKeys.transactions.purchasesInfinite)
- *  — see the naming rule in queryKeys.ts. LIVE staleTime: escrow/inspection state here can change
- *  via a Paystack webhook or the seller's own action, neither of which this device's cache hears
- *  about any other way — refetchInterval turns that into an actual live poll while it's in flight. */
+ *  — see the naming rule in queryKeys.ts. LIVE staleTime, no polling: this device's own actions
+ *  (confirm/cancel/checkout) already invalidate this via their mutations' onSuccess; the other
+ *  party's action (a webhook landing, or the seller/buyer acting on their own device) is picked up
+ *  next time this screen is focused or pulled-to-refresh, not pushed live. */
 export function useMyPurchaseForListing(listingId: string | undefined, status: PurchaseStatusFilter, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.transactions.purchasesLookup(status),
@@ -26,15 +19,11 @@ export function useMyPurchaseForListing(listingId: string | undefined, status: P
     enabled: enabled && !!listingId,
     select: (data) => data.results.find((t) => t.listing?._id === listingId) ?? null,
     staleTime: STALE_TIME.LIVE,
-    refetchInterval: (query) => {
-      const match = query.state.data?.results.find((t) => t.listing?._id === listingId);
-      return isInFlight(match?.status) ? 8000 : false;
-    },
   });
 }
 
 /** Seller-side equivalent — myListingDetailsModal's lookup for a listing it's selling
- *  (GET /transactions, not /transactions/purchases). Same LIVE + polling reasoning as above. */
+ *  (GET /transactions, not /transactions/purchases). Same LIVE + no-polling reasoning as above. */
 export function useMyTransactionForListing(listingId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.transactions.myTransactionsLookup(),
@@ -42,10 +31,6 @@ export function useMyTransactionForListing(listingId: string | undefined, enable
     enabled: enabled && !!listingId,
     select: (data) => data.results.find((t) => t.listing?._id === listingId) ?? null,
     staleTime: STALE_TIME.LIVE,
-    refetchInterval: (query) => {
-      const match = query.state.data?.results.find((t) => t.listing?._id === listingId);
-      return isInFlight(match?.status) ? 8000 : false;
-    },
   });
 }
 

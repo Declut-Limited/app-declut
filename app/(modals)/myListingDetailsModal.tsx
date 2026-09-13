@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Animated, {
@@ -258,6 +259,16 @@ export default function MyListingDetailsModal() {
   // handleRefresh below), not a lightweight native spinner over stale content.
   const loading = isInitialLoading || isFetching;
   const error = listingQueryError ? extractErrorMessage(listingQueryError, 'Could not load this listing.') : null;
+
+  // Unlike listingDetailsModal, this screen used to lean on useListingDetail's own refetchInterval
+  // to pick up a buyer's action (confirm/cancel) without the seller having to pull-to-refresh — now
+  // that polling's gone (see useListings.ts), refetch on every focus instead, matching the buyer
+  // screen's own pattern, so returning to this screen is what catches the seller up.
+  useFocusEffect(
+    useCallback(() => {
+      refetchQuery();
+    }, [refetchQuery])
+  );
 
   const pauseMutation = usePauseListingMutation();
   const resumeMutation = useResumeListingMutation();

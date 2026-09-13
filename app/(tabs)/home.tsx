@@ -113,15 +113,21 @@ export default function HomeScreen() {
           progressBackgroundColor={colors.white}
         />
       }
+      header={
+        // ScreenContainer's `header` slot is deliberately full-bleed/unpadded (see ScreenHeader's
+        // own doc comment) — this content used to be a normal scrollable child, getting its padding
+        // for free from the ScrollView's contentContainerStyle, so it needs its own now.
+        <View style={styles.homeHeader}>
+          <Text style={styles.welcome}>Welcome back, {user?.name?.split(' ')[0] ?? 'there'}</Text>
+          <View style={styles.locationRow}>
+            <Icons.MapPinIcon size={verticalScale(18)} color={colors.gray400} />
+            <Text style={styles.locationText}>
+              {locationLabel ?? (locationDenied ? 'Location unavailable' : 'Finding your location…')}
+            </Text>
+          </View>
+        </View>
+      }
     >
-      <Text style={styles.welcome}>Welcome back, {user?.name?.split(' ')[0] ?? 'there'}</Text>
-      <View style={styles.locationRow}>
-        <Icons.MapPinIcon size={verticalScale(18)} color={colors.gray400} />
-        <Text style={styles.locationText}>
-          {locationLabel ?? (locationDenied ? 'Location unavailable' : 'Finding your location…')}
-        </Text>
-      </View>
-
       <Pressable onPress={guard(goToSearch)} style={styles.searchBar}>
         <Icon name="search-normal-1" variant="linear" size={verticalScale(18)} color={colors.gray400} />
         <Text style={styles.searchPlaceholder}>What are you looking for?</Text>
@@ -221,6 +227,10 @@ function ListingSection({
 }
 
 const styles = StyleSheet.create({
+  homeHeader: {
+    paddingHorizontal: spacingX.lg,
+    paddingTop: spacingY.xl,
+  },
   welcome: {
     fontFamily: fontFamily.display_400,
     fontSize: fontSize['4xl'],
@@ -232,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: scale(4),
     marginTop: verticalScale(2),
-    marginBottom: spacingY.lg,
+    marginBottom: spacingY.md,
   },
   locationText: {
     fontFamily: fontFamily.regular,
@@ -252,6 +262,7 @@ const styles = StyleSheet.create({
     paddingLeft: spacingX.lg,
     paddingRight: spacingX.sm,
     marginBottom: spacingY.lg,
+    marginTop: -spacingX.md,
   },
   searchPlaceholder: {
     flex: 1,
