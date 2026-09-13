@@ -20,6 +20,13 @@ interface ListingActionsSheetProps {
    *  there would just navigate back to itself, so that screen omits it. myListings.tsx (tapping a
    *  card in the list) leaves it in, since that's the only way there to a single listing's detail. */
   hideViewListing?: boolean;
+  /** Called instead of onClose once a delete actually succeeds. myListingDetailsModal passes
+   *  router.back() here — after a delete, the detail query this screen is showing gets removed
+   *  from cache (see useDeleteListingMutation), which would otherwise leave the screen stuck
+   *  re-fetching a listing that no longer exists and landing on its own "not found" state instead
+   *  of just taking the seller back to their list. myListings.tsx doesn't need this: removing the
+   *  card via cache invalidation is already the correct visual result on a list screen. */
+  onDeleted?: () => void;
 }
 
 type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delete' | 'success-pause' | 'success-resume' | 'success-delete';
@@ -35,7 +42,7 @@ type SheetView = 'actions' | 'confirm-pause' | 'confirm-resume' | 'confirm-delet
 // or success sheet instead of stacking one on top of the other. Pause/resume/delete all invalidate
 // their own caches (see useListings.ts) — myListings' list and myListingDetailsModal's own detail
 // query pick up the change on their own, no manual refetch callback needed here.
-export function ListingActionsSheet({ listing, onClose, hideViewListing }: ListingActionsSheetProps) {
+export function ListingActionsSheet({ listing, onClose, hideViewListing, onDeleted }: ListingActionsSheetProps) {
   const guard = useSingleTap();
   const [view, setView] = useState<SheetView>('actions');
   const pauseMutation = usePauseListingMutation();
@@ -107,7 +114,8 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing }: Listi
   }
 
   function handleSuccessClose() {
-    onClose();
+    if (view === 'success-delete' && onDeleted) onDeleted();
+    else onClose();
   }
 
   if (view === 'confirm-pause') {

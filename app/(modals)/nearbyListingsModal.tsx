@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
-import { EmptyState, ListingCard, ListingCardSkeleton, ScreenContainer, ScreenHeader } from '@/components';
+import { EmptyState, ListingCard, ListingCardSkeleton, NewListingsBanner, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, spacingY } from '@/constants/theme';
 import { listingsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
@@ -95,6 +95,7 @@ export default function NearbyListingsModal() {
           onEndReachedThreshold={0.4}
           onEndReached={hasMore ? loadMore : undefined}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={<NewListingsBanner onRefresh={refresh} />}
           ListEmptyComponent={
             loading || refreshing ? (
               <ListingCardSkeleton count={SKELETON_COUNT} variant="all" />

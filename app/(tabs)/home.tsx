@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Icons from 'phosphor-react-native';
-import { EmptyState, ListingCard, ListingCardSkeleton, RecentListingCard, ScreenContainer } from '@/components';
+import { EmptyState, ListingCard, ListingCardSkeleton, NewListingsBanner, RecentListingCard, ScreenContainer } from '@/components';
 import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
@@ -84,6 +84,7 @@ export default function HomeScreen() {
     refetchRecent();
   }
 
+
   function goToSearch() {
     router.push('/(modals)/searchResultsModal');
   }
@@ -132,6 +133,8 @@ export default function HomeScreen() {
         <Icon name="search-normal-1" variant="linear" size={verticalScale(18)} color={colors.gray400} />
         <Text style={styles.searchPlaceholder}>What are you looking for?</Text>
       </Pressable>
+
+      <NewListingsBanner onRefresh={onRefresh} />
 
       <View style={styles.escrowBanner}>
         <View style={styles.escrowIconWrap}>

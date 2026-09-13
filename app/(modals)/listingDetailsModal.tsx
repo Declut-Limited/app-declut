@@ -56,6 +56,7 @@ import {
   useMyPurchaseForListing,
 } from '@/hooks/queries/useTransactions';
 import { useLeaveReviewMutation, useReviewForListing } from '@/hooks/queries/useReviews';
+import { useListingSubscription } from '@/hooks/realtime/useListingSubscription';
 import { calculatePaystackFee } from '@/lib/paystackFees';
 import type { Listing, Review } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
@@ -113,6 +114,40 @@ interface MediaItem {
 /** Adapts Icon's {name,variant,size,color} shape to EmptyState's Phosphor-shaped icon prop (size?: string | number). */
 function DangerIcon({ size, color }: { size?: number | string; color?: string }) {
   return <Icon name="danger" variant="linear" size={typeof size === 'number' ? size : undefined} color={color} />;
+}
+
+interface ListingNotFoundStateProps {
+  message: string;
+  onGoBack: () => void;
+  onBrowseListings: () => void;
+}
+
+// Dedicated full-screen state for a confirmed 404 (listing deleted, or paused and viewed by
+// someone other than its owner — see the Postman collection's note on GET /listings/:id) — a step
+// up from the plain EmptyState used for every other kind of load failure (network/500), since a
+// dead link deserves an actual recovery path, not just an icon and a sentence. `message` is always
+// the backend's own error text verbatim (via extractErrorMessage), never rewritten here.
+function ListingNotFoundState({ message, onGoBack, onBrowseListings }: ListingNotFoundStateProps) {
+  const guard = useSingleTap();
+
+  return (
+    <SafeAreaView style={styles.notFoundRoot} edges={['top', 'bottom']}>
+      <View style={styles.notFoundContent}>
+        <View style={styles.notFoundIconWrap}>
+          <Icons.SmileyXEyesIcon size={verticalScale(60)} color={colors.gray400} />
+        </View>
+        <Text style={styles.notFoundTitle}>Listing Not Found</Text>
+        <Text style={styles.notFoundBody}>{message}</Text>
+
+        <Pressable onPress={guard(onBrowseListings)} style={styles.notFoundPrimaryButton}>
+          <Text style={styles.notFoundPrimaryLabel}>Browse Other Listings</Text>
+        </Pressable>
+        <Pressable onPress={guard(onGoBack)} hitSlop={8} style={styles.notFoundSecondaryButton}>
+          <Text style={styles.notFoundSecondaryLabel}>Go Back</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
 }
 
 interface AccordionEntry {
@@ -181,6 +216,9 @@ export default function ListingDetailsModal() {
   const isOwnListing = isMine === 'true';
   const { user, refreshUser } = useAuth();
   const guard = useSingleTap();
+  // Realtime coverage for a listing this device doesn't own — an owner's own listings already
+  // arrive automatically in their personal room (see src/lib/socket.ts), so this is skipped there.
+  useListingSubscription(id, !isOwnListing);
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const heroScrollRef = useRef<ScrollView>(null);
@@ -224,6 +262,7 @@ export default function ListingDetailsModal() {
     refetch: reloadListing,
   } = useListingDetail(id);
   const error = listingQueryError ? extractErrorMessage(listingQueryError, 'Could not load this listing.') : null;
+  const isNotFound = axios.isAxiosError(listingQueryError) && listingQueryError.response?.status === 404;
 
   // Deliberate reloads (pull-to-refresh, focus-return, post-payment) show the same full-page
   // skeleton as the initial fetch — but useListingDetail's own refetchInterval (see useListings.ts)
@@ -528,6 +567,16 @@ export default function ListingDetailsModal() {
     );
   }
 
+  if (isNotFound) {
+    return (
+      <ListingNotFoundState
+        message={error ?? 'This listing could not be found.'}
+        onGoBack={() => router.back()}
+        onBrowseListings={() => router.replace('/(tabs)/home')}
+      />
+    );
+  }
+
   if (error || !listing) {
     return (
       <SafeAreaView style={styles.centerFlex} edges={['top', 'bottom']}>
@@ -650,7 +699,7 @@ export default function ListingDetailsModal() {
             />
           ) : null}
 
-          {listing.status !== 'active' ? (
+          {listing.status === 'pending_sale' || listing.status === 'sold' ? (
             <SellerContactCard
               seller={listing.seller}
               address={listing.address ?? listing.locationLabel}
@@ -707,7 +756,7 @@ export default function ListingDetailsModal() {
         </View>
       </View>
 
-      {!isOwnListing && listing.status !== 'paused' ? (
+      {!isOwnListing ? (
         <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
           {listing.status === 'active' ? (
             <View style={styles.footerPill}>
@@ -1533,6 +1582,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
+  },
+  notFoundRoot: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  notFoundContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX['2xl'],
+  },
+  notFoundIconWrap: {
+    width: verticalScale(96),
+    height: verticalScale(96),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.xl,
+  },
+  notFoundTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize['2xl'],
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.sm,
+  },
+  notFoundBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY['2xl'],
+  },
+  notFoundPrimaryButton: {
+    width: '100%',
+    minHeight: verticalScale(56),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+    marginBottom: spacingY.md,
+  },
+  notFoundPrimaryLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
+  },
+  notFoundSecondaryButton: {
+    minHeight: verticalScale(44),
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.xl,
+  },
+  notFoundSecondaryLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray500,
   },
   scrollContent: {
     paddingBottom: spacingY['3xl'],

@@ -2,31 +2,36 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { listingsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
 import { STALE_TIME } from '@/api/staleTimes';
+import { useRealtime } from '@/contexts/RealtimeContext';
 import type { CreateListingPayload, Listing } from '@/api/types';
 
 // LIVE, not STATIC: a listing's status is the visible half of its escrow lifecycle, and either
 // side can flip it while the other is looking (a buyer checking out while the seller has this
-// screen open, or vice versa) with no local mutation on this device to invalidate it.
-// listingDetailsModal force-refetches on every focus (see its useFocusEffect) and both listing
-// detail screens refetch on pull-to-refresh — no background polling: the party whose action
-// actually changed something gets it live via their own mutation's cache invalidation, and the
-// other party catches up next time they look (return to the screen, or pull to refresh).
+// screen open, or vice versa). No background polling here — the party whose action actually
+// changed something gets it live via their own mutation's cache invalidation, listingDetailsModal
+// force-refetches on every focus (see its useFocusEffect), and the *other* party (previously only
+// caught up on their own next focus/pull-to-refresh) now gets it pushed instantly too: this
+// screen subscribes to the listing over the realtime socket (see useListingSubscription) unless
+// it's the viewer's own, in which case it's already in their personal room automatically — either
+// way RealtimeContext patches this exact cache entry the moment a listing:update event lands.
 export function useListingDetail(listingId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.listings.detail(listingId ?? ''),
     queryFn: () => listingsApi.getListing(listingId as string),
     enabled: !!listingId && (options?.enabled ?? true),
     staleTime: STALE_TIME.LIVE,
-    refetchInterval: (query) => (query.state.data?.status === 'pending_sale' ? 10000 : false),
   });
 }
 
 /** Applies the listing a mutation just returned straight into its detail cache (no refetch flash
- *  on the screen that triggered it) and invalidates every public list it could appear in or drop
- *  out of — mine/nearby/new/search all share the `lists()` prefix for exactly this. */
+ *  on the screen that triggered it) and invalidates `mine` — the only list endpoint that includes
+ *  the caller's own listings. nearby/new/search all explicitly exclude them (see queryKeys.ts), so
+ *  pausing/resuming/deleting your own listing can never change what any of those three return for
+ *  you, regardless of the status change — invalidating them too used to eagerly refetch Home's
+ *  nearby/new teasers for nothing, since Home stays mounted in the background as a tab. */
 function applyListingUpdate(queryClient: QueryClient, updated: Listing) {
   queryClient.setQueryData(queryKeys.listings.detail(updated._id), updated);
-  queryClient.invalidateQueries({ queryKey: queryKeys.listings.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.listings.mine() });
 }
 
 /** Optimistically flips the cached status the instant the button is tapped, rather than waiting
@@ -72,17 +77,26 @@ export function useDeleteListingMutation() {
     mutationFn: (listingId: string) => listingsApi.deleteListing(listingId),
     onSuccess: (_result, listingId) => {
       queryClient.removeQueries({ queryKey: queryKeys.listings.detail(listingId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.listings.lists() });
+      // Only `mine` — see applyListingUpdate's comment above; same reasoning applies to delete.
+      queryClient.invalidateQueries({ queryKey: queryKeys.listings.mine() });
     },
   });
 }
 
 export function useCreateListingMutation() {
   const queryClient = useQueryClient();
+  const { markOwnListingId } = useRealtime();
   return useMutation({
     mutationFn: (payload: CreateListingPayload) => listingsApi.createListing(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.listings.lists() });
+    onSuccess: (created) => {
+      // Suppresses the "New listings available" banner from firing off the broadcast of this
+      // exact upload — the author already knows, they're looking at the publish-success screen.
+      markOwnListingId(created._id);
+      // Only `mine` — nearby/new/search all exclude the caller's own listings (see queryKeys.ts),
+      // so the listing just created can never appear in any of them on this device regardless of
+      // timing. Invalidating the full `lists()` prefix used to eagerly refetch Home's nearby/new
+      // teasers for nothing, since Home stays mounted in the background as a tab.
+      queryClient.invalidateQueries({ queryKey: queryKeys.listings.mine() });
     },
   });
 }

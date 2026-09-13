@@ -22,7 +22,11 @@ export const queryKeys = {
   listings: {
     all: ['listings'] as const,
     lists: () => [...queryKeys.listings.all, 'list'] as const,
-    mineInfinite: (status: MyListingsStatusFilter | 'all') => [...queryKeys.listings.lists(), 'mine', 'infinite', status] as const,
+    // Prefix over every status-filtered mineInfinite() variant — GET /listings/mine is the only
+    // list endpoint that includes the caller's own listings (nearby/new/search all explicitly
+    // exclude them, per the Postman collection), so it's the only one worth invalidating on create.
+    mine: () => [...queryKeys.listings.lists(), 'mine'] as const,
+    mineInfinite: (status: MyListingsStatusFilter | 'all') => [...queryKeys.listings.mine(), 'infinite', status] as const,
     nearbyTeaser: (params: NearbyKeyParams) => [...queryKeys.listings.lists(), 'nearby', 'teaser', params] as const,
     nearbyInfinite: (params: NearbyKeyParams) => [...queryKeys.listings.lists(), 'nearby', 'infinite', params] as const,
     newTeaser: () => [...queryKeys.listings.lists(), 'new', 'teaser'] as const,

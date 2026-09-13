@@ -17,6 +17,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { DMSerifText_400Regular } from '@expo-google-fonts/dm-serif-text';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { RealtimeProvider } from '@/contexts/RealtimeContext';
 import { NetworkProvider } from '@/contexts/NetworkContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { SearchFilterProvider } from '@/contexts/SearchFilterContext';
@@ -63,6 +64,7 @@ export default function RootLayout() {
             <QueryClientProvider client={queryClient}>
             <IconContext.Provider value={{ size: verticalScale(22), color: colors.gray700, weight: 'regular' }}>
               <AuthProvider>
+                <RealtimeProvider>
                 <NotificationProvider>
                   <NetworkProvider>
                     <SearchFilterProvider>
@@ -91,6 +93,7 @@ export default function RootLayout() {
                     </SearchFilterProvider>
                   </NetworkProvider>
                 </NotificationProvider>
+                </RealtimeProvider>
               </AuthProvider>
             </IconContext.Provider>
             </QueryClientProvider>

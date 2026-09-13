@@ -17,6 +17,7 @@ export const apiClient = axios.create({
 // fills it once at boot and setSessionTokens/clearSessionTokens keep it in sync.
 let currentTokens: AuthTokens | null = null;
 let sessionExpiredHandler: (() => void) | null = null;
+let tokensRefreshedHandler: ((tokens: AuthTokens) => void) | null = null;
 
 export async function hydrateSession(): Promise<AuthTokens | null> {
   currentTokens = await getTokens();
@@ -40,6 +41,13 @@ export function getAccessToken(): string | null {
 /** AuthProvider registers this to force a sign-out when the refresh token is itself rejected. */
 export function onSessionExpired(handler: () => void): void {
   sessionExpiredHandler = handler;
+}
+
+/** AuthProvider registers this to re-sync the realtime socket's auth whenever the access token
+ *  rotates — a live socket doesn't re-verify mid-connection, so left alone it would keep working
+ *  past the old token's expiry rather than actually failing loudly (see src/lib/socket.ts). */
+export function onTokensRefreshed(handler: (tokens: AuthTokens) => void): void {
+  tokensRefreshedHandler = handler;
 }
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -109,7 +117,10 @@ async function refreshTokens(): Promise<AuthTokens | null> {
   if (!refreshInFlight) {
     refreshInFlight = requestTokenRefresh(currentTokens.refreshToken)
       .then(async (tokens) => {
-        if (tokens) await setSessionTokens(tokens);
+        if (tokens) {
+          await setSessionTokens(tokens);
+          tokensRefreshedHandler?.(tokens);
+        }
         return tokens;
       })
       .finally(() => {
@@ -175,13 +186,32 @@ interface ErrorBody {
 }
 
 export function extractErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
-  if (axios.isAxiosError(error)) {
-    const body = error.response?.data as ErrorBody | undefined;
-    // Real deployed shape is { success: false, error: { message, statusCode, ... } };
-    // some endpoints may still return the bare Nest default { message, statusCode, error }.
-    const message = body?.error?.message ?? body?.message;
-    if (Array.isArray(message)) return message.join('\n');
-    if (typeof message === 'string') return message;
+  if (!axios.isAxiosError(error)) return fallback;
+
+  // No response at all — the request either never reached the server (offline, DNS failure,
+  // server down) or did and timed out waiting. Neither of these means the server rejected
+  // anything, so they must never fall through to a caller's fallback written for that case (e.g.
+  // sign-in's "Invalid credentials" would be actively misleading for a connectivity failure).
+  if (!error.response) {
+    if (error.code === 'ECONNABORTED' || /timeout/i.test(error.message)) {
+      return 'The request timed out. Please check your connection and try again.';
+    }
+    return 'Could not reach the server. Check your internet connection and try again.';
   }
+
+  const body = error.response.data as ErrorBody | undefined;
+  // Real deployed shape is { success: false, error: { message, statusCode, ... } };
+  // some endpoints may still return the bare Nest default { message, statusCode, error }.
+  const message = body?.error?.message ?? body?.message;
+  if (Array.isArray(message)) return message.join('\n');
+  if (typeof message === 'string') return message;
+
+  // A 5xx with no message body is a server-side failure, not whatever client-rejection reason the
+  // caller's fallback describes — that fallback is only appropriate when the server did actually
+  // reject the request for a client-side reason (wrong password, bad input, etc.).
+  if (error.response.status >= 500) {
+    return 'Something went wrong on our end. Please try again in a moment.';
+  }
+
   return fallback;
 }

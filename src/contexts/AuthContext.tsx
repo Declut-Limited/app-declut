@@ -2,11 +2,12 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import axios from 'axios';
 import { router } from 'expo-router';
 import { onlineManager } from '@tanstack/react-query';
-import { clearSessionTokens, hydrateSession, onSessionExpired, setSessionTokens } from '@/api/client';
+import { clearSessionTokens, hydrateSession, onSessionExpired, onTokensRefreshed, setSessionTokens } from '@/api/client';
 import { getMyProfile } from '@/api/users';
 import { logout as logoutRequest, resendVerificationEmail } from '@/api/auth';
 import type { AuthTokens, User } from '@/api/types';
 import { queryClient } from '@/lib/queryClient';
+import { connectSocket, disconnectSocket, updateSocketToken } from '@/lib/socket';
 import { showWarningToast } from '@/lib/toast';
 import {
   clearEmailOtpToken as persistClearEmailOtpToken,
@@ -70,12 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Same reasoning as the manual signOut() below — every cached listing/transaction/review/
       // bank-account query is scoped to whoever was just signed out.
       queryClient.clear();
+      disconnectSocket();
       showWarningToast('Session expired', 'Please sign in again to continue.');
       // Force navigation immediately regardless of which screen is currently mounted — updating
       // `status` alone only redirects if app/index.tsx happens to be the active route. A user deep
       // in (tabs)/home or a modal would otherwise be silently left on a now-signed-out screen.
       router.replace('/(auth)/sign-in');
     });
+  }, []);
+
+  // A live socket doesn't re-verify mid-connection — without this it would keep working past the
+  // old access token's expiry on borrowed time instead of actually failing loudly (see
+  // src/lib/socket.ts's own note). client.ts calls this every time /auth/refresh rotates the pair.
+  useEffect(() => {
+    onTokensRefreshed((tokens) => updateSocketToken(tokens.accessToken));
   }, []);
 
   const hydrate = useCallback(async () => {
@@ -98,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await applyKycBypass(await getMyProfile());
       setUser(profile);
       setStatus('authenticated');
+      connectSocket(tokens.accessToken);
     } catch (e) {
       // A 401 here means the interceptor's own refresh attempt (client.ts) already exhausted its
       // retries and got a definitive rejection from the server — tokens are already cleared and
@@ -136,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = await applyKycBypass(await getMyProfile());
     setUser(profile);
     setStatus('authenticated');
+    connectSocket(tokens.accessToken);
     return profile;
   }, []);
 
@@ -144,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await setSessionTokens(tokens);
       updateEmailOtpToken(otpToken);
       setStatus('authenticated');
+      connectSocket(tokens.accessToken);
       getMyProfile()
         .then(applyKycBypass)
         .then(setUser)
@@ -192,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // in — on a shared device the next sign-in must never render a stale frame of this account's
     // data before its own fetches land.
     queryClient.clear();
+    disconnectSocket();
   }, [updateEmailOtpToken]);
 
   const completeOnboarding = useCallback(async () => {

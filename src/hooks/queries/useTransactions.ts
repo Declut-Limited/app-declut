@@ -9,9 +9,10 @@ import type { PurchaseStatusFilter, Transaction } from '@/api/types';
  *  status implies, and picks out the one that matches (see CLAUDE.md). Deliberately a distinct
  *  query key from History's own infinite purchases list (queryKeys.transactions.purchasesInfinite)
  *  — see the naming rule in queryKeys.ts. LIVE staleTime, no polling: this device's own actions
- *  (confirm/cancel/checkout) already invalidate this via their mutations' onSuccess; the other
- *  party's action (a webhook landing, or the seller/buyer acting on their own device) is picked up
- *  next time this screen is focused or pulled-to-refresh, not pushed live. */
+ *  (confirm/cancel/checkout) already invalidate this via their mutations' onSuccess, and the other
+ *  party's action (a webhook landing, or the seller/buyer acting on their own device) now arrives
+ *  live too — RealtimeContext invalidates queryKeys.transactions.all off the socket's own
+ *  `notification`/`listing:update` events, so this refetches without waiting on a focus/refresh. */
 export function useMyPurchaseForListing(listingId: string | undefined, status: PurchaseStatusFilter, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.transactions.purchasesLookup(status),
@@ -23,7 +24,7 @@ export function useMyPurchaseForListing(listingId: string | undefined, status: P
 }
 
 /** Seller-side equivalent — myListingDetailsModal's lookup for a listing it's selling
- *  (GET /transactions, not /transactions/purchases). Same LIVE + no-polling reasoning as above. */
+ *  (GET /transactions, not /transactions/purchases). Same LIVE + realtime reasoning as above. */
 export function useMyTransactionForListing(listingId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.transactions.myTransactionsLookup(),

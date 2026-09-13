@@ -602,6 +602,7 @@ export default function MyListingDetailsModal() {
           <ListingActionsSheet
             listing={listing}
             onClose={() => setActionSheetOpen(false)}
+            onDeleted={() => router.back()}
             hideViewListing
           />
         </View>
