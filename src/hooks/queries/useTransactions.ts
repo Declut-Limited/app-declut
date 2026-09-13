@@ -91,3 +91,15 @@ export function useCancelPurchaseMutation() {
     onSuccess: (transaction: Transaction) => invalidateAfterTransactionChange(queryClient, transaction.listing?._id),
   });
 }
+
+// Buyer-only, one-time. The response only carries the three changed fields (not the full
+// Transaction, and no listing id to target a specific detail() key), so this just invalidates the
+// whole transactions.all prefix rather than trying to patch a partial object into the cache —
+// myTransaction (via useMyPurchaseForListing) refetches and picks up the new deadline.
+export function useRequestInspectionExtensionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (transactionId: string) => transactionsApi.requestInspectionExtension(transactionId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all }),
+  });
+}

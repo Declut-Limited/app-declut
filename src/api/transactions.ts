@@ -68,3 +68,13 @@ export async function cancelPurchase(transactionId: string) {
   const res = await apiClient.post<ApiEnvelope<Transaction>>(`/transactions/${transactionId}/cancel-purchase`);
   return res.data.data;
 }
+
+// Buyer-only, one-time — only callable once inspectionPeriodEnded is true and inspectionExtended
+// is still false (a second call 400s). Response is just the three changed fields, not the full
+// Transaction, so callers should invalidate/refetch rather than trying to merge a partial object.
+export async function requestInspectionExtension(transactionId: string) {
+  const res = await apiClient.post<
+    ApiEnvelope<Pick<Transaction, 'inspectionExtended' | 'inspectionExtendedBy' | 'inspectionExtensionEndDate'>>
+  >(`/transactions/${transactionId}/add-inspection-extension`);
+  return res.data.data;
+}

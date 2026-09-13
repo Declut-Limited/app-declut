@@ -54,11 +54,13 @@ import {
   useCheckoutMutation,
   useConfirmTransactionMutation,
   useMyPurchaseForListing,
+  useRequestInspectionExtensionMutation,
 } from '@/hooks/queries/useTransactions';
 import { useLeaveReviewMutation, useReviewForListing } from '@/hooks/queries/useReviews';
 import { useListingSubscription } from '@/hooks/realtime/useListingSubscription';
+import { useSystemSettings } from '@/hooks/queries/useSystemSettings';
 import { calculatePaystackFee } from '@/lib/paystackFees';
-import type { Listing, Review } from '@/api/types';
+import type { Listing, Review, SystemSettingsInspectionWindow, Transaction } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate, getProfileImage } from '@/utils/helpers';
 import { CONDITION_OPTIONS } from '@/constants/formOptions';
@@ -67,16 +69,13 @@ import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 const PAYSTACK_CALLBACK_URL = 'declut://payment-callback';
 const PAYMENT_POLL_INTERVAL_MS = 10000;
 const PAYMENT_POLL_MAX_ATTEMPTS = 10;
-const INSPECTION_WINDOW_HOURS = 48;
+// Fallback only, used the one frame before GET /settings resolves — the real figure is
+// settings.inspectionWindow.inspectionPeriod (days) once useSystemSettings loads.
+const INSPECTION_WINDOW_HOURS_FALLBACK = 48;
 
 // Reuses the Places API key — same Google Cloud project. If the static map comes back blank/403,
 // "Maps Static API" needs enabling for this key in Google Cloud Console.
 const GOOGLE_STATIC_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
-
-// Static copy, not backend-driven — matches the Figma export verbatim. "Extend by 24 hours" has
-// no backing endpoint yet (nothing in the Postman collection covers a per-transaction inspection
-// extension), so the link below just surfaces a toast rather than pretending to call something real.
-const ESCROW_NOTE_BODY = `Pick up and inspect within ${INSPECTION_WINDOW_HOURS} hours. No pickup by then and the order auto-cancels with a 10% fee (half compensates the seller). After handover, funds release automatically at the end of the window unless you report a problem.`;
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -336,6 +335,24 @@ export default function ListingDetailsModal() {
   const confirmTransactionMutation = useConfirmTransactionMutation();
   const cancelTransactionMutation = useCancelTransactionMutation();
   const leaveReviewMutation = useLeaveReviewMutation();
+
+  // Inspection-deadline extension — settings/mutation live here (not inside EscrowHoldNote) since
+  // the confirm sheet is rendered at this component's top level, same as every other sheet below.
+  const { data: settings } = useSystemSettings();
+  const requestExtensionMutation = useRequestInspectionExtensionMutation();
+  const [extendSheetOpen, setExtendSheetOpen] = useState(false);
+  const [extendSuccessDeadline, setExtendSuccessDeadline] = useState<string | null>(null);
+
+  function handleRequestExtension() {
+    if (!myTransaction) return;
+    requestExtensionMutation.mutate(myTransaction._id, {
+      onSuccess: (result) => {
+        setExtendSheetOpen(false);
+        setExtendSuccessDeadline(result.inspectionExtensionEndDate ?? null);
+      },
+      onError: (e) => showErrorToast('Could not extend deadline', extractErrorMessage(e)),
+    });
+  }
 
   // Thumbnail taps drive the carousel programmatically; swiping drives activeIndex the other way
   // via the ScrollView's onMomentumScrollEnd below — both paths stay in sync either way.
@@ -708,7 +725,14 @@ export default function ListingDetailsModal() {
             />
           ) : null}
 
-          {listing.status === 'pending_sale' ? <EscrowHoldNote amount={myTransaction?.amount ?? listing.price} /> : null}
+          {listing.status === 'pending_sale' ? (
+            <EscrowHoldNote
+              transaction={myTransaction}
+              fallbackAmount={listing.price}
+              inspectionWindow={settings?.inspectionWindow}
+              onRequestExtend={() => setExtendSheetOpen(true)}
+            />
+          ) : null}
 
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.sectionBody}>{listing.description}</Text>
@@ -826,6 +850,24 @@ export default function ListingDetailsModal() {
             onDismiss={() => setReviewSheetOpen(false)}
             onSubmit={handleSubmitReview}
           />
+        </View>
+      ) : null}
+
+      {extendSheetOpen && myTransaction ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ExtendDeadlineConfirmSheet
+            transaction={myTransaction}
+            inspectionWindow={settings?.inspectionWindow}
+            loading={requestExtensionMutation.isPending}
+            onCancel={() => setExtendSheetOpen(false)}
+            onConfirm={handleRequestExtension}
+          />
+        </View>
+      ) : null}
+
+      {extendSuccessDeadline ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ExtendSuccessSheet deadline={extendSuccessDeadline} onClose={() => setExtendSuccessDeadline(null)} />
         </View>
       ) : null}
 
@@ -967,9 +1009,72 @@ function SellerContactCard({ seller, address, coordinates, compact }: SellerCont
   );
 }
 
-// Only shown while a transaction on this listing is actually holding funds (status === 'pending_sale').
-function EscrowHoldNote({ amount }: { amount: number }) {
+// Shown while a transaction on this listing is actually holding funds (status === 'pending_sale').
+// Two card shapes off myTransaction's real inspection fields — these flow through every
+// transaction response (list and detail alike) with no extra wiring, see Transaction in
+// api/types.ts:
+//   1. inspectionPeriodEnded === false → the countdown card, with its own "Extend by N days"
+//      button — extension can be requested proactively, not only once the window has run out.
+//   2. inspectionPeriodEnded === true → the expired card, same extend button when still available.
+// Both buttons only show while allowExtension is on AND the one-time extension hasn't been used yet
+// (inspectionExtended === false) — allowExtension is the system-wide "can extensions happen at all"
+// toggle, checked alongside (not instead of) the per-transaction inspectionExtended state. Once
+// extended, inspectionExtensionEndDate supersedes inspectionDeadlineAt entirely — the two are never
+// combined/averaged, only one is ever the "active" deadline at a time. Tapping either button opens
+// the shared ExtendDeadlineConfirmSheet (rendered at the top level, see the main component).
+function EscrowHoldNote({
+  transaction,
+  fallbackAmount,
+  inspectionWindow,
+  onRequestExtend,
+}: {
+  transaction: Transaction | null;
+  fallbackAmount: number;
+  inspectionWindow: SystemSettingsInspectionWindow | undefined;
+  onRequestExtend: () => void;
+}) {
   const guard = useSingleTap();
+
+  const amount = transaction?.amount ?? fallbackAmount;
+  const periodEnded = transaction?.inspectionPeriodEnded ?? false;
+  const extended = transaction?.inspectionExtended ?? false;
+  const activeDeadline = extended ? transaction?.inspectionExtensionEndDate : transaction?.inspectionDeadlineAt;
+  const canRequestExtension = !!inspectionWindow?.allowExtension && !extended;
+  const extensionDays = inspectionWindow?.maxExtensionPeriod ?? 5;
+  // inspectionPeriod is denominated in days — same unit as maxExtensionPeriod/inspectionExtendedBy.
+  const windowHours = inspectionWindow ? inspectionWindow.inspectionPeriod * 24 : INSPECTION_WINDOW_HOURS_FALLBACK;
+
+  if (periodEnded) {
+    return (
+      <View style={styles.escrowExpiredCard}>
+        <View style={styles.escrowTitleRow}>
+          <Icon name="danger" variant="bold" size={verticalScale(18)} color={colors.danger} />
+          <Text style={styles.escrowExpiredTitle}>Inspection Deadline Expired</Text>
+        </View>
+        <Text style={styles.escrowExpiredBody}>The inspection period for this transaction has ended.</Text>
+        {activeDeadline ? (
+          <Text style={styles.escrowExpiredDeadline}>Deadline was {dayjs(activeDeadline).format('D MMM, YYYY. h:mm A')}.</Text>
+        ) : null}
+
+        {canRequestExtension ? (
+          <Pressable onPress={guard(onRequestExtend)} style={styles.escrowExpiredButton}>
+            <Text style={styles.escrowExpiredButtonLabel}>
+              Extend by {extensionDays} day{extensionDays === 1 ? '' : 's'}
+            </Text>
+          </Pressable>
+        ) : extended ? (
+          <Pressable
+            onPress={guard(() => showWarningToast('Not available yet', "Contacting support isn't available yet."))}
+            style={styles.escrowExpiredButton}
+          >
+            <Text style={styles.escrowExpiredButtonLabel}>Contact Support</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.escrowExpiredUnavailableText}>Extensions aren't available for this transaction.</Text>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.escrowCard}>
@@ -977,13 +1082,160 @@ function EscrowHoldNote({ amount }: { amount: number }) {
         <Icon name="shield-tick" variant="bold" size={verticalScale(18)} color={colors.warning700} />
         <Text style={styles.escrowTitle}>{formatCurrency(amount, 2)} Held In Escrow</Text>
       </View>
-      <Text style={styles.escrowBody}>{ESCROW_NOTE_BODY}</Text>
-      <Pressable
-        onPress={guard(() => showWarningToast('Not available yet', "Extending the inspection window isn't available in the app yet."))}
-        hitSlop={8}
-      >
-        <Text style={styles.escrowExtendLink}>Running Late? Extend by 24 hours (once)</Text>
+      <Text style={styles.escrowBody}>
+        Pick up and inspect within {windowHours} hours. No pickup by then and the order auto-cancels with a 10% fee
+        (half compensates the seller). After handover, funds release automatically at the end of the window unless
+        you report a problem.
+      </Text>
+
+      {activeDeadline ? (
+        <View style={styles.inspectionDeadlineCard}>
+          <Text style={styles.inspectionDeadlineLabel}>INSPECTION DEADLINE</Text>
+          <View style={styles.inspectionDeadlineRow}>
+            <Text style={styles.inspectionDeadlineDate}>
+              {dayjs(activeDeadline).format('MMM D, YYYY')} <Text style={styles.inspectionDeadlineDot}>•</Text>{' '}
+              {dayjs(activeDeadline).format('h:mm A')}
+            </Text>
+            <CountdownPill targetIso={activeDeadline} />
+          </View>
+
+          {canRequestExtension ? (
+            <>
+              <View style={styles.inspectionDeadlineDivider} />
+              <Pressable onPress={guard(onRequestExtend)} style={styles.inspectionExtendButton}>
+                <Text style={styles.inspectionExtendButtonLabel}>
+                  Extend by {extensionDays} day{extensionDays === 1 ? '' : 's'}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+interface ExtendDeadlineConfirmSheetProps {
+  transaction: Transaction;
+  inspectionWindow: SystemSettingsInspectionWindow | undefined;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// Reached from either of EscrowHoldNote's two "Extend by N days" buttons — same confirmation
+// either way. New deadline is computed client-side (current active deadline + maxExtensionPeriod
+// days) purely for this preview; the real value comes back from the request itself and is applied
+// via useRequestInspectionExtensionMutation's cache invalidation once confirmed.
+function ExtendDeadlineConfirmSheet({ transaction, inspectionWindow, loading, onCancel, onConfirm }: ExtendDeadlineConfirmSheetProps) {
+  const guard = useSingleTap();
+  const extensionDays = inspectionWindow?.maxExtensionPeriod ?? 5;
+  const currentDeadline = transaction.inspectionExtended ? transaction.inspectionExtensionEndDate : transaction.inspectionDeadlineAt;
+  const newDeadline = currentDeadline ? dayjs(currentDeadline).add(extensionDays, 'day') : null;
+
+  function formatDeadline(value: string | dayjs.Dayjs) {
+    const d = typeof value === 'string' ? dayjs(value) : value;
+    return `${d.format('D MMM YYYY')} ▪ ${d.format('h:mm A')}`;
+  }
+
+  return (
+    <BottomSheetCard onBackdropPress={loading ? undefined : guard(onCancel)} sheetBackgroundColor={colors.white}>
+      <View style={styles.extendIconWrap}>
+        <Icons.ClockIcon size={verticalScale(28)} color={colors.primary} weight="bold" />
+      </View>
+      <Text style={styles.extendTitle}>Extend Inspection Deadline?</Text>
+      <Text style={styles.extendSubtitle}>
+        Need more time to inspect the item? You can extend your inspection deadline by {extensionDays} day
+        {extensionDays === 1 ? '' : 's'}.
+      </Text>
+
+      <View style={styles.extendDetailsCard}>
+        <View style={styles.extendDetailsRow}>
+          <Text style={styles.extendDetailsLabel}>Current deadline</Text>
+          <Text style={styles.extendDetailsValue}>{currentDeadline ? formatDeadline(currentDeadline) : '—'}</Text>
+        </View>
+        <View style={styles.extendDetailsRow}>
+          <Text style={styles.extendDetailsLabel}>Extension</Text>
+          <Text style={styles.extendDetailsExtensionValue}>
+            +{extensionDays} day{extensionDays === 1 ? '' : 's'}
+          </Text>
+        </View>
+        <View style={[styles.extendDetailsRow, styles.extendDetailsRowHighlighted]}>
+          <Text style={styles.extendDetailsLabel}>New deadline</Text>
+          <Text style={styles.extendDetailsNewValue}>{newDeadline ? formatDeadline(newDeadline) : '—'}</Text>
+        </View>
+      </View>
+
+      <Text style={styles.extendNote}>Once confirmed, your new deadline will apply to this transaction.</Text>
+
+      <View style={styles.extendWarningBanner}>
+        <Icon name="danger" variant="bold" size={verticalScale(16)} color={colors.warning700} />
+        <Text style={styles.extendWarningText}>This extension can only be used once for this transaction.</Text>
+      </View>
+
+      <Pressable onPress={loading ? undefined : guard(onConfirm)} disabled={loading} style={styles.extendConfirmButton}>
+        {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.extendConfirmLabel}>Extend Deadline</Text>}
       </Pressable>
+      <Pressable onPress={loading ? undefined : guard(onCancel)} disabled={loading} hitSlop={8} style={styles.extendCancelButton}>
+        <Text style={styles.extendCancelLabel}>Not Now</Text>
+      </Pressable>
+
+      <View style={styles.extendFooterNote}>
+        <Icon name="info-circle" variant="bold" size={verticalScale(14)} color={colors.gray400} />
+        <Text style={styles.extendFooterNoteText}>Your payment stays secured in escrow either way</Text>
+      </View>
+    </BottomSheetCard>
+  );
+}
+
+// Shown once the extension actually succeeds, in place of a toast — same DoneSheet shape/copy
+// pattern used elsewhere (ListingActionsSheet's pause/resume/delete, submitReportModal's report
+// success), Close button styled backgroundLight to match those too.
+function ExtendSuccessSheet({ deadline, onClose }: { deadline: string; onClose: () => void }) {
+  const guard = useSingleTap();
+
+  return (
+    <BottomSheetCard onBackdropPress={guard(onClose)} sheetBackgroundColor={colors.white}>
+      <View style={styles.extendSuccessIconWrap}>
+        <Icon name="tick-circle" variant="bold" size={verticalScale(64)} color={colors.success} />
+      </View>
+      <Text style={styles.extendTitle}>Deadline Extended</Text>
+      <Text style={styles.extendSubtitle}>
+        Your new inspection deadline is {dayjs(deadline).format('D MMM YYYY')} ▪ {dayjs(deadline).format('h:mm A')}.
+      </Text>
+      <Pressable onPress={guard(onClose)} style={styles.extendSuccessCloseButton}>
+        <Text style={styles.extendSuccessCloseLabel}>Close</Text>
+      </Pressable>
+    </BottomSheetCard>
+  );
+}
+
+function formatRemaining(targetIso: string): string {
+  const diffMs = dayjs(targetIso).diff(dayjs());
+  if (diffMs <= 0) return 'Expired';
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h remaining`;
+  if (hours > 0) return `${hours}h ${minutes}m remaining`;
+  return `${minutes} min${minutes === 1 ? '' : 's'} remaining`;
+}
+
+// Own component so the 30s tick only re-renders this small pill, not the whole EscrowHoldNote.
+function CountdownPill({ targetIso }: { targetIso: string }) {
+  const [label, setLabel] = useState(() => formatRemaining(targetIso));
+
+  useEffect(() => {
+    setLabel(formatRemaining(targetIso));
+    const timer = setInterval(() => setLabel(formatRemaining(targetIso)), 30000);
+    return () => clearInterval(timer);
+  }, [targetIso]);
+
+  return (
+    <View style={styles.inspectionCountdownRow}>
+      <Icons.ClockIcon size={verticalScale(14)} color={colors.warning700} weight="bold" />
+      <Text style={styles.inspectionCountdownText}>{label}</Text>
     </View>
   );
 }
@@ -1920,11 +2172,255 @@ const styles = StyleSheet.create({
     color: colors.warning600,
     marginBottom: spacingY.md,
   },
-  escrowExtendLink: {
+  inspectionDeadlineCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.lg,
+  },
+  inspectionDeadlineLabel: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.sm,
+    color: colors.ink,
+    letterSpacing: 0.3,
+    marginBottom: spacingY.sm,
+  },
+  inspectionDeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.sm,
+  },
+  inspectionDeadlineDate: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray700,
+  },
+  inspectionDeadlineDot: {
+    color: colors.gray300,
+  },
+  inspectionCountdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.xs,
+  },
+  inspectionCountdownText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.warning700,
+  },
+  inspectionDeadlineDivider: {
+    height: 1,
+    borderStyle: 'dashed',
+    borderTopWidth: 1,
+    borderColor: colors.gray200,
+    marginVertical: spacingY.md,
+  },
+  inspectionExtendButton: {
+    minHeight: verticalScale(48),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inspectionExtendButtonLabel: {
     fontFamily: fontFamily.semibold,
     fontSize: fontSize.md,
+    color: colors.gray700,
+  },
+  escrowExpiredCard: {
+    backgroundColor: colors.error50,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.lg,
+    marginBottom: spacingY.xl,
+  },
+  escrowExpiredTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.lg,
+    color: colors.danger,
+  },
+  escrowExpiredBody: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.sm * 1.8,
+    color: colors.danger,
+    marginBottom: spacingY.xs,
+  },
+  escrowExpiredDeadline: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.danger,
+    marginBottom: spacingY.lg,
+  },
+  escrowExpiredButton: {
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.dangerLight,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacingX.lg,
+  },
+  escrowExpiredButtonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.danger,
+  },
+  escrowExpiredUnavailableText: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.danger,
+    textAlign: 'center',
+  },
+  extendIconWrap: {
+    alignSelf: 'center',
+    width: verticalScale(72),
+    height: verticalScale(72),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacingY.lg,
+    marginBottom: spacingY.lg,
+  },
+  extendTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: spacingY.xs,
+  },
+  extendSubtitle: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.4,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.lg,
+  },
+  extendDetailsCard: {
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    marginBottom: spacingY.md,
+  },
+  extendDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingX.md,
+    backgroundColor: colors.gray50,
+    paddingHorizontal: spacingX.lg,
+    paddingVertical: spacingY.md,
+  },
+  extendDetailsRowHighlighted: {
+    backgroundColor: colors.primary25,
+  },
+  extendDetailsLabel: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.md,
+    color: colors.gray500,
+  },
+  extendDetailsValue: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.ink,
+  },
+  extendDetailsExtensionValue: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
     color: colors.warning700,
-    textDecorationLine: 'underline',
+  },
+  extendDetailsNewValue: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.md,
+    color: colors.primary,
+  },
+  extendNote: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.sm,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: spacingY.md,
+  },
+  extendWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacingX.sm,
+    backgroundColor: colors.warning25,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    padding: spacingX.md,
+    marginBottom: spacingY.lg,
+  },
+  extendWarningText: {
+    flex: 1,
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    lineHeight: fontSize.sm * 1.4,
+    color: colors.warning700,
+  },
+  extendConfirmButton: {
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.sm,
+  },
+  extendConfirmLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    color: colors.white,
+  },
+  extendCancelButton: {
+    alignSelf: 'center',
+    paddingVertical: spacingY.xs,
+    paddingHorizontal: spacingX.xl,
+    marginBottom: spacingY.sm,
+  },
+  extendCancelLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray600,
+  },
+  extendFooterNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacingX.xs,
+    marginBottom: spacingY.xs,
+  },
+  extendFooterNoteText: {
+    fontFamily: fontFamily.medium,
+    fontSize: fontSize.sm,
+    color: colors.gray400,
+  },
+  extendSuccessIconWrap: {
+    alignSelf: 'center',
+    marginTop: spacingY.lg,
+    marginBottom: spacingY.lg,
+  },
+  extendSuccessCloseButton: {
+    minHeight: verticalScale(52),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.backgroundLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacingY.md,
+  },
+  extendSuccessCloseLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    color: colors.gray700,
   },
   starRow: {
     flexDirection: 'row',

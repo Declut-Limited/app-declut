@@ -430,6 +430,17 @@ export interface Transaction {
   confirmationCode?: string;
   /** Real backend deadline for buyer inspection, present once payment succeeds. */
   inspectionDeadlineAt?: string;
+  /** True once inspectionDeadlineAt (or inspectionExtensionEndDate, once extended) has passed — set
+   *  by an hourly backend job, not something the client computes. Flows through every transaction
+   *  response (list and detail alike) with no extra wiring. */
+  inspectionPeriodEnded?: boolean;
+  /** True once the buyer's one-time POST /transactions/:id/request-extension has been used. */
+  inspectionExtended?: boolean;
+  /** Days granted by the extension — only present once inspectionExtended is true. */
+  inspectionExtendedBy?: number;
+  /** The real deadline once extended — supersedes inspectionDeadlineAt entirely (don't combine
+   *  the two); only present once inspectionExtended is true. */
+  inspectionExtensionEndDate?: string;
   escrow?: string;
   createdAt?: string;
   updatedAt?: string;
