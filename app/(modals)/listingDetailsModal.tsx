@@ -45,7 +45,7 @@ import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/cons
 import { verticalScale } from '@/utils/styling';
 import { useSingleTap } from '@/hooks/useSingleTap';
 import { useAuth } from '@/contexts/AuthContext';
-import { listingsApi, reviewsApi, transactionsApi, usersApi } from '@/api';
+import { listingsApi, reviewsApi, settingsApi, transactionsApi, usersApi } from '@/api';
 import type { Listing, Review, Transaction } from '@/api/types';
 import { extractErrorMessage } from '@/api/client';
 import { formatCurrency, formatDate, getProfileImage } from '@/utils/helpers';
@@ -1163,16 +1163,8 @@ function BeforeYouPaySheet({ onClose, onContinue }: BeforeYouPaySheetProps) {
   );
 }
 
-// Matches Paystack's own fee structure: 1.5% of the transaction plus a flat ₦100, capped at
-// ₦2,000 for larger amounts — display-only for now; that field isn't wired into checkout/payout
-// logic server-side yet, per the Postman collection's own note.
-const PAY_FEE_PERCENT = 1.5;
-const PAY_FEE_FLAT = 100;
-const PAY_FEE_CAP = 2000;
-
-function calculatePaystackFee(amount: number): number {
-  return Math.min(amount * (PAY_FEE_PERCENT / 100) + PAY_FEE_FLAT, PAY_FEE_CAP);
-}
+// Fallback until GET /settings resolves (or if it fails) — matches the rate this sheet used before commissionPercentage was fetched live.
+const DEFAULT_COMMISSION_PERCENTAGE = 10;
 
 interface PaySummarySheetProps {
   listing: Listing;
@@ -1186,7 +1178,16 @@ interface PaySummarySheetProps {
 // way as BeforeYouPaySheet's (full-width primary + a plain text link below it).
 function PaySummarySheet({ listing, paying, onClose, onCancelPurchase, onMakePayment }: PaySummarySheetProps) {
   const guard = useSingleTap();
-  const fee = calculatePaystackFee(listing.price);
+  const [commissionPercentage, setCommissionPercentage] = useState(DEFAULT_COMMISSION_PERCENTAGE);
+
+  useEffect(() => {
+    settingsApi
+      .getSettings()
+      .then((settings) => setCommissionPercentage(settings.commissionPercentage))
+      .catch(() => {});
+  }, []);
+
+  const fee = listing.price * (commissionPercentage / 100);
   const total = listing.price + fee;
 
   return (

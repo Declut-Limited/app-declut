@@ -537,13 +537,21 @@ export interface SystemSettingsInspectionWindow {
   maxExtensionPeriod: number;
 }
 
-/** GET /settings — public, unauthenticated, admin-configured platform settings. Confirmed 2026-09-12:
- *  returns this object directly, not wrapped in the usual ApiEnvelope. */
+/** GET /settings — public, unauthenticated, admin-configured platform settings. Confirmed
+ *  2026-09-13 against a real response — wrapped in the usual ApiEnvelope after all. */
 export interface SystemSettings {
   companyName: string;
   supportEmail: string;
   defaultCurrency: string;
   timezone: string;
+  /** Seller-side marketplace commission — deducted from the seller's payout, not added to what the buyer pays. */
   commissionPercentage: number;
+  cardPaymentsEnabled: boolean;
+  bankTransferEnabled: boolean;
+  /** Buyer-side checkout fee — distinct from commissionPercentage. */
+  buyerServiceFeePercentage: number;
+  /** Flat fee (₦), same currency as defaultCurrency. */
+  escrowReleaseFee: number;
+  minimumPayoutThreshold: number;
   inspectionWindow: SystemSettingsInspectionWindow;
 }

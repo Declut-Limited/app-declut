@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import axios from 'axios';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
@@ -97,7 +98,16 @@ export default function PaymentInfoModal() {
       setRemoveSuccess(true);
     } catch (e) {
       setRemoveConfirmOpen(false);
-      showErrorToast('Could not remove account', extractErrorMessage(e));
+      // deleteBankAccount 409s specifically when the caller has an active transaction as seller
+      // (escrow_active/awaiting_inspection) — a purpose-built message here beats whatever generic
+      // string the backend happens to send back for that conflict.
+      const hasActiveTransactionConflict = axios.isAxiosError(e) && e.response?.status === 409;
+      showErrorToast(
+        hasActiveTransactionConflict
+          ? 'You have an active sale in escrow. Resolve it before removing your payout account.'
+          : extractErrorMessage(e),
+        'Could not remove account',
+      );
     } finally {
       setRemoving(false);
     }
