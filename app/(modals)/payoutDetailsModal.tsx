@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
@@ -148,7 +149,7 @@ export default function PayoutDetailsModal() {
         <Pressable onPress={guard(() => setBankPickerOpen(true))} style={styles.fieldBox}>
           {selectedBank ? (
             <View style={styles.bankLogoWrap}>
-              <Image source={{ uri: selectedBank.logoUrl }} style={styles.bankLogo} />
+              <Image source={{ uri: selectedBank.logoUrl }} style={styles.bankLogo} contentFit="cover" cachePolicy="memory-disk" />
             </View>
           ) : null}
           <View style={styles.fieldTextColumn}>

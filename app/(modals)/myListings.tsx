@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
@@ -125,7 +126,12 @@ function MyListingCard({ listing, onPress }: MyListingCardProps) {
     <Pressable onPress={guard(onPress)} style={styles.card}>
       <View style={styles.imageWrap}>
         {listing.mainImageUrl || listing.images[0] ? (
-          <Image source={{ uri: listing.mainImageUrl || listing.images[0]?.secureUrl }} style={styles.image} resizeMode="cover" />
+          <Image
+            source={{ uri: listing.mainImageUrl || listing.images[0]?.secureUrl }}
+            style={styles.image}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
         ) : null}
       </View>
 

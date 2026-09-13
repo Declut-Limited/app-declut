@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
@@ -110,7 +111,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.avatarBlock}>
           <View style={styles.avatarWrap}>
-            <Image source={getProfileImage(displayAvatar)} style={styles.avatar} />
+            <Image source={getProfileImage(displayAvatar)} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
             {avatarUploading ? (
               <View style={styles.avatarOverlay}>
                 <ActivityIndicator color={colors.white} />

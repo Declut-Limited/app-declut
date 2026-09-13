@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   LayoutAnimation,
   Linking,
   Platform,
@@ -18,6 +17,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -562,7 +562,13 @@ export default function ListingDetailsModal() {
                     <PlayableHeroVideo uri={item.uri} />
                   </View>
                 ) : (
-                  <Image key={index} source={{ uri: item.uri }} style={[styles.heroImage, { width: screenWidth }]} resizeMode="cover" />
+                  <Image
+                    key={index}
+                    source={{ uri: item.uri }}
+                    style={[styles.heroImage, { width: screenWidth }]}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                 )
               )}
             </ScrollView>
@@ -578,7 +584,7 @@ export default function ListingDetailsModal() {
                   onPress={guard(() => goToMediaIndex(index))}
                   style={[styles.thumbnail, index === activeIndex && styles.thumbnailActive]}
                 >
-                  <Image source={{ uri: item.uri }} style={styles.thumbnailImage} resizeMode="cover" />
+                  <Image source={{ uri: item.uri }} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" />
                   {item.isVideo ? (
                     <View style={styles.thumbnailPlayOverlay}>
                       <Icon name="play-circle" variant="bold" size={verticalScale(20)} color={colors.white} />
@@ -859,7 +865,12 @@ function SellerContactCard({ seller, address, coordinates, compact }: SellerCont
   return (
     <View style={styles.sellerCard}>
       <View style={styles.sellerHeaderRow}>
-        <Image source={getProfileImage(seller?.profileImageUrl)} style={[styles.sellerAvatar, compact && styles.sellerAvatarRinged]} />
+        <Image
+          source={getProfileImage(seller?.profileImageUrl)}
+          style={[styles.sellerAvatar, compact && styles.sellerAvatarRinged]}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
         <View style={styles.sellerHeaderText}>
           <Text style={styles.sellerName} numberOfLines={1}>
             {seller?.name ?? 'Seller'}
@@ -879,7 +890,7 @@ function SellerContactCard({ seller, address, coordinates, compact }: SellerCont
         <>
           <View style={styles.sellerDivider} />
           <View style={styles.sellerMapWrap}>
-            <Image source={{ uri: staticMapUrl }} style={styles.sellerMapImage} resizeMode="cover" />
+            <Image source={{ uri: staticMapUrl }} style={styles.sellerMapImage} contentFit="cover" cachePolicy="memory-disk" />
           </View>
           {address ? (
             <Text style={styles.sellerAddress} numberOfLines={2}>
@@ -977,7 +988,7 @@ function BuyerFeedbackSection({ review, buyerName, buyerAvatar, onRateSeller }: 
       {review ? (
         <View style={styles.feedbackCard}>
           <View style={styles.feedbackCardHeader}>
-            <Image source={getProfileImage(buyerAvatar)} style={styles.feedbackAvatar} />
+            <Image source={getProfileImage(buyerAvatar)} style={styles.feedbackAvatar} contentFit="cover" cachePolicy="memory-disk" />
             <Text style={styles.feedbackName} numberOfLines={1}>
               {buyerName}
             </Text>
@@ -1311,7 +1322,7 @@ function RateSellerSheet({ listing, rating, comment, submitting, onRatingChange,
       <Text style={styles.rateSheetTitle}>How did this deal go?</Text>
 
       <View style={styles.rateSheetItemRow}>
-        <Image source={{ uri: listing.mainImageUrl }} style={styles.rateSheetItemImage} />
+        <Image source={{ uri: listing.mainImageUrl }} style={styles.rateSheetItemImage} contentFit="cover" cachePolicy="memory-disk" />
         <View style={styles.rateSheetItemText}>
           <Text style={styles.rateSheetItemTitle} numberOfLines={1}>
             {listing.title}
@@ -1331,7 +1342,7 @@ function RateSellerSheet({ listing, rating, comment, submitting, onRatingChange,
       <Text style={styles.rateSheetSectionTitle}>Rate Seller</Text>
 
       <View style={styles.rateSheetSellerRow}>
-        <Image source={getProfileImage(seller?.profileImageUrl)} style={styles.rateSheetSellerAvatar} />
+        <Image source={getProfileImage(seller?.profileImageUrl)} style={styles.rateSheetSellerAvatar} contentFit="cover" cachePolicy="memory-disk" />
         <View>
           <Text style={styles.rateSheetSellerRowName}>{seller?.name ?? 'Seller'}</Text>
           <View style={styles.rateSheetSellerRowMeta}>

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { BottomSheetCard, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
+import { BottomSheetCard, ConfirmModal, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { AddItemBasicInfoStep } from '@/components/addItem/AddItemBasicInfoStep';
 import type { AddItemBasicInfoStepErrors } from '@/components/addItem/AddItemBasicInfoStep';
@@ -68,6 +68,9 @@ export default function AddItemModal() {
   // is an orphan and gets deleted from Cloudinary instead of being applied.
   const photoUploadGeneration = useRef<Record<number, number>>({});
   const videoUploadGeneration = useRef(0);
+  // Gates the actual removePhoto/removeVideo behind a centered confirm modal (not a bottom sheet —
+  // this is a plain yes/no, same pattern as ConfirmModal's other uses like logout).
+  const [removeTarget, setRemoveTarget] = useState<{ type: 'photo'; index: number } | { type: 'video' } | null>(null);
 
   // Step 3 — Price
   const [price, setPrice] = useState('');
@@ -284,14 +287,6 @@ export default function AddItemModal() {
     }
   }
 
-  function confirmRemovePhoto(index: number) {
-    if (!photos[index]) return;
-    Alert.alert('Remove photo?', 'This photo will be removed from your listing.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removePhoto(index) },
-    ]);
-  }
-
   async function removeVideo() {
     const slot = video;
     if (!slot) return;
@@ -307,12 +302,21 @@ export default function AddItemModal() {
     }
   }
 
+  function confirmRemovePhoto(index: number) {
+    if (!photos[index]) return;
+    setRemoveTarget({ type: 'photo', index });
+  }
+
   function confirmRemoveVideo() {
     if (!video) return;
-    Alert.alert('Remove video?', 'This video will be removed from your listing.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: removeVideo },
-    ]);
+    setRemoveTarget({ type: 'video' });
+  }
+
+  function handleConfirmRemoveMedia() {
+    if (!removeTarget) return;
+    if (removeTarget.type === 'photo') removePhoto(removeTarget.index);
+    else removeVideo();
+    setRemoveTarget(null);
   }
 
   // Fetched once for the whole modal (not re-fetched every time the sheet opens/closes) — mirrors
@@ -689,6 +693,18 @@ export default function AddItemModal() {
           <PublishSuccessSheet onClose={guard(handleSuccessClose)} />
         </View>
       ) : null}
+
+      {removeTarget ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ConfirmModal
+            title={removeTarget.type === 'video' ? 'Remove video?' : 'Remove photo?'}
+            message={`This ${removeTarget.type === 'video' ? 'video' : 'photo'} will be removed from your listing.`}
+            confirmLabel="Remove"
+            onConfirm={guard(handleConfirmRemoveMedia)}
+            onCancel={guard(() => setRemoveTarget(null))}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -742,7 +758,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacingX.md,
-    paddingBottom: spacingY.md,
+    // paddingBottom: spacingY.md,
+    paddingBottom: spacingY.sm,
   },
   footerButton: {
     minHeight: verticalScale(56),

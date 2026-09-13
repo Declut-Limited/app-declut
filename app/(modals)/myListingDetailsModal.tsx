@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   RefreshControl,
@@ -14,6 +13,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -444,7 +444,13 @@ export default function MyListingDetailsModal() {
                     <PlayableHeroVideo uri={item.uri} />
                   </View>
                 ) : (
-                  <Image key={index} source={{ uri: item.uri }} style={[styles.heroImage, { width: screenWidth }]} resizeMode="cover" />
+                  <Image
+                    key={index}
+                    source={{ uri: item.uri }}
+                    style={[styles.heroImage, { width: screenWidth }]}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                 )
               )}
             </ScrollView>
@@ -460,7 +466,7 @@ export default function MyListingDetailsModal() {
                   onPress={guard(() => goToMediaIndex(index))}
                   style={[styles.thumbnail, index === activeIndex && styles.thumbnailActive]}
                 >
-                  <Image source={{ uri: item.uri }} style={styles.thumbnailImage} resizeMode="cover" />
+                  <Image source={{ uri: item.uri }} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" />
                   {item.isVideo ? (
                     <View style={styles.thumbnailPlayOverlay}>
                       <Icon name="play-circle" variant="bold" size={verticalScale(20)} color={colors.white} />

@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
+import { settingsApi } from '@/api';
 
-const PLATFORM_FEE_RATE = 0.08;
+// Shown until GET /settings resolves (or if it fails) — matches this screen's rate before
+// commissionPercentage was fetched live.
+const DEFAULT_COMMISSION_PERCENTAGE = 10;
 
 export interface AddItemPriceStepProps {
   price: string;
@@ -28,11 +31,31 @@ function formatPriceDisplay(raw: string): string {
   return decPart !== undefined ? `${groupedInt}.${decPart}` : groupedInt;
 }
 
-// "Add Item" — step 3 of 3: price + the 8%-fee "you get" preview.
+// "Add Item" — step 3 of 3: price + the commission-fee "you get" preview.
 export function AddItemPriceStep({ price, onPriceChange, error }: AddItemPriceStepProps) {
   const [focused, setFocused] = useState(false);
+  const [commissionPercentage, setCommissionPercentage] = useState(DEFAULT_COMMISSION_PERCENTAGE);
+  const inputRef = useRef<TextInput>(null);
+
+  // A plain .focus() on mount reports the input as focused (the border style updates) but the
+  // native keyboard often doesn't actually rise yet — the TextInput's native view hasn't finished
+  // attaching/laying out the instant this effect fires. Deferring by a tick gives it time to.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    settingsApi
+      .getSettings()
+      .then((settings) => setCommissionPercentage(settings.commissionPercentage))
+      .catch(() => {});
+  }, []);
+
   const numericPrice = Number(price) || 0;
-  const youGet = numericPrice * (1 - PLATFORM_FEE_RATE);
+  const youGet = numericPrice * (1 - commissionPercentage / 100);
 
   return (
     <View>
@@ -44,6 +67,7 @@ export function AddItemPriceStep({ price, onPriceChange, error }: AddItemPriceSt
         </View>
         <View style={[styles.priceInputWrap, focused && styles.priceInputWrapFocused, error ? styles.priceInputWrapError : null]}>
           <TextInput
+            ref={inputRef}
             style={styles.priceInput}
             value={formatPriceDisplay(price)}
             onChangeText={(text) => onPriceChange(sanitizePriceInput(text))}
@@ -68,8 +92,8 @@ export function AddItemPriceStep({ price, onPriceChange, error }: AddItemPriceSt
 
       <View style={styles.tipBanner}>
         <Text style={styles.tipText}>
-          Set your item's price, and we'll apply an 8% processing fee. Your final earning will be automatically
-          calculated just below the price input box. Start selling with ease!
+          Set your item's price, and we'll apply a {commissionPercentage}% processing fee. Your final earning will be
+          automatically calculated just below the price input box. Start selling with ease!
         </Text>
       </View>
     </View>

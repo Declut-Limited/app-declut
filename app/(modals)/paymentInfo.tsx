@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BottomSheetCard, ScreenContainer, ScreenHeader } from '@/components';
@@ -122,7 +123,9 @@ export default function PaymentInfoModal() {
         <View style={styles.accountCard}>
           <View style={styles.accountCardHeader}>
             <View style={styles.bankBadge}>
-              {bankLogoUrl ? <Image source={{ uri: bankLogoUrl }} style={styles.bankBadgeImage} /> : null}
+              {bankLogoUrl ? (
+                <Image source={{ uri: bankLogoUrl }} style={styles.bankBadgeImage} contentFit="cover" cachePolicy="memory-disk" />
+              ) : null}
             </View>
             <Pressable onPress={guard(() => setRemoveConfirmOpen(true))} hitSlop={8}>
               <Text style={styles.changeText}>Remove Account</Text>

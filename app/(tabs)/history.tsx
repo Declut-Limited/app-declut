@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
 import dayjs from 'dayjs';
@@ -111,7 +112,7 @@ function PurchaseCard({ transaction, onPress }: PurchaseCardProps) {
         {/* /transactions/purchases only sends { _id, title } for the listing — no image field to render here. */}
         <View style={styles.imageWrap}>
           {listing?.mainImageUrl ? (
-            <Image source={{ uri: listing?.mainImageUrl }} style={styles.image} resizeMode="cover" />
+            <Image source={{ uri: listing?.mainImageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" />
           ) : null}
         </View>
         <View style={styles.info}>
