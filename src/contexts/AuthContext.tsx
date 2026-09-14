@@ -5,7 +5,9 @@ import { onlineManager } from '@tanstack/react-query';
 import { clearSessionTokens, hydrateSession, onSessionExpired, onTokensRefreshed, setSessionTokens } from '@/api/client';
 import { getMyProfile } from '@/api/users';
 import { logout as logoutRequest, resendVerificationEmail } from '@/api/auth';
+import { unregisterDeviceToken } from '@/api/notifications';
 import type { AuthTokens, User } from '@/api/types';
+import { getPushToken } from '@/lib/pushToken';
 import { queryClient } from '@/lib/queryClient';
 import { connectSocket, disconnectSocket, updateSocketToken } from '@/lib/socket';
 import { showWarningToast } from '@/lib/toast';
@@ -195,6 +197,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const tokens = await hydrateSession();
     if (tokens) {
       await logoutRequest(tokens.refreshToken).catch(() => {});
+      // Best-effort — a shared device must not keep receiving this account's pushes after sign-out.
+      // Has to run before clearSessionTokens() below, while the access token this request needs is
+      // still attached by the apiClient interceptor.
+      const token = await getPushToken();
+      if (token) unregisterDeviceToken(token).catch(() => {});
     }
     await clearSessionTokens();
     updateEmailOtpToken(null);

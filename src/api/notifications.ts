@@ -9,3 +9,9 @@ export async function registerDeviceTokens(tokens: DeviceTokenEntry[]) {
   const res = await apiClient.post<ApiEnvelope<RegisterDeviceTokensResponse>>('/notifications/register-token', payload);
   return res.data.data;
 }
+
+// Fire-and-forget, same as above — called best-effort during sign-out so a shared device doesn't
+// keep receiving the signed-out account's pushes; must never block or fail the sign-out itself.
+export async function unregisterDeviceToken(token: string) {
+  await apiClient.delete(`/notifications/token/${encodeURIComponent(token)}`);
+}

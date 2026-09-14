@@ -9,6 +9,7 @@ import Icon from '@/components/Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/styling';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtime } from '@/contexts/RealtimeContext';
 import { listingsApi } from '@/api';
 import type { Listing } from '@/api/types';
 import { queryKeys } from '@/api/queryKeys';
@@ -21,6 +22,7 @@ const SECTION_LIMIT = 2;
 
 export default function HomeScreen() {
   const { user, status } = useAuth();
+  const { dismissNewListings } = useRealtime();
   const guard = useSingleTap();
 
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
@@ -49,7 +51,14 @@ export default function HomeScreen() {
 
   const {
     data: nearbyData,
-    isLoading: nearbyLoading,
+    // isFetching, not isLoading — isLoading only covers the very first fetch (no data yet), so a
+    // background refetch (tapping the "New listings available" banner after someone else's create,
+    // or the app-wide list invalidate a delete anywhere now triggers) would otherwise swap this
+    // section's data with no loading feedback at all. Teasers are small (2 items), so a brief
+    // skeleton on every reload reads as "refreshing," not as a disruptive flash the way it would on
+    // a long scrollable list (see nearbyListingsModal/newListingsModal, which deliberately go the
+    // other way for exactly that reason).
+    isFetching: nearbyFetching,
     error: nearbyQueryError,
     refetch: refetchNearby,
   } = useQuery({
@@ -63,7 +72,7 @@ export default function HomeScreen() {
 
   const {
     data: recentData,
-    isLoading: recentLoading,
+    isFetching: recentFetching,
     error: recentQueryError,
     refetch: refetchRecent,
   } = useQuery({
@@ -79,9 +88,13 @@ export default function HomeScreen() {
   const userLng = coords?.lng;
 
   // The native pull indicator is never held open — it retracts the instant the pull gesture completes. The skeletons (nearbyLoading/recentLoading) carry the rest of the loading feedback.
+  // Also clears the "New listings available" banner — pulling to refresh here accomplishes the
+  // same "user has now seen fresh data" outcome as tapping the banner itself, which was previously
+  // the only way to dismiss it (NewListingsBanner only calls dismissNewListings from its own tap).
   function onRefresh() {
     refetchNearby();
     refetchRecent();
+    dismissNewListings();
   }
 
 
@@ -151,8 +164,8 @@ export default function HomeScreen() {
         subtitle={locationLabel ? `within ${DEFAULT_NEARBY_RADIUS_KM}km` : undefined}
         variant="all"
         listings={locationDenied ? [] : nearby}
-        // useQuery's isLoading is false while `enabled` is false, so without the locationResolved check this would flash the empty state during the location prompt instead of a skeleton.
-        loading={!locationResolved || nearbyLoading}
+        // useQuery's isFetching is false while `enabled` is false, so without the locationResolved check this would flash the empty state during the location prompt instead of a skeleton.
+        loading={!locationResolved || nearbyFetching}
         emptyLabel={locationDenied ? 'Enable location to see listings near you.' : 'No nearby listings yet.'}
         error={nearbyError}
         onSeeAll={goToNearbyListings}
@@ -167,7 +180,7 @@ export default function HomeScreen() {
         title="Recently Posted"
         variant="recent"
         listings={recent}
-        loading={!locationResolved || recentLoading}
+        loading={!locationResolved || recentFetching}
         emptyLabel="No listings yet."
         error={recentError}
         onSeeAll={goToNewListings}

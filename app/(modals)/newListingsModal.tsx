@@ -43,7 +43,7 @@ export default function NewListingsModal() {
       header={<ScreenHeader title="Recently Posted" />}
     >
       <FlatList
-        data={loading || refreshing ? [] : items}
+        data={loading ? [] : items}
         keyExtractor={(item) => item._id}
         showsHorizontalScrollIndicator={false}
         renderItem={({ item, index }) => (
@@ -51,13 +51,13 @@ export default function NewListingsModal() {
             <RecentListingCard listing={item} userLat={coords?.lat} userLng={coords?.lng} onPress={() => onPressListing(item)} />
           </Animated.View>
         )}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
         onEndReachedThreshold={0.4}
         onEndReached={hasMore ? loadMore : undefined}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={<NewListingsBanner onRefresh={refresh} />}
         ListEmptyComponent={
-          loading || refreshing ? (
+          loading ? (
             <ListingCardSkeleton count={SKELETON_COUNT} variant="recent" />
           ) : error ? (
             <Text style={styles.message}>{error}</Text>

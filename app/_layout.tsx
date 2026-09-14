@@ -32,7 +32,8 @@ Notifications.setNotificationHandler({
 		return {
 			shouldPlaySound: true,
 			shouldSetBadge: true,
-			shouldShowAlert: true,
+			shouldShowBanner: true,
+			shouldShowList: true,
 		};
 	},
 });

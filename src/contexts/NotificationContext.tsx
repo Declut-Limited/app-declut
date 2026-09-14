@@ -1,4 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '@/lib/registerForPushAsync';
 import { savePushToken } from '@/lib/pushToken';
@@ -46,12 +47,45 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       if (__DEV__) console.log('Notification response:', response);
       // No in-app deep-link routing wired yet — nothing to build ahead into (see CLAUDE.md).
+      // Blocked on the backend confirming each notification type's `data` shape before this can
+      // route to the right screen; see the notification-payload discussion in project memory.
+    });
+
+    // Fires with the raw native (FCM/APNs) device token, not the Expo push token the backend
+    // wants — the OS can reissue that underlying token mid-session (rare, but documented), and
+    // when it does, re-derive the Expo token from it rather than forwarding the native one.
+    const tokenSub = Notifications.addPushTokenListener(() => {
+      if (status !== 'authenticated') return;
+      registerForPushNotificationsAsync()
+        .then(async (token) => {
+          if (__DEV__) console.log('Push token rotated, re-registered Expo token');
+          setExpoPushToken(token);
+          await savePushToken(token);
+        })
+        .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
     });
 
     return () => {
       receivedSub.remove();
       responseSub.remove();
+      tokenSub.remove();
     };
+  }, [status]);
+
+  // iOS badge only ever climbs (shouldSetBadge: true on every push) since there's no per-item read
+  // state in-app yet — clear it on launch and every foreground, the same "cheap enough for now"
+  // approach as the app taking a fresh look at everything else on resume (see socket.ts, queryClient.ts).
+  useEffect(() => {
+    Notifications.setBadgeCountAsync(0).catch(() => {});
+
+    let appState: AppStateStatus = AppState.currentState;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      const cameToForeground = /inactive|background/.test(appState) && nextState === 'active';
+      appState = nextState;
+      if (cameToForeground) Notifications.setBadgeCountAsync(0).catch(() => {});
+    });
+
+    return () => sub.remove();
   }, []);
 
   return (

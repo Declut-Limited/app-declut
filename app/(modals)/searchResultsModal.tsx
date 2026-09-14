@@ -79,11 +79,11 @@ export default function SearchResultsModal() {
   );
   // Text feedback ("Searching…") reacts to any pending state, including debounce.
   const isSearching = loading || refreshing || isPendingDebounce;
-  // But the list itself only clears to empty for a genuine network fetch — a pending debounce
-  // alone must never wipe results already on screen (e.g. a filtered list you're refining with a
-  // keyword), or every keystroke flashes them away and back. Forcing the skeleton for a pending
-  // debounce is still fine when there's nothing on screen yet to lose.
-  const isFetching = loading || refreshing;
+  // The list itself only clears to empty for a genuine first load — a background refetch (pull-
+  // to-refresh, or a realtime delete/status event resyncing this list) must never wipe results
+  // already on screen, same reasoning as the pending-debounce case below. Forcing the skeleton for
+  // a pending debounce is still fine when there's nothing on screen yet to lose.
+  const isFetching = loading;
   const showSkeleton = isFetching || (isPendingDebounce && items.length === 0);
 
   // Fetch-as-you-type — 500ms after the user stops typing, the query becomes the active keyword
@@ -239,7 +239,7 @@ export default function SearchResultsModal() {
               />
             </Animated.View>
           )}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />}
           onEndReachedThreshold={0.4}
           onEndReached={hasMore ? loadMore : undefined}
           contentContainerStyle={styles.listContent}

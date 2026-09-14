@@ -75,7 +75,7 @@ export default function MyListingsModal() {
       </ScrollView>
 
       <FlatList
-        data={loading || refreshing ? [] : items}
+        data={loading ? [] : items}
         keyExtractor={(item) => item._id}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 70)}>
@@ -83,13 +83,13 @@ export default function MyListingsModal() {
           </Animated.View>
         )}
         refreshControl={
-          <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.white} />
         }
         onEndReachedThreshold={0.4}
         onEndReached={hasMore ? loadMore : undefined}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          loading || refreshing ? (
+          loading ? (
             <MyListingCardSkeleton count={SKELETON_COUNT} />
           ) : error ? (
             <Text style={styles.message}>{error}</Text>
