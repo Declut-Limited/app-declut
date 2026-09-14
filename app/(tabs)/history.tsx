@@ -7,7 +7,7 @@ import * as Icons from 'phosphor-react-native';
 import dayjs from 'dayjs';
 import { EmptyState, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
-import { verticalScale } from '@/utils/styling';
+import { scale, verticalScale } from '@/utils/styling';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { transactionsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontFamily: fontFamily.semibold,
-    fontSize: verticalScale(11),
+    fontSize: scale(11),
   },
   sellerName: {
     fontFamily: fontFamily.medium,

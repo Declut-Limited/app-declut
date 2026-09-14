@@ -303,9 +303,15 @@ export default function MyListingDetailsModal() {
     refetchQuery();
   }
 
-  // TODO: no listing edit screen exists yet (addItemModal is create-only) — placeholder toast.
+  // PATCH /listings/:id only accepts the request while the listing is active (400 otherwise — see
+  // the Postman collection), but this button also shows on the paused footer as a secondary
+  // action — resuming first is what actually makes editing possible there.
   function handleEdit() {
-    showWarningToast('Not available yet', "Editing a listing isn't available yet.");
+    if (listing?.status !== 'active') {
+      showWarningToast('Resume first', 'Resume this listing before making changes to it.');
+      return;
+    }
+    router.push({ pathname: '/(modals)/addItemModal', params: { listingId: listing._id } });
   }
 
   function confirmPause() {

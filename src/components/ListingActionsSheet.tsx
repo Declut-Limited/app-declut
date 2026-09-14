@@ -74,9 +74,11 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
     router.push({ pathname: '/(modals)/myListingDetailsModal', params: { id: listing._id } });
   }
 
-  // TODO: no listing edit screen exists yet (addItemModal is create-only) — placeholder toast.
+  // Only reachable while canEdit gates this row (status === 'active'), matching PATCH
+  // /listings/:id's own "only callable while active" rule — see addItemModal.tsx.
   function handleEdit() {
-    showWarningToast('Not available yet', "Editing a listing isn't available yet.");
+    onClose();
+    router.push({ pathname: '/(modals)/addItemModal', params: { listingId: listing._id } });
   }
 
   function confirmPause() {

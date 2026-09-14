@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   },
   badgeLabel: {
     fontFamily: fontFamily.bold,
-    fontSize: verticalScale(10),
+    fontSize: scale(10),
     color: colors.warning,
   },
   info: {

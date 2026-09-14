@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { BottomSheetCard, ConfirmModal, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
+import { BottomSheetCard, ConfirmModal, EmptyState, PermissionModal, ScreenContainer, ScreenHeader } from '@/components';
 import Icon from '@/components/Icon';
 import { AddItemBasicInfoStep } from '@/components/addItem/AddItemBasicInfoStep';
 import type { AddItemBasicInfoStepErrors } from '@/components/addItem/AddItemBasicInfoStep';
@@ -24,22 +24,47 @@ import { validateLength, validateOptionalMaxLength, validatePrice, validateRequi
 import { mediaApi } from '@/api';
 import { extractErrorMessage } from '@/api/client';
 import { useCategories } from '@/hooks/queries/useCategories';
-import { useCreateListingMutation } from '@/hooks/queries/useListings';
-import type { CreateListingLocation, CreateListingPayload, ListingCondition, UploadSignature } from '@/api/types';
+import { useCreateListingMutation, useListingDetail, useUpdateListingMutation } from '@/hooks/queries/useListings';
+import type { CreateListingLocation, CreateListingPayload, ListingCondition, UpdateListingPayload, UploadSignature } from '@/api/types';
 
 const TOTAL_STEPS = 3;
 const PREVIEW_STEP = TOTAL_STEPS + 1;
 
-// "Add Item" — steps 1-3 of 3, then a Preview screen beyond the numbered steps.
+/** Adapts Icon's {name,variant,size,color} shape to EmptyState's Phosphor-shaped icon prop (size?: string | number) — same pattern used elsewhere (e.g. myListingDetailsModal.tsx). */
+function DangerIcon({ size, color }: { size?: number | string; color?: string }) {
+  return <Icon name="danger" variant="linear" size={typeof size === 'number' ? size : undefined} color={color} />;
+}
+
+// "Add Item" (create) and "Edit Item" (update) share this exact wizard — edit mode is entered via
+// an optional `listingId` param (passed by myListingDetailsModal's "Edit Listing" footer button
+// and ListingActionsSheet's "Edit Listing" row, both only shown while listing.status === 'active',
+// matching PATCH /listings/:id's own "only callable while active" rule — see the Postman
+// collection). When present, the existing listing is fetched and every field — including photos
+// and video — is prefilled once, then Publish becomes an update instead of a create.
 export default function AddItemModal() {
   const guard = useSingleTap();
   const { user } = useAuth();
+  const { listingId } = useLocalSearchParams<{ listingId?: string }>();
+  const isEditing = !!listingId;
+  const {
+    data: existingListing,
+    isLoading: isLoadingListing,
+    error: listingQueryError,
+  } = useListingDetail(listingId);
+  const updateListingMutation = useUpdateListingMutation();
+  // Guards the prefill effect below to run exactly once — otherwise every background refetch of
+  // the listing (or every categories page loading in) would stomp the seller's own in-progress edits.
+  const prefilledRef = useRef(false);
   const [step, setStep] = useState(1);
 
   // Step 1 — Basic Info
   const [itemName, setItemName] = useState('');
   const [itemDescription, setItemDescription] = useState('');
   const [category, setCategory] = useState('');
+  // Edit mode only — the listing's own category sub-document already carries its title, so the
+  // picker can show the right label immediately without waiting on a match against the paginated
+  // `categories` list (see categoryLabel below and the prefill effect).
+  const [prefillCategoryLabel, setPrefillCategoryLabel] = useState<string | undefined>(undefined);
   const {
     categories,
     loading: categoriesLoading,
@@ -88,12 +113,67 @@ export default function AddItemModal() {
 
   // Publish
   const createListingMutation = useCreateListingMutation();
-  const publishing = createListingMutation.isPending;
+  const publishing = createListingMutation.isPending || updateListingMutation.isPending;
   const [publishSuccess, setPublishSuccess] = useState(false);
 
   const photoCount = photos.filter(Boolean).length;
   const uploadedPhotoCount = photos.filter((p) => p?.status === 'uploaded').length;
   const mediaComplete = uploadedPhotoCount >= REQUIRED_PHOTO_COUNT && video?.status === 'uploaded';
+
+  // Runs once existingListing has loaded, prefilling every field.
+  useEffect(() => {
+    if (!isEditing || !existingListing || prefilledRef.current) return;
+    prefilledRef.current = true;
+
+    setItemName(existingListing.title);
+    setItemDescription(existingListing.description);
+    // category is a populated sub-document ({_id, title, slug}), confirmed against a real
+    // GET /listings/:id response — its _id is a real Category id regardless of whether that
+    // category happens to be in the paginated `categories` list's currently-loaded pages, so this
+    // doesn't need to wait on (or retry against) that list at all. categoryLabel below falls back
+    // to the title here directly for the same reason — no need to wait for a `categories` match
+    // just to show the right text.
+    setCategory(existingListing.category._id);
+    setPrefillCategoryLabel(existingListing.category.title);
+    setItemBrand(existingListing.specs?.brand ?? '');
+    setState(existingListing.state ?? '');
+    // `area` is what create/update send and what the Postman collection documents ("area replaced
+    // city here"), but the read side wasn't confirmed to actually use that name — try it first,
+    // fall back to the older `city` field so this doesn't come up blank either way (see Listing in
+    // api/types.ts).
+    const existingArea = existingListing.area ?? existingListing.city ?? '';
+    setArea(existingArea);
+    if (existingListing.state) {
+      setAreaOptionsLoading(true);
+      setTimeout(() => {
+        setAreaOptions(getAreaOptions(existingListing.state!));
+        setAreaOptionsLoading(false);
+      }, 0);
+    }
+    setAddress(existingListing.address ?? '');
+    // ListingLocation.coordinates is GeoJSON order — [lng, lat], not [lat, lng].
+    setAddressLocation({ lat: existingListing.location.coordinates[1], lng: existingListing.location.coordinates[0] });
+    setCondition(existingListing.condition);
+    setHasDefects(existingListing.hasDefect ?? false);
+    setDefectsDescription(existingListing.defectDescription ?? '');
+
+    setPhotos(
+      existingListing.images.slice(0, REQUIRED_PHOTO_COUNT).map((img) => ({
+        uri: img.secureUrl,
+        status: 'uploaded' as const,
+        uploaded: img,
+        isExisting: true,
+      }))
+    );
+    if (existingListing.video) {
+      const existingVideo = existingListing.video;
+      setVideo({ uri: existingVideo.secureUrl, status: 'uploaded', uploaded: existingVideo, isExisting: true });
+      generateVideoThumbnail(existingVideo.secureUrl);
+    }
+
+    setPrice(String(existingListing.price));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, existingListing]);
 
   // Hard-denied permissions never re-show the OS dialog, so this is the one case that still gets the custom PermissionModal card.
   function promptOpenSettings(target: string, message: string) {
@@ -289,7 +369,9 @@ export default function AddItemModal() {
     if (!slot) return;
     photoUploadGeneration.current[index] = (photoUploadGeneration.current[index] ?? 0) + 1; // invalidate any in-flight upload
     setPhotoSlot(index, undefined);
-    if (slot.uploaded) {
+    // Only eagerly delete assets uploaded fresh this session — a prefilled (isExisting) slot's
+    // asset still belongs to the live listing until the edit is actually saved (or never is).
+    if (slot.uploaded && !slot.isExisting) {
       try {
         await mediaApi.deleteImage(slot.uploaded.publicId);
       } catch {
@@ -304,7 +386,7 @@ export default function AddItemModal() {
     videoUploadGeneration.current++; // invalidate any in-flight upload
     setVideo(null);
     setVideoThumbnailUri(null);
-    if (slot.uploaded) {
+    if (slot.uploaded && !slot.isExisting) {
       try {
         await mediaApi.deleteImage(slot.uploaded.publicId);
       } catch {
@@ -330,7 +412,9 @@ export default function AddItemModal() {
     setRemoveTarget(null);
   }
 
-  const categoryLabel = categories.find((c) => c.id === category)?.title;
+  // The live categories list takes priority (e.g. once the user actually opens the picker and
+  // re-selects), falling back to the prefilled title so edit mode shows the right label right away.
+  const categoryLabel = categories.find((c) => c.id === category)?.title ?? prefillCategoryLabel;
 
   function clearBasicInfoError(field: keyof AddItemBasicInfoStepErrors) {
     setBasicInfoErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
@@ -429,16 +513,34 @@ export default function AddItemModal() {
         : undefined,
     };
 
+    if (isEditing && listingId) {
+      const updatePayload: UpdateListingPayload = payload;
+      updateListingMutation.mutate(
+        { listingId, payload: updatePayload },
+        {
+          onSuccess: () => setPublishSuccess(true),
+          onError: (e) => showErrorToast('Could not save changes', extractErrorMessage(e)),
+        }
+      );
+      return;
+    }
+
     createListingMutation.mutate(payload, {
       onSuccess: () => setPublishSuccess(true),
       onError: (e) => showErrorToast('Could not publish listing', extractErrorMessage(e)),
     });
   }
 
-  // Before landing back home, make sure the seller actually has somewhere for payouts to go —
-  // skip straight home if they already do, otherwise hand off to its own full-screen modal
-  // (replacing this one in the stack, same pattern filterByModal uses for its own handoff).
+  // Create: before landing back home, make sure the seller actually has somewhere for payouts to
+  // go — skip straight home if they already do, otherwise hand off to its own full-screen modal
+  // (replacing this one in the stack, same pattern filterByModal uses for its own handoff). Edit:
+  // no payout check — the seller already has a listing, so that's already been dealt with — just
+  // back to the listing's own detail screen, replacing this one so it loads the saved changes fresh.
   function handleSuccessClose() {
+    if (isEditing && listingId) {
+      router.replace({ pathname: '/(modals)/myListingDetailsModal', params: { id: listingId } });
+      return;
+    }
     if (user?.hasPayoutDetails) {
       router.dismissTo('/(tabs)/home');
     } else {
@@ -448,6 +550,23 @@ export default function AddItemModal() {
 
   const nextDisabled = step === 2 && !mediaComplete;
   const isPreview = step === PREVIEW_STEP;
+
+  // Edit mode: block on the existing listing loading (or failing to) before rendering the wizard —
+  // nothing below this point is safe to show until prefill has something to prefill from.
+  if (isEditing && (isLoadingListing || listingQueryError || !prefilledRef.current)) {
+    return (
+      <View style={[styles.flex, styles.loadingCenter]}>
+        {listingQueryError ? (
+          <EmptyState icon={DangerIcon} message={extractErrorMessage(listingQueryError, 'Could not load this listing.')} />
+        ) : (
+          <ActivityIndicator color={colors.primary} size="large" />
+        )}
+        <Pressable onPress={guard(() => router.back())} style={styles.loadingBackButton} hitSlop={8}>
+          <Icon name="arrow-left" variant="linear" size={verticalScale(20)} color={colors.gray900} />
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex}>
@@ -460,7 +579,7 @@ export default function AddItemModal() {
         avoidKeyboard={step !== 1}
         header={
           <ScreenHeader
-            title={isPreview ? 'Preview' : 'Add Item'}
+            title={isPreview ? (isEditing ? 'Review Changes' : 'Preview') : isEditing ? 'Edit Item' : 'Add Item'}
             onBack={handleBack}
             rightElement={
               isPreview ? undefined : (
@@ -490,7 +609,7 @@ export default function AddItemModal() {
                 {publishing ? (
                   <ActivityIndicator color={colors.white} />
                 ) : (
-                  <Text style={styles.publishLabel}>Publish Item</Text>
+                  <Text style={styles.publishLabel}>{isEditing ? 'Save Changes' : 'Publish Item'}</Text>
                 )}
               </Pressable>
             </View>
@@ -687,7 +806,7 @@ export default function AddItemModal() {
 
       {publishSuccess ? (
         <View style={StyleSheet.absoluteFill}>
-          <PublishSuccessSheet onClose={guard(handleSuccessClose)} />
+          <PublishSuccessSheet isEditing={isEditing} onClose={guard(handleSuccessClose)} />
         </View>
       ) : null}
 
@@ -710,9 +829,9 @@ function conditionLabel(value: string): string {
   return CONDITION_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
-// Shown once createListing() actually succeeds, in place of the old toast+immediate-back — the
-// user gets a clear confirmation beat before landing back wherever they came from.
-function PublishSuccessSheet({ onClose }: { onClose: () => void }) {
+// Shown once createListing()/updateListing() actually succeeds, in place of the old toast+
+// immediate-back — the user gets a clear confirmation beat before landing back wherever they came from.
+function PublishSuccessSheet({ isEditing, onClose }: { isEditing: boolean; onClose: () => void }) {
   const guard = useSingleTap();
 
   return (
@@ -720,10 +839,11 @@ function PublishSuccessSheet({ onClose }: { onClose: () => void }) {
       <View style={styles.successIconWrap}>
         <Icon name="tick-circle" variant="bold" size={verticalScale(72)} color={colors.success} />
       </View>
-      <Text style={styles.successTitle}>Success</Text>
+      <Text style={styles.successTitle}>{isEditing ? 'Changes Saved' : 'Success'}</Text>
       <Text style={styles.successSubtitle}>
-        Congratulations! Your products are now live and available for potential buyers to explore. Best of luck with
-        your sales!
+        {isEditing
+          ? 'Your listing has been updated with the latest details.'
+          : "Congratulations! Your products are now live and available for potential buyers to explore. Best of luck with your sales!"}
       </Text>
       <Pressable onPress={guard(onClose)} style={styles.successCloseButton}>
         <Text style={styles.successCloseLabel}>Close</Text>
@@ -735,6 +855,24 @@ function PublishSuccessSheet({ onClose }: { onClose: () => void }) {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+  },
+  loadingCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacingY.lg,
+    backgroundColor: colors.white,
+  },
+  loadingBackButton: {
+    position: 'absolute',
+    top: spacingY.xl,
+    left: spacingX.xl,
+    width: verticalScale(40),
+    height: verticalScale(40),
+    borderRadius: radius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepBadge: {
     flexDirection: 'row',

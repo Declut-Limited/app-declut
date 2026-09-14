@@ -11,11 +11,16 @@ export const REQUIRED_PHOTO_COUNT = 3;
 
 /** A picked photo/video slot, tracked through its Cloudinary upload. */
 export interface MediaSlot {
-  /** Local file URI — used for the on-screen preview regardless of upload status. */
+  /** Local file URI for a fresh pick, or the existing Cloudinary secureUrl when prefilled for
+   *  editing — either way just used for the on-screen preview. */
   uri: string;
   status: 'uploading' | 'uploaded' | 'failed';
   /** Present once status === 'uploaded'. */
   uploaded?: CloudinaryMediaRef;
+  /** True for a slot prefilled from an existing listing being edited (addItemModal's edit mode) —
+   *  removePhoto/removeVideo skip the eager Cloudinary delete for these, since the live listing
+   *  still references the asset until the edit is actually saved (or never is). */
+  isExisting?: boolean;
 }
 
 export interface AddItemMediaStepProps {

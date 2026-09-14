@@ -103,14 +103,14 @@ export const fontFamily = {
 } as const;
 
 export const fontSize = {
-  xs: verticalScale(13),
-  sm: verticalScale(15),
-  md: verticalScale(18),
-  lg: verticalScale(20),
-  xl: verticalScale(24),
-  '2xl': verticalScale(28),
-  '3xl': verticalScale(32),
-  '4xl': verticalScale(36),
+  xs: scale(13),
+  sm: scale(15),
+  md: scale(18),
+  lg: scale(20),
+  xl: scale(24),
+  '2xl': scale(28),
+  '3xl': scale(32),
+  '4xl': scale(36),
 } as const;
 
 export const theme = { colors, spacingX, spacingY, radius, fontFamily, fontSize };

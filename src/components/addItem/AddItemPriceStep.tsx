@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
-import { verticalScale } from '@/utils/styling';
+import { scale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
 import { settingsApi } from '@/api';
 
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   priceInput: {
     fontFamily: fontFamily.bold,
-    fontSize: verticalScale(46),
+    fontSize: scale(46),
     color: colors.gray700,
     textAlign: 'right',
     padding: 0,

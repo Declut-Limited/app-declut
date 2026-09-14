@@ -3,7 +3,7 @@ import { listingsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
 import { STALE_TIME } from '@/api/staleTimes';
 import { useRealtime } from '@/contexts/RealtimeContext';
-import type { CreateListingPayload, Listing } from '@/api/types';
+import type { CreateListingPayload, Listing, UpdateListingPayload } from '@/api/types';
 
 // LIVE, not STATIC: a listing's status is the visible half of its escrow lifecycle, and either
 // side can flip it while the other is looking (a buyer checking out while the seller has this
@@ -80,6 +80,19 @@ export function useDeleteListingMutation() {
       // Only `mine` — see applyListingUpdate's comment above; same reasoning applies to delete.
       queryClient.invalidateQueries({ queryKey: queryKeys.listings.mine() });
     },
+  });
+}
+
+// Owner-only, and only while the listing is active (the backend 400s otherwise — see the Postman
+// collection's note on PATCH /listings/:id) — addItemModal's edit-mode gates entry into the flow
+// itself on the same status, so this shouldn't be reachable outside that, but the backend's own
+// check is still the real guard.
+export function useUpdateListingMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listingId, payload }: { listingId: string; payload: UpdateListingPayload }) =>
+      listingsApi.updateListing(listingId, payload),
+    onSuccess: (updated) => applyListingUpdate(queryClient, updated),
   });
 }
 

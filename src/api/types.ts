@@ -237,7 +237,10 @@ export interface Listing {
   _id: string;
   title: string;
   description: string;
-  category: string;
+  /** Confirmed 2026-09-19 against a real GET /listings/:id response — populated, not a bare id
+   *  string. Note the `_id` key: distinct from the plain Category type's `id` (the /categories
+   *  list endpoint's own shape), since this is a populated sub-document, not that endpoint. */
+  category: { _id: string; title: string; slug: string };
   condition: ListingCondition;
   price: number;
   specs?: { brand?: string };
@@ -251,6 +254,11 @@ export interface Listing {
   /** Computed server-side as "city, state". Never sent by the client. */
   locationLabel: string;
   state?: string;
+  /** Unconfirmed against a real response which of these two the read side actually populates —
+   *  `area` is what create/update send (the Postman collection notes "area replaced city here"),
+   *  but the read shape may still only return the older `city` name. Kept both, optional, so
+   *  prefill (addItemModal.tsx's edit mode) can fall back rather than come up blank either way. */
+  area?: string;
   city?: string;
   address?: string;
   // 'delisted' confirmed 2026-09-19 — admin-only moderation status (set/cleared via relist), not

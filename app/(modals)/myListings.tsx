@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingActionsSheet, ScreenContainer, ScreenHeader } from '@/components';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
-import { verticalScale } from '@/utils/styling';
+import { scale, verticalScale } from '@/utils/styling';
 import { formatCurrency } from '@/utils/helpers';
 import { listingsApi } from '@/api';
 import { queryKeys } from '@/api/queryKeys';
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontFamily: fontFamily.semibold,
-    fontSize: verticalScale(11),
+    fontSize: scale(11),
   },
   price: {
     fontFamily: fontFamily.bold,

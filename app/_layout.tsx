@@ -53,6 +53,8 @@ export default function RootLayout() {
     if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded]);
 
+  // console.log("MY DIMENSION", deviceName, Dimensions.get('window').width)
+
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback} onError={(error, info) => console.error('Global error caught:', error, info)}>
       {!fontsLoaded ? (
