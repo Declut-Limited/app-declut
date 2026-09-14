@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext';
 import { getSocket } from '@/lib/socket';
 import type { ListingUpdateEvent, NewListingEvent, PublicListingUpdateEvent, SocketNotification } from '@/lib/socket';
 import { queryKeys } from '@/api/queryKeys';
-import { patchListingStatus, removeListingEverywhere } from '@/lib/realtime/listingCache';
+import { patchListingStatus, removeListingEverywhere, resyncListingLists } from '@/lib/realtime/listingCache';
 
 // How long a listingId stays remembered after markOwnListingId — long enough to cover a slow
 // broadcast, short enough that it can never accidentally suppress a *later, genuine* listings:new
@@ -65,8 +65,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         patchListingStatus(queryClient, evt.listingId, evt.status);
       } else {
         // 'updated' (or a status_changed missing its status) carries no field-level data to
-        // patch with — mark the detail stale rather than guess what changed.
+        // patch with — mark the detail stale rather than guess what changed, and resync every
+        // list too, since an edit's new title/price/photo can only ever come from a real refetch.
         queryClient.invalidateQueries({ queryKey: queryKeys.listings.detail(evt.listingId) });
+        resyncListingLists(queryClient);
       }
       // The server only ever routes this to us for our own listing or one we're actively
       // watching, so it's never noise from an unrelated listing — either way, a status move is
@@ -90,8 +92,11 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         patchListingStatus(queryClient, evt.listingId, evt.status);
       } else {
         // 'updated' carries no field-level data to patch with — mark the detail stale rather
-        // than guess what changed. Harmless no-op if nothing has this listing's detail mounted.
+        // than guess what changed (harmless no-op if nothing has this listing's detail mounted),
+        // and resync every list too, since an edit's new title/price/photo can only ever come
+        // from a real refetch.
         queryClient.invalidateQueries({ queryKey: queryKeys.listings.detail(evt.listingId) });
+        resyncListingLists(queryClient);
       }
     }
 

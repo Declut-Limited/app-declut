@@ -42,4 +42,3 @@ env.d.ts
 # generated native folders
 /ios
 /android
-app-example

@@ -44,6 +44,6 @@ yarn-error.*
 /ios
 /android
 
-declut-app-firebase-adminsdk.json
+declut-firebase-adminsdk.json
 google-services.json
 GoogleService-info.plist

@@ -83,16 +83,28 @@ export function patchListingStatus(queryClient: QueryClient, listingId: string, 
 }
 
 /**
+ * Triggers a real, immediate background refetch of every listing list (mine/nearby/new/search,
+ * teaser and infinite shapes alike) and Home's teaser queries (they share the same `lists()`
+ * prefix). Shared by `removeListingEverywhere` (delete) and the 'updated' branch of both realtime
+ * handlers (a plain edit) — neither event carries the changed fields to patch in directly (a delete
+ * has nothing to patch, an edit's payload has no title/price/photo diff), so a real refetch is the
+ * only way any list showing that listing ever picks up the new state. Every browse screen (see
+ * usePaginatedListings call sites) no longer blanks its FlatList to a skeleton while a background
+ * fetch like this is in flight — only a genuine first load does that now — so this reads as silent
+ * on those screens (at most a native pull-to-refresh-style spinner); Home's teaser sections
+ * deliberately go the other way and do show their skeleton for it (see home.tsx).
+ */
+export function resyncListingLists(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.listings.lists() });
+}
+
+/**
  * Removes `listingId` from every cached list/detail immediately (instant, no waiting on a round
- * trip), then triggers a real background refetch of every listing list so `total`/pagination
- * bookkeeping a pure client-side splice can't fix resyncs with the server right away, not just
- * whenever that list next happens to refocus/pull-to-refresh/go stale. Every browse screen (see
- * usePaginatedListings call sites) no longer blanks its FlatList to a skeleton while this is in
- * flight — only a genuine first load does that now — so this refetch is silent: the list already
- * lost the item instantly via the splice above, and the background refetch just quietly confirms
- * it, with at most a native pull-to-refresh-style spinner, never a full list wipe.
+ * trip), then calls `resyncListingLists` so `total`/pagination bookkeeping a pure client-side
+ * splice can't fix resyncs with the server right away, not just whenever that list next happens to
+ * refocus/pull-to-refresh/go stale.
  */
 export function removeListingEverywhere(queryClient: QueryClient, listingId: string) {
   updateListingEverywhere(queryClient, listingId, () => null);
-  queryClient.invalidateQueries({ queryKey: queryKeys.listings.lists() });
+  resyncListingLists(queryClient);
 }
