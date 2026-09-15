@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Icons from 'phosphor-react-native';
 import { EmptyState, ListingCard, ListingCardSkeleton, NewListingsBanner, RecentListingCard, ScreenContainer } from '@/components';
@@ -30,6 +30,15 @@ export default function HomeScreen() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   // Flips true once the location prompt has been answered either way (granted or denied) — gates Recently Posted below so it doesn't fire ahead of Listings Near You; the two start together once the permission decision is known, rather than Recently Posted racing off on mount.
   const [locationResolved, setLocationResolved] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      };
+    }, [])
+  );
 
   useEffect(() => {
     getDeviceLocation().then((device) => {
@@ -118,6 +127,7 @@ export default function HomeScreen() {
     <ScreenContainer
       edges={['top']}
       background={colors.white}
+      ref={scrollRef}
       refreshControl={
         <RefreshControl
           refreshing={false}

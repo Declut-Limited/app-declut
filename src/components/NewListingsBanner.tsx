@@ -27,7 +27,7 @@ export function NewListingsBanner({ onRefresh }: NewListingsBannerProps) {
   return (
     <Pressable onPress={guard(handlePress)} style={styles.banner}>
       <Icons.ArrowClockwiseIcon size={verticalScale(16)} color={colors.white} weight="bold" />
-      <Text style={styles.text}>New listings available — Tap to refresh</Text>
+      <Text style={styles.text}>New listings! Tap to refresh</Text>
     </Pressable>
   );
 }
@@ -37,8 +37,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     gap: spacingX.sm,
-    backgroundColor: colors.primary,
+    paddingHorizontal: spacingX.lg,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     borderRadius: radius.full,
     borderCurve: 'continuous',
     paddingVertical: spacingY.sm,

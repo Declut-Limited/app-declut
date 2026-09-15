@@ -2,11 +2,7 @@ import { io, type Socket } from 'socket.io-client';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { Listing } from '@/api/types';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL!;
-// The realtime gateway lives at the API host's root, not under the REST /api prefix — strip it
-// off rather than hardcode a second host. EXPO_PUBLIC_SOCKET_URL overrides this if the gateway is
-// ever hosted separately from the REST API.
-const SOCKET_HOST = process.env.EXPO_PUBLIC_SOCKET_URL ?? API_BASE_URL.replace(/\/api\/?$/, '');
+const SOCKET_HOST = process.env.EXPO_PUBLIC_SOCKET_URL;
 const USER_EVENTS_NAMESPACE = '/user-events';
 
 export interface ListingUpdateEvent {
