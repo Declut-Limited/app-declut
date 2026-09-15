@@ -94,8 +94,7 @@ export default function NotificationSettingModal() {
             <SettingRow
               title="Inspection Reminders"
               description="Receive reminders about upcoming inspection deadlines and required actions."
-              value={settings.inspectionReminders}
-              onValueChange={(next) => patch({ inspectionReminders: next })}
+              required
             />
             <SettingRow
               title="Payment & Escrow Updates"
@@ -116,9 +115,13 @@ export default function NotificationSettingModal() {
 
             <Text style={styles.sectionLabel}>OFFERS & UPDATES</Text>
             <SettingRow title="Product Updates" description="Be the first to know about new Declut features and improvements." required />
-            {/* Design shows this as a toggle, but PATCH rejects referralAndRewards (400) — Required
-                pill like the other backend-locked fields, not a toggle that can't actually persist. */}
-            <SettingRow title="Referral & Rewards" description="Get updates about your referrals, progress and rewards." required last />
+            <SettingRow
+              title="Referral & Rewards"
+              description="Get updates about your referrals, progress and rewards."
+              value={settings.referralAndRewards}
+              onValueChange={(next) => patch({ referralAndRewards: next })}
+              last
+            />
           </>
         )}
       </ScreenContainer>

@@ -7,7 +7,7 @@ export async function getMyNotificationSettings(userId: string) {
   return res.data.data;
 }
 
-// paymentAndEscrowUpdates/listingActivity/productUpdates/referralAndRewards aren't accepted here — 400s.
+// paymentAndEscrowUpdates/listingActivity/productUpdates aren't accepted here — 400s.
 export async function updateMyNotificationSettings(userId: string, payload: UpdateNotificationSettingsPayload) {
   const res = await apiClient.patch<ApiEnvelope<NotificationSettings>>(`/notification-settings/user/${userId}`, payload);
   return res.data.data;

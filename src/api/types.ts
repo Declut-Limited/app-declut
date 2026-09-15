@@ -547,6 +547,8 @@ export interface NotificationSettings {
   userId: string;
   channels: { push: boolean; email: boolean };
   transactionUpdates: boolean;
+  referralAndRewards: boolean;
+  /** Not accepted by PATCH — sending it 400s. Always on. */
   inspectionReminders: boolean;
   disputeUpdates: boolean;
   /** Not accepted by PATCH — sending it 400s. Always on. */
@@ -555,8 +557,6 @@ export interface NotificationSettings {
   listingActivity: boolean;
   /** Not accepted by PATCH — sending it 400s. Always on. */
   productUpdates: boolean;
-  /** Not accepted by PATCH — sending it 400s, despite the design showing a toggle for it. */
-  referralAndRewards: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -565,7 +565,7 @@ export interface NotificationSettings {
 export interface UpdateNotificationSettingsPayload {
   channels?: { push?: boolean; email?: boolean };
   transactionUpdates?: boolean;
-  inspectionReminders?: boolean;
+  referralAndRewards?: boolean;
   disputeUpdates?: boolean;
 }
 
