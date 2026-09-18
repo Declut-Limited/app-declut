@@ -5,7 +5,6 @@ export * as listingsApi from './listings';
 export * as mediaApi from './media';
 export * as categoriesApi from './categories';
 export * as favoritesApi from './favorites';
-export * as offersApi from './offers';
 export * as transactionsApi from './transactions';
 export * as reviewsApi from './reviews';
 export * as notificationsApi from './notifications';

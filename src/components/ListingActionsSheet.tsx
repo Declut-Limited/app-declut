@@ -6,7 +6,7 @@ import { BottomSheetCard } from './BottomSheetCard';
 import Icon from './Icon';
 import { colors, fontFamily, fontSize, radius, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
-import { formatCurrency } from '@/utils/helpers';
+import { getListingShareMessage } from '@/utils/helpers';
 import { extractErrorMessage } from '@/api/client';
 import type { Listing } from '@/api/types';
 import { useSingleTap } from '@/hooks/useSingleTap';
@@ -128,7 +128,7 @@ export function ListingActionsSheet({ listing, onClose, hideViewListing, onDelet
 
   async function handleShare() {
     try {
-      await Share.share({ message: `Check out "${listing.title}" on Declut — ${formatCurrency(listing.price)}` });
+      await Share.share({ message: getListingShareMessage(listing) });
     } catch {
       // User cancelled or the native share sheet failed — nothing actionable to surface.
     }

@@ -1,8 +1,20 @@
 import dayjs from "dayjs";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import { customAlphabet } from "nanoid/non-secure";
+import type { Listing } from "@/api/types";
 
 dayjs.extend(advancedFormat);
+
+const LISTING_SHARE_BASE_URL = "https://declut.com.ng/listings";
+
+/** Falls back to _id when slug isn't populated (not confirmed on every response yet — see Listing.slug). */
+export function getListingShareUrl(listing: Pick<Listing, "_id" | "slug">): string {
+  return `${LISTING_SHARE_BASE_URL}/${listing.slug ?? listing._id}`;
+}
+
+export function getListingShareMessage(listing: Pick<Listing, "_id" | "slug" | "title" | "price">): string {
+  return `Check out "${listing.title}" on Declut — ${formatCurrency(listing.price)}\n${getListingShareUrl(listing)}`;
+}
 
 export function formatCurrency(amount: number, dec: number = 0) {
 	return "₦" + Number(amount)

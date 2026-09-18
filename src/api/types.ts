@@ -235,6 +235,9 @@ export interface ListingSeller {
 export interface Listing {
   id: string;
   _id: string;
+  /** LST-#### form — GET /listings/:idOrSlug accepts either this or _id. Not confirmed against a
+   *  real response yet; the share link falls back to _id when absent. */
+  slug?: string;
   title: string;
   description: string;
   /** Confirmed 2026-09-19 against a real GET /listings/:id response — populated, not a bare id
@@ -371,26 +374,6 @@ export interface UploadSignature {
   folder?: string;
 }
 
-export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'withdrawn';
-
-export interface Offer {
-  id: string;
-  listingId: string;
-  buyerId: string;
-  sellerId: string;
-  amount: number;
-  status: OfferStatus;
-  proposedBy: string;
-}
-
-export interface MakeOfferPayload {
-  listingId: string;
-  amount: number;
-}
-
-export interface CounterOfferPayload {
-  amount: number;
-}
 
 export type TransactionStatus =
   | 'pending_payment'

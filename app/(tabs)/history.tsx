@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Icons from 'phosphor-react-native';
 import dayjs from 'dayjs';
@@ -49,11 +49,14 @@ function formatInspectionCountdown(deadline: dayjs.Dayjs): string {
 
 export default function HistoryScreen() {
   const guard = useSingleTap();
-  const [filter, setFilter] = useState<PurchaseStatusFilter>('active');
+  // Set by purchasedListingDetailsModal's back button (?status=<filter>) so returning from a
+  // transaction lands on the tab that actually matches it, instead of always Active — see below.
+  const { status: statusParam } = useLocalSearchParams<{ status?: PurchaseStatusFilter }>();
+  const [filter, setFilter] = useState<PurchaseStatusFilter>(statusParam ?? 'active');
 
   // A tab screen stays mounted across tab switches (unlike a stack/modal screen), so without this
   // the selected pill would just sit wherever it was left. Resets on blur (leaving), so it's
-  // already back to Active by the time you return.
+  // already back to Active by the time you return — unless statusParam below overrides it.
   useFocusEffect(
     useCallback(() => {
       return () => {
@@ -61,6 +64,12 @@ export default function HistoryScreen() {
       };
     }, [])
   );
+
+  // Tab screens stay mounted, so a fresh navigation here with ?status= doesn't remount the
+  // component — the initial useState above only covers first mount, this covers every return.
+  useEffect(() => {
+    if (statusParam) setFilter(statusParam);
+  }, [statusParam]);
 
   // LIVE: escrow/inspection status can change via a Paystack webhook or the seller's own action —
   // see staleTimes.ts.
@@ -72,7 +81,10 @@ export default function HistoryScreen() {
   );
 
   function onPressTransaction(transaction: Transaction) {
-    router.push({ pathname: '/(modals)/listingDetailsModal', params: { id: transaction.listing?._id } });
+    router.push({
+      pathname: '/(modals)/purchasedListingDetailsModal',
+      params: { id: transaction.listing?._id, transactionId: transaction._id },
+    });
   }
 
   return (
@@ -122,6 +134,8 @@ function PurchaseCard({ transaction, onPress }: PurchaseCardProps) {
   const isActive = transaction.status === 'escrow_active';
   const listing = transaction.listing;
   const deadline = transaction.inspectionDeadlineAt ? dayjs(transaction.inspectionDeadlineAt) : null;
+
+  console.log("ITEMS transaction", transaction, "ITEMS listing", listing)
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
